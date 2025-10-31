@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: riskmonitor-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: riskmonitor2024
+      MYSQL_DATABASE: riskmonitor
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: riskmonitor2024
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "admin", "-priskmonitor2024"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - riskmonitor-network
+    restart: unless-stopped
+
+  # phpMyAdmin（数据库管理界面，可选）
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: riskmonitor-phpmyadmin
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: admin
+      PMA_PASSWORD: riskmonitor2024
+      UPLOAD_LIMIT: 300M
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+    networks:
+      - riskmonitor-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  riskmonitor-network:
+    driver: bridge
