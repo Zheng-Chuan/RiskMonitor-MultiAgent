@@ -81,6 +81,7 @@ python main.py
 - [功能说明](docs/FEATURES.md) - MCP工具
 - [数据库](docs/DATABASE.md) - 数据库设计
 - [测试](docs/TESTING.md) - 测试指南
+- [MCP面试题](docs/MCP_INTERVIEW.md) - 20道精选面试题
 - [故障排除](docs/TROUBLESHOOTING.md) - 常见问题
 
 ### 常用命令

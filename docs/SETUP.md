@@ -22,7 +22,14 @@ make setup-mcp
   "mcpServers": {
     "riskMonitor": {
       "command": "docker",
-      "args": ["exec", "-i", "riskmonitor-mcp", "python", "main.py"]
+      "args": [
+        "exec",
+        "-i",
+        "riskmonitor-mcp",
+        "python",
+        "main.py"
+      ],
+      "env": {}
     }
   }
 }

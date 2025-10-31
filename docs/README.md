@@ -13,6 +13,7 @@
 - **[测试](TESTING.md)** - 测试指南
 - **[路线图](ROADMAP.md)** - 开发计划
 - **[故障排除](TROUBLESHOOTING.md)** - 常见问题
+- **[MCP面试题](MCP_INTERVIEW.md)** - 20道精选面试题
 
 ## 配置示例
 
