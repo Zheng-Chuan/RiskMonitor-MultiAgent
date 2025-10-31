@@ -1,17 +1,25 @@
-.PHONY: help install up down restart logs test clean
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean shell-db phpmyadmin
 
 help:
 	@echo "RiskMonitor-MCP Development Commands"
 	@echo "====================================="
-	@echo "make install    - Install Python dependencies"
-	@echo "make up         - Start all Docker containers"
-	@echo "make down       - Stop all Docker containers"
-	@echo "make restart    - Restart all Docker containers"
-	@echo "make logs       - Show container logs"
-	@echo "make test-db    - Test database connection"
-	@echo "make clean      - Clean up containers and volumes"
-	@echo "make shell-db   - Open PostgreSQL shell"
-	@echo "make pgadmin    - Start with PgAdmin (optional tool)"
+	@echo "make install          - Install Python dependencies"
+	@echo "make up               - Start all Docker containers"
+	@echo "make down             - Stop all Docker containers"
+	@echo "make restart          - Restart all Docker containers"
+	@echo "make logs             - Show container logs"
+	@echo ""
+	@echo "Testing Commands:"
+	@echo "make test-db          - Test database connection"
+	@echo "make test-unit        - Run unit tests"
+	@echo "make test-integration - Run integration tests"
+	@echo "make test-all         - Run all tests"
+	@echo "make test             - Alias for test-all"
+	@echo ""
+	@echo "Other Commands:"
+	@echo "make clean            - Clean up containers and volumes"
+	@echo "make shell-db         - Open MySQL shell"
+	@echo "make phpmyadmin       - Start with phpMyAdmin (optional tool)"
 
 install:
 	pip install -r requirements.txt
@@ -33,7 +41,25 @@ logs:
 	docker-compose logs -f
 
 test-db:
+	@echo "Testing database connection..."
 	python scripts/test_db_connection.py
+
+test-unit:
+	@echo "Running unit tests..."
+	pytest tests/unit/ -v --tb=short
+
+test-integration:
+	@echo "Running integration tests..."
+	@echo "Ensuring containers are running..."
+	@docker-compose ps mysql | grep -q "Up" || docker-compose up -d mysql
+	@sleep 5
+	pytest tests/integration/ -v --tb=short
+
+test-all: test-db test-unit test-integration
+	@echo ""
+	@echo "✓ All tests completed!"
+
+test: test-all
 
 clean:
 	docker-compose down -v
@@ -42,8 +68,9 @@ clean:
 shell-db:
 	docker-compose exec mysql mysql -u admin -priskmonitor2024 riskmonitor
 
-pgadmin:
+phpmyadmin:
 	docker-compose --profile tools up -d
-	@echo "PgAdmin available at http://localhost:5050"
-	@echo "Email: admin@riskmonitor.com"
-	@echo "Password: admin"
+	@echo "phpMyAdmin available at http://localhost:8080"
+	@echo "Server: mysql"
+	@echo "Username: admin"
+	@echo "Password: riskmonitor2024"

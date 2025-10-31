@@ -12,7 +12,7 @@ services:
       MYSQL_PASSWORD: riskmonitor2024
       MYSQL_ROOT_HOST: '%'
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql

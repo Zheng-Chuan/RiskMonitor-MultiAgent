@@ -46,3 +46,7 @@ htmlcov/
 reports/
 *.xlsx
 *.pdf
+
+# Package manager lock files
+uv.lock
+poetry.lock
