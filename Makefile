@@ -1,4 +1,4 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp
 
 help:
 	@echo "RiskMonitor-MCP Development Commands"
@@ -24,6 +24,7 @@ help:
 	@echo ""
 	@echo "Other Commands:"
 	@echo "make clean            - Clean up containers and volumes"
+	@echo "make clean-cache      - Clean Python cache files"
 	@echo "make shell-db         - Open MySQL shell"
 	@echo "make phpmyadmin       - Start with phpMyAdmin (optional tool)"
 
@@ -82,6 +83,14 @@ test: test-all
 clean:
 	docker-compose down -v
 	@echo "All containers and volumes removed"
+
+clean-cache:
+	@echo "Cleaning Python cache files..."
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete
+	find . -type f -name "*.pyo" -delete
+	find . -type f -name ".DS_Store" -delete
+	@echo "Cache files cleaned"
 
 shell-db:
 	docker-compose exec mysql mysql -u admin -priskmonitor2024 riskmonitor
