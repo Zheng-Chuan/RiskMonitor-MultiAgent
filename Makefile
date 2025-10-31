@@ -1,13 +1,19 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean shell-db phpmyadmin
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp
 
 help:
 	@echo "RiskMonitor-MCP Development Commands"
 	@echo "====================================="
 	@echo "make install          - Install Python dependencies"
+	@echo "make build            - Build Docker images"
 	@echo "make up               - Start all Docker containers"
 	@echo "make down             - Stop all Docker containers"
 	@echo "make restart          - Restart all Docker containers"
-	@echo "make logs             - Show container logs"
+	@echo "make logs             - Show all container logs"
+	@echo ""
+	@echo "MCP Server Commands:"
+	@echo "make setup-mcp        - Setup MCP server with Docker"
+	@echo "make mcp-logs         - Show MCP server logs"
+	@echo "make mcp-shell        - Open shell in MCP container"
 	@echo ""
 	@echo "Testing Commands:"
 	@echo "make test-db          - Test database connection"
@@ -24,12 +30,24 @@ help:
 install:
 	pip install -r requirements.txt
 
+build:
+	docker-compose build
+
 up:
 	docker-compose up -d
 	@echo "Waiting for database to be ready..."
 	@sleep 5
 	@echo "Containers are running!"
 	@docker-compose ps
+
+setup-mcp:
+	@./scripts/setup_mcp.sh
+
+mcp-logs:
+	docker logs -f riskmonitor-mcp
+
+mcp-shell:
+	docker exec -it riskmonitor-mcp /bin/bash
 
 down:
 	docker-compose down

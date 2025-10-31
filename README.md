@@ -26,41 +26,73 @@
 
 ## 快速开始
 
+### 方式1: Docker部署 (推荐)
+
 ```bash
 # 1. 克隆项目
 git clone https://github.com/Zheng-Chuan/RiskMonitor-MCP.git
 cd RiskMonitor-MCP
 
-# 2. 启动MySQL容器
-docker-compose up -d
+# 2. 一键启动
+make setup-mcp
 
-# 3. 安装Python依赖
-pip install -r requirements.txt
-
-# 4. 测试数据库连接
-python scripts/test_db_connection.py
+# 3. 配置MCP客户端
+# 编辑 ~/.codeium/windsurf/mcp_config.json 或
+# ~/Library/Application Support/Claude/claude_desktop_config.json
+# 添加以下配置:
 ```
 
-详细安装步骤请查看 [快速开始指南](docs/QUICKSTART.md)
+```json
+{
+  "mcpServers": {
+    "riskMonitor": {
+      "command": "docker",
+      "args": ["exec", "-i", "riskmonitor-mcp", "python", "main.py"]
+    }
+  }
+}
+```
+
+### 方式2: 本地开发
+
+```bash
+# 1. 启动MySQL容器
+docker-compose up -d mysql
+
+# 2. 安装Python依赖
+pip install -r requirements.txt
+
+# 3. 测试数据库连接
+python scripts/test_db_connection.py
+
+# 4. 运行MCP服务器
+python main.py
+```
+
+详细文档: [docs/README.md](docs/README.md)
 
 ---
 
-## 📚 文档导航
+## 📚 文档
 
-### 核心文档
-
-- **[快速开始](docs/QUICKSTART.md)** - 环境搭建、安装步骤、验证安装
-- **[系统架构](docs/ARCHITECTURE.md)** - 整体数据流、技术栈详解
-- **[核心功能](docs/FEATURES.md)** - MCP工具集、典型工作流
-- **[数据库设计](docs/DATABASE.md)** - 表结构、索引策略、备份恢复
-- **[测试指南](docs/TESTING.md)** - 单元测试、集成测试、CI/CD集成
-- **[开发计划](docs/ROADMAP.md)** - 5个开发阶段、时间规划
-- **[故障排除](docs/TROUBLESHOOTING.md)** - 常见问题及解决方案
+- [快速配置](docs/SETUP.md) - Docker部署和MCP配置
+- [本地开发](docs/QUICKSTART.md) - 本地开发环境
+- [系统架构](docs/ARCHITECTURE.md) - 系统设计
+- [功能说明](docs/FEATURES.md) - MCP工具
+- [数据库](docs/DATABASE.md) - 数据库设计
+- [测试](docs/TESTING.md) - 测试指南
+- [故障排除](docs/TROUBLESHOOTING.md) - 常见问题
 
 ### 常用命令
 
 ```bash
+# MCP服务器
+make setup-mcp   # 一键设置MCP服务器
+make mcp-logs    # 查看MCP日志
+make mcp-shell   # 进入MCP容器
+
 # 容器管理
+make build       # 构建Docker镜像
 make up          # 启动容器
 make down        # 停止容器
 make logs        # 查看日志

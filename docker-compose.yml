@@ -26,6 +26,29 @@ services:
       - riskmonitor-network
     restart: unless-stopped
 
+  # RiskMonitor MCP Server
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riskmonitor-mcp
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: riskmonitor
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: riskmonitor2024
+      APP_ENV: production
+      LOG_LEVEL: INFO
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - riskmonitor-network
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
   # phpMyAdmin（数据库管理界面，可选）
   phpmyadmin:
     image: phpmyadmin:latest
