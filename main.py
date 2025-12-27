@@ -78,10 +78,13 @@ _tasks_lock = asyncio.Lock()
 
 
 def _new_task_id() -> str:
+    # task_id 用于让客户端持有句柄, 后续通过轮询查询状态与获取结果
     return uuid.uuid4().hex
 
 
 async def _set_task(task_id: str, patch: dict[str, Any]) -> None:
+    # 任务状态写入需要加锁, 避免并发更新导致状态丢失
+    # patch 采用增量更新, 便于不同阶段逐步写入 progress, message, result
     async with _tasks_lock:
         current = _tasks.get(task_id, {})
         current.update(patch)
@@ -89,26 +92,38 @@ async def _set_task(task_id: str, patch: dict[str, Any]) -> None:
 
 
 async def _get_task(task_id: str) -> Optional[dict[str, Any]]:
+    # 返回副本, 避免调用方直接修改内部状态
     async with _tasks_lock:
         item = _tasks.get(task_id)
         return dict(item) if item is not None else None
 
 
 async def _run_task_calculate_total_delta(task_id: str) -> None:
+    # 任务执行函数在后台协程中运行
+    # status: queued -> running -> succeeded | failed | canceled
     request_id = new_request_id()
     log_info(f"task=calculate_total_delta start task_id={task_id}", request_id)
     await _set_task(task_id, {"status": "running", "request_id": request_id, "progress": 0})
 
     try:
+        # 让出一次事件循环, 给客户端机会先拿到 task_id
         await asyncio.sleep(0)
         await _set_task(task_id, {"progress": 10, "message": "开始查询数据库"})
+
+        # 复用现有业务实现, 保持口径一致
+        # 注意: 这里调用的是工具函数 calculate_total_delta, 其内部也会产生日志与 request_id
         result = await calculate_total_delta()
+
+        # 任务完成后将 result 写回注册表, 轮询方即可取回
         await _set_task(task_id, {"progress": 100, "status": "succeeded", "result": result})
         log_info(f"task=calculate_total_delta ok task_id={task_id}", request_id)
     except asyncio.CancelledError:
+        # background.cancel() 会触发 CancelledError
+        # 这里将状态写为 canceled, 并返回统一错误结构
         await _set_task(task_id, {"status": "canceled", "progress": 0, "error": {"code": "CANCELED", "message": "任务已取消"}})
         log_error(f"task=calculate_total_delta canceled task_id={task_id}", request_id)
     except Exception as e:
+        # 兜底异常会标记 failed, 便于客户端区分执行失败与主动取消
         await _set_task(task_id, {"status": "failed", "progress": 0, "error": {"code": "INTERNAL_ERROR", "message": f"任务执行出错: {str(e)}"}})
         log_error(f"task=calculate_total_delta error task_id={task_id} err={str(e)}", request_id)
 
@@ -544,9 +559,14 @@ async def start_calculate_total_delta_task() -> dict:
     返回:
         dict: 结构化 JSON 对象, 包含 task_id 与初始状态
     """
+    # 创建任务并写入 queued 状态
     task_id = _new_task_id()
     await _set_task(task_id, {"status": "queued", "progress": 0, "created_at": datetime.utcnow().isoformat()})
+
+    # 创建后台协程执行, 立刻返回 task_id
     background = asyncio.create_task(_run_task_calculate_total_delta(task_id))
+
+    # 内部保存 asyncio task, 仅用于 cancel, 对外返回会过滤该字段
     await _set_task(task_id, {"_asyncio_task": background})
     return {
         "task_id": task_id,
@@ -568,6 +588,7 @@ async def get_task_status(task_id: str) -> dict:
     返回:
         dict: 结构化 JSON 对象
     """
+    # 轮询接口只返回公共字段, 不暴露内部协程对象
     item = await _get_task(task_id)
     if item is None:
         return {
@@ -602,9 +623,11 @@ async def cancel_task(task_id: str) -> dict:
 
     background = item.get("_asyncio_task")
     if background is not None and hasattr(background, "cancel"):
+        # 触发后台协程取消
         background.cancel()
         await asyncio.sleep(0)
 
+    # 先标记 cancel_requested, 最终状态会由后台执行函数写入 canceled
     await _set_task(task_id, {"status": "cancel_requested"})
     return {
         "task_id": task_id,
