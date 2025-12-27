@@ -2,6 +2,32 @@
 
 采用**最小可运行demo → 逐步扩充**的策略，从简单到复杂逐步构建系统。
 
+## Phase 0: 基础强化与MCP最佳实践
+
+**目标**: 在现有功能基础上优先完成安全, 稳定, 可扩展, 可维护方面的增强, 为后续各 Phase 打好生产级基础
+
+- [x] 移除 mcp_config.json 中的明文 secrets, 改为读取环境变量, 未使用的第三方 server 默认 disabled
+- [x] 为高风险工具补充用途说明与前置授权提示, 确保用户同意与最小权限
+- [x] 为至少 2 个工具完成 JSON Schema 化输入输出, 输出改为结构化 JSON
+- [x] 为查询类工具增加分页与日期范围过滤参数
+- [x] 统一错误分层与结构化日志, 引入 correlation id 便于排障
+- [x] 为耗时操作提供 progress 与 cancellation 钩子
+- [x] 引入 tasks 以支持长耗时操作的轮询与延迟结果获取
+- [ ] 评估启用 Streamable HTTP 与 SSE 流, 为无状态与水平扩展做准备
+- [ ] 数据访问层强化: 连接池, 超时, 重试, 明确事务边界与资源释放
+- [ ] 模块化重构: 拆分 main.py 为模块(工具层, 数据访问层, 配置层)
+- [ ] 按 MCP 指南完善工具命名, description 与 icon 元数据
+- [ ] 增加常用 Resources 与 Prompts 模板, 支持资源模板复用查询与报表
+- [ ] 扩充单元与集成测试覆盖新增路径, 并在 CI 中集成 lint 与 pre-commit
+- [ ] 同步 README 与 ROADMAP 的状态与用法, 保持示例与实现一致
+
+**验收标准**:
+- mcp_config.json 无明文 secrets, 未用 server 处于禁用状态
+- 至少 2 个工具完成 JSON Schema 化并返回结构化 JSON
+- 查询类工具支持分页或日期范围过滤
+- 关键路径具备结构化日志与错误分层, 并提供 progress/cancellation 钩子
+- 新增或调整的测试通过
+
 ## Phase 1: 最小可运行Demo
 
 **目标**: 实现一个端到端的简单功能，验证技术可行性
