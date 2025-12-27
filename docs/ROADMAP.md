@@ -1,10 +1,10 @@
 # 开发计划
 
-采用**最小可运行demo → 逐步扩充**的策略，从简单到复杂逐步构建系统。
+采用最小可运行 demo -> 逐步扩充的策略, 从简单到复杂逐步构建系统.
 
 ## Phase 0: 基础强化与MCP最佳实践
 
-**目标**: 在现有功能基础上优先完成安全, 稳定, 可扩展, 可维护方面的增强, 为后续各 Phase 打好生产级基础
+**目标**: 在现有功能基础上优先完成安全, 稳定, 可扩展, 可维护方面的增强, 为后续各 Phase 打好生产级基础.
 
 - [x] 移除 mcp_config.json 中的明文 secrets, 改为读取环境变量, 未使用的第三方 server 默认 disabled
 - [x] 为高风险工具补充用途说明与前置授权提示, 确保用户同意与最小权限
@@ -13,13 +13,10 @@
 - [x] 统一错误分层与结构化日志, 引入 correlation id 便于排障
 - [x] 为耗时操作提供 progress 与 cancellation 钩子
 - [x] 引入 tasks 以支持长耗时操作的轮询与延迟结果获取
-- [ ] 评估启用 Streamable HTTP 与 SSE 流, 为无状态与水平扩展做准备
+- [x] 评估启用 Streamable HTTP 与 SSE 流, 为无状态与水平扩展做准备
 - [ ] 数据访问层强化: 连接池, 超时, 重试, 明确事务边界与资源释放
 - [ ] 模块化重构: 拆分 main.py 为模块(工具层, 数据访问层, 配置层)
-- [ ] 按 MCP 指南完善工具命名, description 与 icon 元数据
-- [ ] 增加常用 Resources 与 Prompts 模板, 支持资源模板复用查询与报表
-- [ ] 扩充单元与集成测试覆盖新增路径, 并在 CI 中集成 lint 与 pre-commit
-- [ ] 同步 README 与 ROADMAP 的状态与用法, 保持示例与实现一致
+- [ ] 扩充单元与集成测试覆盖新增路径
 
 **验收标准**:
 - mcp_config.json 无明文 secrets, 未用 server 处于禁用状态
@@ -28,102 +25,136 @@
 - 关键路径具备结构化日志与错误分层, 并提供 progress/cancellation 钩子
 - 新增或调整的测试通过
 
-## Phase 1: 最小可运行Demo
+## Phase 1: MCP 最小可运行与开发体验
 
-**目标**: 实现一个端到端的简单功能，验证技术可行性
+**目标**: 保证 MCP server 可在本地稳定运行, 并能被 MCP 客户端调用, 形成端到端演示闭环.
 
 - [x] 项目初始化
-- [x] Docker环境配置
-- [x] MySQL数据库初始化
-- [ ] MCP Server基础框架
-- [ ] 实现第一个工具: `query_all_positions`
-- [ ] 实现第二个工具: `calculate_total_delta`
-- [ ] Claude Desktop集成测试
+- [x] Docker 环境配置
+- [x] MySQL 数据库初始化
+- [x] MCP Server 基础框架
+- [x] 基础查询与聚合工具可用
+- [x] Claude Desktop 或 Windsurf 可调用工具
 
 **验收标准**:
 - 数据库正常运行
-- MCP Server能启动
-- Claude Desktop能调用至少2个工具
-- 端到端流程跑通
+- MCP Server 能启动
+- MCP 客户端能调用至少 2 个工具
+- 至少 1 个端到端流程跑通
 
-## Phase 2: 完善数据模型
+## Phase 2: 金融衍生品业务场景与风险计算展示
 
-**目标**: 建立完整的数据库表结构和模拟数据
+**目标**: 用更专业的金融衍生品业务场景驱动实现, 重点展示业务理解, 数据建模能力, 与风险计算能力.
 
-- [ ] 创建完整的4张表
-- [ ] 编写数据生成脚本
-- [ ] 生成50-100条模拟数据
-- [ ] 实现3个查询工具
-- [ ] 添加日期范围过滤
+### 2.1 业务问题与用例设计
+
+- [ ] 选定 2 到 3 条真实感用例, 并明确计算口径与输出形式.
+  - 主线 A: FRTB SA sensitivities 流程演示.
+    - 输入: position, instrument, market snapshot, risk factor mapping.
+    - 输出: Delta, Vega, Curvature sensitivities, 以及按 risk class 的聚合结果.
+    - 可选: 应用相关性矩阵后得到资本占用的示意结果.
+  - 辅线 C: CVA 简化链路演示.
+    - 输入: counterparty, rating or PD, LGD, expected exposure.
+    - 输出: counterparty 级别 CVA 与变化解释.
+  - 业务增强: 多币种 Dollarization 与 desk 级别聚合, 作为口径统一的一部分.
+- [ ] 定义输入输出口径, 例如: desk, trader, portfolio, instrument, currency, valuation_time, risk_factor
+
+### 2.2 数据模型与数据字典
+
+- [ ] 基于业务用例设计数据模型, 明确实体与关系, 覆盖以下最小集合:
+  - instruments: component, compound, underlying, strike, expiry, option_type
+  - positions: component_position, compound_position, quantity, desk, trader, book
+  - market_data: spot, fx_rates, curves, vol_surface, credit_spreads
+  - risk_measures: pv, delta, gamma, vega, theta, dv01, cva
+  - counterparties: rating, pd, lgd, netting_set, collateral
+- [ ] 为关键字段提供数据字典, 明确单位与口径, 例如:
+  - delta per share vs per contract, dv01 definition, fx conversion convention
+  - valuation_time cut, eod vs intraday snapshot
+- [ ] 为查询路径设计索引策略, 以演示工程思维即可, 不追求自研高可用
+
+### 2.3 公开数据与资料引用
+
+- [ ] 收集可公开引用的数据或资料, 用于支撑口径与示例数据:
+  - 利率曲线节点样例, 波动率样例, CDS spread 样例, FX spot 样例
+  - Greeks 定义与聚合口径资料, FRTB SA sensitivities 资料
+  - CVA 与 XVA 的概念资料
+- [ ] 在 docs 中记录来源链接与口径假设, 并说明简化点
+
+### 2.4 风险计算实现
+
+- [ ] 定义统一的 risk measure 输出结构, 例如: pv, delta, gamma, vega, theta, dv01, cva
+- [ ] 实现至少 2 条计算链路, 并可被 MCP tools 编排.
+  - FRTB SA 主链路: risk factor mapping -> sensitivities -> bucket aggregation -> correlation aggregation.
+  - CVA 副链路: exposure -> PD term structure or simplified PD -> LGD -> CVA.
+- [ ] 增加结果校验与 sanity check:
+  - 数值范围, 符号, 单位一致性
+  - 聚合前后守恒检查, 例如 sum(component) == portfolio
+
+### 2.5 MCP 交互层设计
+
+- [ ] 以 MCP 为中心设计工具集合, 让 agent 易于编排, 并体现业务语言:
+  - list_desks, list_traders, query_positions, get_market_snapshot
+  - frtb_map_risk_factors, frtb_calc_sensitivities, frtb_aggregate_sa
+  - frtb_apply_correlation, frtb_capital_charge_summary
+  - dollarize_positions, run_shock_scenario
+  - calc_cva_summary
+- [ ] 增加 Resources 与 Prompts 模板, 让业务背景与口径能被 agent 复用
+
+### 2.6 测试与演示
+
+- [ ] 单元测试覆盖关键计算
+- [ ] 集成测试覆盖典型用例
+- [ ] 输出 1 份 demo 脚本或对话示例, 展示从查询到风险分析的完整链路
 
 **验收标准**:
-- 4张核心表全部创建
-- 有足够的模拟数据支持测试
-- 3个查询工具都能正常工作
+- 有清晰的业务用例与数据口径说明
+- 数据模型与字段口径合理且可解释
+- 至少 2 条风险计算链路可运行并有测试
+- MCP 工具设计可被 agent 自然编排
+- 有可复现实验与演示材料
 
-## Phase 3: Greeks计算引擎
+## Phase 3: 生产化与高可用 Web 服务
 
-**目标**: 实现Greeks计算和风险聚合功能
+**目标**: 将 MCP server 以 streamable-http 方式部署为可复用的服务, 使用成熟框架与基础设施能力, 用指标验收高可用与性能.
 
-- [ ] Portfolio Greeks聚合计算
-- [ ] 按标的分组Greeks
-- [ ] Delta对冲建议
-- [ ] 按交易台聚合
-- [ ] 多币种转换(Dollarization)
-- [ ] 限额检查
-- [ ] 单元测试
+### 3.1 部署方式与运行形态
 
-**验收标准**:
-- Greeks计算准确
-- 支持多维度聚合
-- 限额检查功能正常
+- [ ] 基于成熟组件完成服务化部署, 不自研:
+  - uvicorn, docker, reverse proxy, k8s 或托管平台
+- [ ] 支持水平扩展与无状态化:
+  - streamable-http transport
+  - tasks 结果存储方案演进, 例如 redis
 
-## Phase 4: CVA和高级功能
+### 3.2 可观测性与容量指标
 
-**目标**: 实现CVA计算和压力测试
+- [ ] 定义指标与验收口径:
+  - QPS, p50, p95 latency, error rate
+  - availability SLO, 例如 99.9%
+- [ ] 集成成熟观测方案:
+  - structured logging
+  - metrics, traces, dashboards
 
-- [ ] 对手方数据和CVA计算
-- [ ] CVA变化分析
-- [ ] 信用利差压力测试
-- [ ] 市场压力测试
-- [ ] 历史情景回测
-- [ ] 假设分析
-- [ ] 集成测试
+### 3.3 安全与治理
 
-**验收标准**:
-- CVA计算逻辑正确
-- 压力测试能运行
-- 所有核心功能集成测试通过
-
-## Phase 5: 报表生成和系统优化
-
-**目标**: 实现专业报表生成和系统优化
-
-- [ ] Excel日度风险报告
-- [ ] 盈亏归因报告
-- [ ] 监管报送报告
-- [ ] 图表可视化
-- [ ] 数据库查询优化
-- [ ] 日志和监控
-- [ ] 错误处理
-- [ ] 文档完善
+- [ ] 采用成熟方案实现:
+  - TLS, authn/authz, rate limit
+  - network policy, secrets management
 
 **验收标准**:
-- 能生成专业Excel/PDF报表
-- 查询响应时间 < 1秒
-- 代码质量达到生产级别
+- 在 streamable-http 模式下可稳定运行并可被客户端连接
+- 在固定压测用例下达到目标 QPS 与 p95 延迟
+- 异常与取消路径可观测, 且错误率可控
 
 ## 时间规划
 
 | Phase | 预计时间 | 关键里程碑 |
 |-------|---------|-----------|
-| Phase 1 | 1周 | MCP Server运行 |
-| Phase 2 | 1-2周 | 完整数据模型 |
-| Phase 3 | 2-3周 | Greeks计算引擎 |
-| Phase 4 | 2-3周 | CVA和压力测试 |
-| Phase 5 | 2周 | 报表和优化 |
+| Phase 0 | 1 周 | MCP 最佳实践与可维护性增强 |
+| Phase 1 | 1 周 | MCP 最小可运行与端到端演示 |
+| Phase 2 | 3-6 周 | 业务场景驱动的数据建模与风险计算展示 |
+| Phase 3 | 1-2 周 | 生产化与指标验收 |
 
-**总计**: 8-11周
+**总计**: 6-10 周
 
 ## 开发建议
 

@@ -76,13 +76,20 @@
 - [x] 统一错误分层与结构化日志, 引入 correlation id 便于排障
 - [x] 为耗时操作提供 progress 与 cancellation 钩子
 - [x] 引入 tasks 以支持长耗时操作的轮询与延迟结果获取
-- [ ] 评估启用 Streamable HTTP 与 SSE 流, 为无状态与水平扩展做准备
+- [x] 评估启用 Streamable HTTP 与 SSE 流, 为无状态与水平扩展做准备
 - [ ] 数据访问层强化: 连接池, 超时, 重试, 明确事务边界与资源释放
 - [ ] 模块化重构: 拆分 main.py 为模块(工具层, 数据访问层, 配置层)
-- [ ] 按 MCP 指南完善工具命名, description 与 icon 元数据
-- [ ] 增加常用 Resources 与 Prompts 模板, 支持资源模板复用查询与报表
-- [ ] 扩充单元与集成测试覆盖新增路径, 并在 CI 中集成 lint 与 pre-commit
-- [ ] 同步 README 与 ROADMAP 的状态与用法, 保持示例与实现一致
+- [ ] 扩充单元与集成测试覆盖新增路径
+
+### Phase 2 业务主线
+
+- 主线 A: FRTB SA sensitivities, risk factor mapping -> sensitivities -> aggregation -> correlation
+- 辅线 C: CVA 简化链路, exposure -> PD -> LGD -> CVA
+
+### Phase 3 生产化与高可用
+
+- 使用 streamable-http 作为生产 transport
+- 使用成熟组件完成部署与治理, 并用 QPS, p95 latency, SLO 验收
 
 ## 基础技术栈
 

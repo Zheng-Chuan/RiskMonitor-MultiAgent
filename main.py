@@ -637,4 +637,24 @@ async def cancel_task(task_id: str) -> dict:
 
 if __name__ == "__main__":
     # 启动 MCP server
-    mcp.run()
+    transport = os.getenv("MCP_TRANSPORT")
+    if transport is None or not transport.strip():
+        app_env = os.getenv("APP_ENV", "development").strip().lower()
+        if app_env == "production":
+            transport = "streamable-http"
+        else:
+            transport = "stdio"
+    transport = transport.strip().lower()
+    mount_path = os.getenv("MCP_MOUNT_PATH")
+    if mount_path is not None:
+        mount_path = mount_path.strip() or None
+
+    if transport == "sse":
+        # SSE 为旧版 HTTP 传输, 仅用于兼容旧客户端
+        mcp.run(transport="sse", mount_path=mount_path)
+    elif transport in {"streamable-http", "http"}:
+        # Streamable HTTP 为推荐传输, 用于无状态部署与水平扩展
+        mcp.run(transport="streamable-http")
+    else:
+        # 默认使用 stdio, 适用于 Claude Desktop 与本地集成
+        mcp.run(transport="stdio")

@@ -40,9 +40,14 @@ services:
       MYSQL_PASSWORD: riskmonitor2024
       APP_ENV: production
       LOG_LEVEL: INFO
+      MCP_TRANSPORT: streamable-http
+      FASTMCP_HOST: 0.0.0.0
+      FASTMCP_PORT: 8000
     depends_on:
       mysql:
         condition: service_healthy
+    ports:
+      - "8000:8000"
     networks:
       - riskmonitor-network
     restart: unless-stopped

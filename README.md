@@ -69,6 +69,20 @@ python scripts/test_db_connection.py
 python main.py
 ```
 
+### 方式3: 生产部署 Streamable HTTP
+
+说明:
+本地开发与测试建议使用 stdio
+生产部署建议使用 streamable-http, 便于网络访问, 无状态部署与水平扩展
+
+启动方式示例:
+```bash
+MCP_TRANSPORT=streamable-http FASTMCP_HOST=0.0.0.0 FASTMCP_PORT=8000 python main.py
+```
+
+默认 MCP endpoint 通常为:
+`http://<host>:<port>/mcp`
+
 详细文档: [docs/README.md](docs/README.md)
 
 ---
