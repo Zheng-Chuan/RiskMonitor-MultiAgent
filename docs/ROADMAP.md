@@ -2,6 +2,63 @@
 
 采用最小可运行 demo -> 逐步扩充的策略, 从简单到复杂逐步构建系统.
 
+## 2026-01 1 个月范围(优先级 P1)
+
+说明:
+
+- 该项目在 2026-01 的优先级低于 `RiskAgent-MultiAgent` 与 `RiskKnowGraph-GraphRAG`.
+- 2026-01 只做最小可展示版本, 重点是可复现, 可演示, 可维护.
+
+硬性验收口径:
+
+- 本地可运行: MCP server 可稳定启动, 数据库可运行.
+- 端到端演示: MCP 客户端可调用至少 2 个工具, 且有 1 条 demo 脚本.
+- 工程化底线: 无明文 secrets, 错误分层与结构化日志可定位, 测试可运行.
+
+### Week 1: Phase 0 收尾
+
+- 交付
+
+  - 数据访问层强化: 连接池, 超时, 重试, 资源释放
+
+  - 模块化重构: 拆分 main.py 为模块
+
+  - 扩充测试覆盖新增路径
+
+- 验收
+
+  - Phase 0 验收标准全部满足
+
+### Week 2: Phase 1 稳定性与 DX
+
+- 交付
+
+  - 固化最小 demo 脚本或对话样例
+
+  - 统一配置与启动方式(README)
+
+- 验收
+
+  - MCP 客户端能调用至少 2 个工具
+
+  - 端到端 demo 可复现
+
+### Week 3-4: Phase 2 最小业务演示(收敛版)
+
+- 交付
+
+  - 选定 1 条主线用例并固化口径(例如 FRTB SA sensitivities 的简化链路)
+
+  - 输出结构化结果与 sanity checks
+
+  - 增加最小集成测试覆盖该用例
+
+- 验收
+
+  - 有清晰的业务用例与数据口径说明
+
+  - 至少 1 条计算链路可运行并有测试
+
 ## Phase 0: 基础强化与MCP最佳实践
 
 **目标**: 在现有功能基础上优先完成安全, 稳定, 可扩展, 可维护方面的增强, 为后续各 Phase 打好生产级基础.
@@ -62,12 +119,14 @@
 ### 2.2 数据模型与数据字典
 
 - [ ] 基于业务用例设计数据模型, 明确实体与关系, 覆盖以下最小集合:
+
   - instruments: component, compound, underlying, strike, expiry, option_type
   - positions: component_position, compound_position, quantity, desk, trader, book
   - market_data: spot, fx_rates, curves, vol_surface, credit_spreads
   - risk_measures: pv, delta, gamma, vega, theta, dv01, cva
   - counterparties: rating, pd, lgd, netting_set, collateral
 - [ ] 为关键字段提供数据字典, 明确单位与口径, 例如:
+
   - delta per share vs per contract, dv01 definition, fx conversion convention
   - valuation_time cut, eod vs intraday snapshot
 - [ ] 为查询路径设计索引策略, 以演示工程思维即可, 不追求自研高可用
@@ -75,6 +134,7 @@
 ### 2.3 公开数据与资料引用
 
 - [ ] 收集可公开引用的数据或资料, 用于支撑口径与示例数据:
+
   - 利率曲线节点样例, 波动率样例, CDS spread 样例, FX spot 样例
   - Greeks 定义与聚合口径资料, FRTB SA sensitivities 资料
   - CVA 与 XVA 的概念资料
@@ -84,15 +144,18 @@
 
 - [ ] 定义统一的 risk measure 输出结构, 例如: pv, delta, gamma, vega, theta, dv01, cva
 - [ ] 实现至少 2 条计算链路, 并可被 MCP tools 编排.
+
   - FRTB SA 主链路: risk factor mapping -> sensitivities -> bucket aggregation -> correlation aggregation.
   - CVA 副链路: exposure -> PD term structure or simplified PD -> LGD -> CVA.
 - [ ] 增加结果校验与 sanity check:
+
   - 数值范围, 符号, 单位一致性
   - 聚合前后守恒检查, 例如 sum(component) == portfolio
 
 ### 2.5 MCP 交互层设计
 
 - [ ] 以 MCP 为中心设计工具集合, 让 agent 易于编排, 并体现业务语言:
+
   - list_desks, list_traders, query_positions, get_market_snapshot
   - frtb_map_risk_factors, frtb_calc_sensitivities, frtb_aggregate_sa
   - frtb_apply_correlation, frtb_capital_charge_summary
@@ -148,7 +211,7 @@
 ## 时间规划
 
 | Phase | 预计时间 | 关键里程碑 |
-|-------|---------|-----------|
+| ------- | -------- | ---------- |
 | Phase 0 | 1 周 | MCP 最佳实践与可维护性增强 |
 | Phase 1 | 1 周 | MCP 最小可运行与端到端演示 |
 | Phase 2 | 3-6 周 | 业务场景驱动的数据建模与风险计算展示 |
