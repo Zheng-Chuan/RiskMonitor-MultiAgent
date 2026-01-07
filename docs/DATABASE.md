@@ -127,17 +127,17 @@ WHERE calculation_date < DATE_SUB(CURDATE(), INTERVAL 3 YEAR);
 ### 每日备份
 ```bash
 # 全量备份
-docker-compose exec mysql mysqldump -u admin -priskmonitor2024 riskmonitor > backup_$(date +%Y%m%d).sql
+docker-compose exec -T mysql sh -lc 'mysqldump -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}"' > backup_$(date +%Y%m%d).sql
 
 # 压缩备份
-docker-compose exec mysql mysqldump -u admin -priskmonitor2024 riskmonitor | gzip > backup_$(date +%Y%m%d).sql.gz
+docker-compose exec -T mysql sh -lc 'mysqldump -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}"' | gzip > backup_$(date +%Y%m%d).sql.gz
 ```
 
 ### 恢复数据
 ```bash
 # 从备份恢复
-docker-compose exec -T mysql mysql -u admin -priskmonitor2024 riskmonitor < backup_20241031.sql
+docker-compose exec -T mysql sh -lc 'mysql -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}"' < backup_20241031.sql
 
 # 从压缩备份恢复
-gunzip < backup_20241031.sql.gz | docker-compose exec -T mysql mysql -u admin -priskmonitor2024 riskmonitor
+gunzip < backup_20241031.sql.gz | docker-compose exec -T mysql sh -lc 'mysql -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}"'
 ```

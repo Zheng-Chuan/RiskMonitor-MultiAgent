@@ -6,6 +6,22 @@
 make setup-mcp
 ```
 
+## 本地开发环境
+
+本项目本地开发与测试默认使用 conda 环境 `MCP`.
+如果你在其他解释器里直接运行 `pytest` 或 `python main.py`, 可能会出现 `ModuleNotFoundError: mcp` 之类的报错.
+
+最小自检命令:
+
+```bash
+python -c "import sys; print(sys.executable); import mcp; print('mcp_ok')"
+```
+
+如果自检失败:
+
+- **优先检查** 当前终端是否已激活 conda 环境 `MCP`
+- **其次检查** `pip install -r requirements.txt` 是否是在该环境内执行
+
 ## 配置MCP客户端
 
 ### 配置文件位置

@@ -18,15 +18,27 @@ import os
 load_dotenv()
 
 
+def _require_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        pytest.skip(f"missing env var: {name}")
+    return value.strip()
+
+
 @pytest.fixture
 def db_connection():
     """数据库连接fixture"""
+    host = _require_env("MYSQL_HOST")
+    port = int(_require_env("MYSQL_PORT"))
+    database = _require_env("MYSQL_DATABASE")
+    user = _require_env("MYSQL_USER")
+    password = _require_env("MYSQL_PASSWORD")
     conn = pymysql.connect(
-        host=os.getenv('MYSQL_HOST', 'localhost'),
-        port=int(os.getenv('MYSQL_PORT', '3306')),
-        database=os.getenv('MYSQL_DATABASE', 'riskmonitor'),
-        user=os.getenv('MYSQL_USER', 'admin'),
-        password=os.getenv('MYSQL_PASSWORD', 'riskmonitor2024'),
+        host=host,
+        port=port,
+        database=database,
+        user=user,
+        password=password,
         charset='utf8mb4',
         cursorclass=pymysql.cursors.DictCursor
     )

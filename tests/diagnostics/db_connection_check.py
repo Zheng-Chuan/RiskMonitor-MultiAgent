@@ -9,14 +9,14 @@ import sys
 from pathlib import Path
 
 # Add project root to path
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import pymysql
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv(dotenv_path=project_root / ".env")
 
 def test_connection():
     """Test database connection"""
@@ -27,9 +27,14 @@ def test_connection():
         'port': int(os.getenv('MYSQL_PORT', '3306')),
         'database': os.getenv('MYSQL_DATABASE', 'riskmonitor'),
         'user': os.getenv('MYSQL_USER', 'admin'),
-        'password': os.getenv('MYSQL_PASSWORD', 'riskmonitor2024'),
+        'password': os.getenv('MYSQL_PASSWORD'),
         'charset': 'utf8mb4'
     }
+    
+    if db_config['password'] is None or not str(db_config['password']).strip():
+        print("✗ MYSQL_PASSWORD is missing")
+        print("  Please set MYSQL_PASSWORD in .env or environment variables")
+        return False
     
     print("=" * 60)
     print("Testing Database Connection")

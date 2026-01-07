@@ -9,204 +9,131 @@
 - 该项目在 2026-01 的优先级低于 `RiskAgent-MultiAgent` 与 `RiskKnowGraph-GraphRAG`.
 - 2026-01 只做最小可展示版本, 重点是可复现, 可演示, 可维护.
 
+主线定位:
+
+- 用例 A: Intraday desk exposure monitoring(near real time)
+  - 输入: positions(交易系统落库) + market snapshot(上游 API 或 mock) + risk limits
+  - 输出: desk 级别 exposure(PV, Delta, Vega 的简化版) + breaches + alert payload
+  - 目标: 让工程师能通过工具与文档理解风控口径, 让 risk manager 能实时查询与订阅告警
+
 硬性验收口径:
 
 - 本地可运行: MCP server 可稳定启动, 数据库可运行.
 - 端到端演示: MCP 客户端可调用至少 2 个工具, 且有 1 条 demo 脚本.
-- 工程化底线: 无明文 secrets, 错误分层与结构化日志可定位, 测试可运行.
+- 工程化底线: 无明文 secrets, 错误分层与结构化日志可定位, tests 可运行且通过.
 
-### Week 1: Phase 0 收尾
+验收原则:
 
-- 交付
+- 以 tests 全部通过为硬标准.
+- demo 作为辅助验证, 用于面试叙事与可复现展示.
 
-  - 数据访问层强化: 连接池, 超时, 重试, 资源释放
+周计划与 phase 映射:
 
-  - 模块化重构: 拆分 main.py 为模块
+- Week 1-2 对应 Phase 0: 工程化底线与可复现闭环.
+- Week 3 对应 Phase 1: DX 与服务化形态稳定.
+- Week 4 对应 Phase 3(最小版): 可观测与告警闭环, 指标化验收.
 
-  - 扩充测试覆盖新增路径
-
-- 验收
-
-  - Phase 0 验收标准全部满足
-
-### Week 2: Phase 1 稳定性与 DX
+### Week 1(Phase 0): 监控链路 MVP(vertical slice)
 
 - 交付
 
-  - 固化最小 demo 脚本或对话样例
+  - [x] 业务用例固化
+    - [x] 定义口径与 contract
+      - [x] positions schema, market snapshot schema, risk limits schema
+      - [x] output schema: exposure, breaches, alerts, citations(如果有)
+    - [x] 实现 1 个用例级入口(可被 MCP 与 HTTP 复用)
+      - [x] 示例: monitor_desk_exposure(desk, as_of, horizon, limit_profile)
 
-  - 统一配置与启动方式(README)
+  - [x] 实时性与可观测性底座(最小版)
+    - [x] 数据访问层: 超时, 重试, 资源释放, 明确事务边界
+    - [x] 结构化日志: request_id, tool name, latency_ms, error.code
+    - [x] 指标: 至少输出 2 个核心指标(例如 qps, p95 latency)的最小实现方式
+
+  - [x] demo 与回归入口
+    - [x] 1 条 demo 脚本: 从查询头寸 -> 聚合 exposure -> 限额判断 -> 输出告警 payload
+    - [x] 1 条端到端 smoke test 覆盖该链路
 
 - 验收
 
-  - MCP 客户端能调用至少 2 个工具
+  - [x] 端到端 demo 可复现
+    - [x] 本地一键启动数据库与 server
+    - [x] MCP 客户端可调用至少 2 个工具
+    - [x] demo 脚本输出包含:
+      - [x] exposure(按 desk 聚合)
+      - [x] breaches(超限判断)
+      - [x] request_id 与可定位日志
+  - [x] 工程化底线满足
+    - [x] 无明文 secrets
+    - [x] 核心链路具备超时与结构化错误返回
+    - [x] tests 可运行且通过
 
-  - 端到端 demo 可复现
-
-### Week 3-4: Phase 2 最小业务演示(收敛版)
+### Week 2(Phase 0): 工程化强化与性能
 
 - 交付
 
-  - 选定 1 条主线用例并固化口径(例如 FRTB SA sensitivities 的简化链路)
+  - [ ] 模块化重构
+    - [ ] 拆分 main.py 为模块(接口层, service 层, 计算层, 数据访问层, 配置层)
+    - [ ] 统一输入输出 schema 与错误结构
 
-  - 输出结构化结果与 sanity checks
+  - [ ] 数据访问层工业化
+    - [ ] 连接池, 超时, 重试
+    - [ ] 读写分离预留点或 cache 抽象(先不实现也可)
 
-  - 增加最小集成测试覆盖该用例
+  - [ ] 性能与容量口径
+    - [ ] 固化压测用例(固定请求集)
+    - [ ] 定义并输出 p50, p95 latency 的目标与测量方法
 
 - 验收
 
-  - 有清晰的业务用例与数据口径说明
+  - [ ] p95 latency 在固定用例下达到目标(先给出保守目标, 例如 500ms 以内)
+  - [ ] 关键模块可单测, 用例级逻辑可集成测试
 
-  - 至少 1 条计算链路可运行并有测试
+### Week 3(Phase 1): 服务化形态与 DX 固化
 
-## Phase 0: 基础强化与MCP最佳实践
+- 交付
 
-**目标**: 在现有功能基础上优先完成安全, 稳定, 可扩展, 可维护方面的增强, 为后续各 Phase 打好生产级基础.
+  - [ ] streamable-http 部署形态固化
+    - [ ] streamable-http 作为推荐部署方式
+    - [ ] health check, readiness, graceful shutdown
+  - [ ] DX 固化
+    - [ ] 统一启动与测试入口
+    - [x] 明确目录职责(例如 src, scripts, tests)
 
-- [x] 移除 mcp_config.json 中的明文 secrets, 改为读取环境变量, 未使用的第三方 server 默认 disabled
-- [x] 为高风险工具补充用途说明与前置授权提示, 确保用户同意与最小权限
-- [x] 为至少 2 个工具完成 JSON Schema 化输入输出, 输出改为结构化 JSON
-- [x] 为查询类工具增加分页与日期范围过滤参数
-- [x] 统一错误分层与结构化日志, 引入 correlation id 便于排障
-- [x] 为耗时操作提供 progress 与 cancellation 钩子
-- [x] 引入 tasks 以支持长耗时操作的轮询与延迟结果获取
-- [x] 评估启用 Streamable HTTP 与 SSE 流, 为无状态与水平扩展做准备
-- [ ] 数据访问层强化: 连接池, 超时, 重试, 明确事务边界与资源释放
-- [ ] 模块化重构: 拆分 main.py 为模块(工具层, 数据访问层, 配置层)
-- [ ] 扩充单元与集成测试覆盖新增路径
+- 验收
 
-**验收标准**:
-- mcp_config.json 无明文 secrets, 未用 server 处于禁用状态
-- 至少 2 个工具完成 JSON Schema 化并返回结构化 JSON
-- 查询类工具支持分页或日期范围过滤
-- 关键路径具备结构化日志与错误分层, 并提供 progress/cancellation 钩子
-- 新增或调整的测试通过
+  - [ ] 在 streamable-http 模式下可稳定运行并可被客户端连接
+  - [ ] tests 全部通过
 
-## Phase 1: MCP 最小可运行与开发体验
+### Week 4(Phase 3 最小版): 可观测与告警闭环
 
-**目标**: 保证 MCP server 可在本地稳定运行, 并能被 MCP 客户端调用, 形成端到端演示闭环.
+- 交付
 
-- [x] 项目初始化
-- [x] Docker 环境配置
-- [x] MySQL 数据库初始化
-- [x] MCP Server 基础框架
-- [x] 基础查询与聚合工具可用
-- [x] Claude Desktop 或 Windsurf 可调用工具
+  - [ ] 告警闭环
+    - [ ] 告警规则最小集合(例如 desk delta breach)
+    - [ ] 告警路由(例如 webhook 或写入 alerts 表)
+  - [ ] 可观测与容量口径
+    - [ ] 指标可观测: p50, p95 latency, error rate
+    - [ ] 固化压测用例与报告输出
 
-**验收标准**:
-- 数据库正常运行
-- MCP Server 能启动
-- MCP 客户端能调用至少 2 个工具
-- 至少 1 个端到端流程跑通
+- 验收
 
-## Phase 2: 金融衍生品业务场景与风险计算展示
+  - [ ] 告警可端到端触发并可追踪(request_id, alert_id)
+  - [ ] 固定压测用例下 error rate 与 p95 latency 可观测
+  - [ ] tests 全部通过
 
-**目标**: 用更专业的金融衍生品业务场景驱动实现, 重点展示业务理解, 数据建模能力, 与风险计算能力.
+## Phase 映射(参考)
 
-### 2.1 业务问题与用例设计
+说明:
 
-- [ ] 选定 2 到 3 条真实感用例, 并明确计算口径与输出形式.
-  - 主线 A: FRTB SA sensitivities 流程演示.
-    - 输入: position, instrument, market snapshot, risk factor mapping.
-    - 输出: Delta, Vega, Curvature sensitivities, 以及按 risk class 的聚合结果.
-    - 可选: 应用相关性矩阵后得到资本占用的示意结果.
-  - 辅线 C: CVA 简化链路演示.
-    - 输入: counterparty, rating or PD, LGD, expected exposure.
-    - 输出: counterparty 级别 CVA 与变化解释.
-  - 业务增强: 多币种 Dollarization 与 desk 级别聚合, 作为口径统一的一部分.
-- [ ] 定义输入输出口径, 例如: desk, trader, portfolio, instrument, currency, valuation_time, risk_factor
+- 本文以 week 为权威计划.
+- phase 仅用于描述能力成熟度, 用于后续复盘与叙事.
 
-### 2.2 数据模型与数据字典
+phase 定义:
 
-- [ ] 基于业务用例设计数据模型, 明确实体与关系, 覆盖以下最小集合:
-
-  - instruments: component, compound, underlying, strike, expiry, option_type
-  - positions: component_position, compound_position, quantity, desk, trader, book
-  - market_data: spot, fx_rates, curves, vol_surface, credit_spreads
-  - risk_measures: pv, delta, gamma, vega, theta, dv01, cva
-  - counterparties: rating, pd, lgd, netting_set, collateral
-- [ ] 为关键字段提供数据字典, 明确单位与口径, 例如:
-
-  - delta per share vs per contract, dv01 definition, fx conversion convention
-  - valuation_time cut, eod vs intraday snapshot
-- [ ] 为查询路径设计索引策略, 以演示工程思维即可, 不追求自研高可用
-
-### 2.3 公开数据与资料引用
-
-- [ ] 收集可公开引用的数据或资料, 用于支撑口径与示例数据:
-
-  - 利率曲线节点样例, 波动率样例, CDS spread 样例, FX spot 样例
-  - Greeks 定义与聚合口径资料, FRTB SA sensitivities 资料
-  - CVA 与 XVA 的概念资料
-- [ ] 在 docs 中记录来源链接与口径假设, 并说明简化点
-
-### 2.4 风险计算实现
-
-- [ ] 定义统一的 risk measure 输出结构, 例如: pv, delta, gamma, vega, theta, dv01, cva
-- [ ] 实现至少 2 条计算链路, 并可被 MCP tools 编排.
-
-  - FRTB SA 主链路: risk factor mapping -> sensitivities -> bucket aggregation -> correlation aggregation.
-  - CVA 副链路: exposure -> PD term structure or simplified PD -> LGD -> CVA.
-- [ ] 增加结果校验与 sanity check:
-
-  - 数值范围, 符号, 单位一致性
-  - 聚合前后守恒检查, 例如 sum(component) == portfolio
-
-### 2.5 MCP 交互层设计
-
-- [ ] 以 MCP 为中心设计工具集合, 让 agent 易于编排, 并体现业务语言:
-
-  - list_desks, list_traders, query_positions, get_market_snapshot
-  - frtb_map_risk_factors, frtb_calc_sensitivities, frtb_aggregate_sa
-  - frtb_apply_correlation, frtb_capital_charge_summary
-  - dollarize_positions, run_shock_scenario
-  - calc_cva_summary
-- [ ] 增加 Resources 与 Prompts 模板, 让业务背景与口径能被 agent 复用
-
-### 2.6 测试与演示
-
-- [ ] 单元测试覆盖关键计算
-- [ ] 集成测试覆盖典型用例
-- [ ] 输出 1 份 demo 脚本或对话示例, 展示从查询到风险分析的完整链路
-
-**验收标准**:
-- 有清晰的业务用例与数据口径说明
-- 数据模型与字段口径合理且可解释
-- 至少 2 条风险计算链路可运行并有测试
-- MCP 工具设计可被 agent 自然编排
-- 有可复现实验与演示材料
-
-## Phase 3: 生产化与高可用 Web 服务
-
-**目标**: 将 MCP server 以 streamable-http 方式部署为可复用的服务, 使用成熟框架与基础设施能力, 用指标验收高可用与性能.
-
-### 3.1 部署方式与运行形态
-
-- [ ] 基于成熟组件完成服务化部署, 不自研:
-  - uvicorn, docker, reverse proxy, k8s 或托管平台
-- [ ] 支持水平扩展与无状态化:
-  - streamable-http transport
-  - tasks 结果存储方案演进, 例如 redis
-
-### 3.2 可观测性与容量指标
-
-- [ ] 定义指标与验收口径:
-  - QPS, p50, p95 latency, error rate
-  - availability SLO, 例如 99.9%
-- [ ] 集成成熟观测方案:
-  - structured logging
-  - metrics, traces, dashboards
-
-### 3.3 安全与治理
-
-- [ ] 采用成熟方案实现:
-  - TLS, authn/authz, rate limit
-  - network policy, secrets management
-
-**验收标准**:
-- 在 streamable-http 模式下可稳定运行并可被客户端连接
-- 在固定压测用例下达到目标 QPS 与 p95 延迟
-- 异常与取消路径可观测, 且错误率可控
+- Phase 0: 安全与工程化底线, 可复现, 可观测, tests 可信.
+- Phase 1: MCP 可用与 DX, demo 脚本固化, 结构清晰.
+- Phase 2: 专业业务用例与口径, 更强的风险计算与 explainability.
+- Phase 3: 高可用 web 服务, 性能与 SLO 可量化验收.
 
 ## 时间规划
 
@@ -223,6 +150,5 @@
 
 1. **每完成一个Phase就提交Git** - 保持代码可回溯
 2. **边开发边写测试** - 避免后期bug堆积
-3. **保持README更新** - 记录问题和解决方案
-4. **定期Demo** - 录制演示视频用于展示
-5. **代码质量** - 使用类型提示、添加docstring、遵循PEP 8
+3. **定期Demo** - 录制演示视频用于展示
+4. **代码质量** - 使用类型提示、添加docstring、遵循PEP 8

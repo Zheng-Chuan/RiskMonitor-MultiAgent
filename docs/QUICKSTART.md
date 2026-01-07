@@ -32,13 +32,8 @@ docker-compose up -d
 ### Step 4: 创建Python虚拟环境
 
 ```bash
-# 创建虚拟环境
-python -m venv .venv
-
-# 激活虚拟环境
-source .venv/bin/activate  # macOS/Linux
-# 或
-.venv\Scripts\activate  # Windows
+# 使用 conda 环境 MCP
+conda activate MCP
 ```
 
 ### Step 5: 安装Python依赖
@@ -50,7 +45,7 @@ pip install -r requirements.txt
 ### Step 6: 测试数据库连接
 
 ```bash
-python scripts/test_db_connection.py
+python tests/diagnostics/db_connection_check.py
 ```
 
 如果看到 `✓ All tests passed!`，说明环境搭建成功！
@@ -70,10 +65,10 @@ docker-compose ps
 
 ```bash
 # 方式1: 使用测试脚本
-python scripts/test_db_connection.py
+python tests/diagnostics/db_connection_check.py
 
 # 方式2: 直接连接数据库
-docker-compose exec mysql mysql -u admin -priskmonitor2024 riskmonitor
+docker-compose exec mysql sh -lc 'mysql -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}"'
 
 # 在MySQL中执行
 SHOW TABLES;                  # 查看所有表
@@ -114,7 +109,7 @@ docker-compose logs -f mysql
 docker-compose restart mysql
 
 # 进入MySQL容器
-docker-compose exec mysql mysql -u admin -priskmonitor2024 riskmonitor
+docker-compose exec mysql sh -lc 'mysql -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}"'
 ```
 
 ### 配置Claude Desktop
@@ -146,10 +141,10 @@ make test-db
 make shell-db
 
 # 查看表结构
-docker-compose exec mysql mysql -u admin -priskmonitor2024 -e "DESCRIBE riskmonitor.positions;"
+docker-compose exec mysql sh -lc 'mysql -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" -e "DESCRIBE $${MYSQL_DATABASE}.positions;"'
 
 # 查看数据
-docker-compose exec mysql mysql -u admin -priskmonitor2024 -e "SELECT * FROM riskmonitor.positions LIMIT 5;"
+docker-compose exec mysql sh -lc 'mysql -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" -e "SELECT * FROM $${MYSQL_DATABASE}.positions LIMIT 5;"'
 ```
 
 #### 容器管理
@@ -177,4 +172,3 @@ docker-compose --profile tools up -d
 访问 http://localhost:8080
 - 服务器: mysql
 - 用户名: admin
-- 密码: riskmonitor2024

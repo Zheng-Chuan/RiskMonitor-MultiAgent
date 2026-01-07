@@ -10,10 +10,9 @@
 - **[系统架构](ARCHITECTURE.md)** - 系统设计
 - **[功能说明](FEATURES.md)** - MCP工具
 - **[数据库](DATABASE.md)** - 数据库设计
-- **[测试](TESTING.md)** - 测试指南
 - **[路线图](ROADMAP.md)** - 开发计划
-- **[故障排除](TROUBLESHOOTING.md)** - 常见问题
-- **[MCP面试题](MCP_INTERVIEW.md)** - 20道精选面试题
+- **[本地开发](QUICKSTART.md)** - 本地开发与验证
+- **[快速配置](SETUP.md)** - Docker部署和MCP配置
 
 ## 配置示例
 

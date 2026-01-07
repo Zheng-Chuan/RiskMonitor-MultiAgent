@@ -63,7 +63,7 @@ docker-compose up -d mysql
 pip install -r requirements.txt
 
 # 3. 测试数据库连接
-python scripts/test_db_connection.py
+python tests/diagnostics/db_connection_check.py
 
 # 4. 运行MCP服务器
 python main.py

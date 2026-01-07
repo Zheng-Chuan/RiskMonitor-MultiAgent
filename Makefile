@@ -42,7 +42,17 @@ up:
 	@docker-compose ps
 
 setup-mcp:
-	@./scripts/setup_mcp.sh
+	@echo "=================================="
+	@echo "RiskMonitor-MCP Setup"
+	@echo "=================================="
+	@echo "Building Docker images..."
+	docker-compose build
+	@echo "Starting services..."
+	docker-compose up -d
+	@echo "Waiting for MySQL to be ready..."
+	@sleep 10
+	@echo "Containers are running!"
+	@docker-compose ps
 
 mcp-logs:
 	docker logs -f riskmonitor-mcp
@@ -61,7 +71,7 @@ logs:
 
 test-db:
 	@echo "Testing database connection..."
-	python scripts/test_db_connection.py
+	python tests/diagnostics/db_connection_check.py
 
 test-unit:
 	@echo "Running unit tests..."
@@ -93,11 +103,10 @@ clean-cache:
 	@echo "Cache files cleaned"
 
 shell-db:
-	docker-compose exec mysql mysql -u admin -priskmonitor2024 riskmonitor
+	docker-compose exec mysql sh -lc 'mysql -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}"'
 
 phpmyadmin:
 	docker-compose --profile tools up -d
 	@echo "phpMyAdmin available at http://localhost:8080"
 	@echo "Server: mysql"
 	@echo "Username: admin"
-	@echo "Password: riskmonitor2024"
