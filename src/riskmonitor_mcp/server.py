@@ -10,7 +10,7 @@ import uuid
 import asyncio
 import time
 from typing import Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 from mcp.server import FastMCP
@@ -672,7 +672,7 @@ async def monitor_desk_exposure(
 
     try:
         if as_of is None or not as_of.strip():
-            as_of = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+            as_of = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         else:
             as_of = as_of.strip()
 

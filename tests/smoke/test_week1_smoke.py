@@ -57,6 +57,18 @@ async def run_smoke(snapshot_url: str) -> dict[str, Any]:
     )
 
 
+def test_week1_smoke() -> None:
+    # Week 1 验收: 端到端 smoke test 覆盖 monitoring 链路.
+    server = start_snapshot_server("127.0.0.1", 9010)
+    try:
+        snapshot_url = "http://127.0.0.1:9010/snapshot"
+        result = asyncio.run(run_smoke(snapshot_url))
+        assert_schema(result)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def main() -> None:
     server = start_snapshot_server("127.0.0.1", 9010)
     try:
