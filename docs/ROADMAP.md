@@ -94,9 +94,9 @@
 
 - 交付
 
-  - [ ] streamable-http 部署形态固化
-    - [ ] streamable-http 作为推荐部署方式
-    - [ ] health check, readiness, graceful shutdown
+  - [x] streamable-http 部署形态固化
+    - [x] streamable-http 作为推荐部署方式
+    - [x] health check, readiness, graceful shutdown
   - [ ] DX 固化
     - [ ] 统一启动与测试入口
     - [x] 明确目录职责(例如 src, scripts, tests)
@@ -104,7 +104,7 @@
 - 验收
 
   - [ ] 在 streamable-http 模式下可稳定运行并可被客户端连接
-  - [ ] tests 全部通过
+  - [x] tests 全部通过
 
 ### Week 4(Phase 3 最小版): 可观测与告警闭环
 

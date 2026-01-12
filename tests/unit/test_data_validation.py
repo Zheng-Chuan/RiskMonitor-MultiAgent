@@ -1,5 +1,5 @@
 """
-单元测试：数据验证逻辑
+单元测试: 数据验证逻辑
 不需要数据库连接
 """
 
@@ -24,16 +24,16 @@ def test_position_id_format():
 
 
 def test_delta_calculation():
-    """测试Delta计算逻辑"""
-    # Call期权：Delta为正
+    """测试 Delta 计算逻辑"""
+    # Call 期权: Delta 为正
     call_delta = 600.0
     assert call_delta > 0
 
-    # Put期权：Delta为负
+    # Put 期权: Delta 为负
     put_delta = -300.0
     assert put_delta < 0
 
-    # Delta范围检查
+    # Delta 范围检查
     assert abs(call_delta) <= 10000  # 合理范围
 
 
