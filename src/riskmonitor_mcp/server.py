@@ -18,6 +18,7 @@ from starlette.responses import JSONResponse, Response
 from riskmonitor_mcp.data_access.health_checks import check_mysql_ready
 from riskmonitor_mcp.services import readiness_service
 from riskmonitor_mcp.services.logging_service import configure_logging
+from riskmonitor_mcp.services.prometheus_metrics_service import generate_prometheus_metrics
 from riskmonitor_mcp.tools.mcp_tools import (
     calculate_total_delta,
     cancel_task,
@@ -85,6 +86,14 @@ async def readiness_check(request: Request) -> Response:
         },
         status_code=503,
     )
+
+
+@mcp.custom_route("/metrics", methods=["GET"], include_in_schema=False)
+async def metrics_endpoint(request: Request) -> Response:
+    """Week4: Prometheus 指标端点"""
+    del request
+    metrics_text = generate_prometheus_metrics()
+    return Response(content=metrics_text, media_type="text/plain; version=0.0.4")
 
 
 def _install_signal_handlers() -> None:

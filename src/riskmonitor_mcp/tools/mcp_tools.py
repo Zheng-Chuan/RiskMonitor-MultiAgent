@@ -16,12 +16,14 @@ from typing import Optional
 from mcp.server import FastMCP
 from mcp.server.fastmcp import Context
 
-from riskmonitor_mcp.data_access.errors import DataAccessError
-from riskmonitor_mcp.data_access.market_snapshot_client import fetch_market_snapshot
 from riskmonitor_mcp.data_access import positions_repository
-from riskmonitor_mcp.services.alerting_service import build_alerts
-from riskmonitor_mcp.services.breach_service import build_abs_delta_breaches
+from riskmonitor_mcp.data_access.market_snapshot_client import fetch_market_snapshot
+from riskmonitor_mcp.data_access.errors import DataAccessError
+from riskmonitor_mcp.data_access import alerts_repository
 from riskmonitor_mcp.services.exposure_service import compute_exposure
+from riskmonitor_mcp.services.breach_service import build_abs_delta_breaches
+from riskmonitor_mcp.services.alerting_service import build_alerts
+from riskmonitor_mcp.services import alert_rules_service
 from riskmonitor_mcp.services.logging_service import (
     new_request_id,
     log_info,
@@ -412,12 +414,31 @@ async def monitor_desk_exposure(
         breaches = build_abs_delta_breaches(total_delta=total_delta, abs_delta_limit=abs_delta_limit)
         alerts = build_alerts(desk=desk, as_of=as_of, breaches=breaches)
 
+        # Week4: 告警闭环 - 评估告警规则并持久化
+        abs_delta = abs(total_delta)
+        alert_records = alert_rules_service.evaluate_desk_delta_breach(
+            desk=desk,
+            abs_delta=abs_delta,
+            threshold=abs_delta_limit,
+            request_id=request_id
+        )
+        
+        if alert_records:
+            try:
+                alerts_repository.save_alerts_batch(alert_records)
+                log_info(f"tool=monitor_desk_exposure saved {len(alert_records)} alerts", request_id)
+            except DataAccessError as alert_err:
+                log_error(f"tool=monitor_desk_exposure failed to save alerts: {alert_err}", request_id)
+
         if ctx is not None:
             await ctx.report_progress(95, 100, "结果整理完成")
 
         latency_ms = (time.monotonic() - start) * 1000.0
         await record_latency("monitor_desk_exposure", latency_ms)
         log_info(f"tool=monitor_desk_exposure ok desk={desk} latency_ms={latency_ms:.2f}", request_id)
+
+        # 格式化告警用于响应
+        formatted_alerts = alert_rules_service.format_alerts_for_response(alert_records)
 
         return {
             "as_of": as_of,
@@ -431,7 +452,7 @@ async def monitor_desk_exposure(
             },
             "limits": {"abs_delta_limit": float(abs_delta_limit)},
             "breaches": breaches,
-            "alerts": alerts,
+            "alerts": formatted_alerts,
             "market_snapshot": {
                 "source_url": market_snapshot_url,
                 "as_of": snapshot.get("as_of"),

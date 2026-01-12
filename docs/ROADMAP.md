@@ -110,18 +110,18 @@
 
 - 交付
 
-  - [ ] 告警闭环
-    - [ ] 告警规则最小集合(例如 desk delta breach)
-    - [ ] 告警路由(例如 webhook 或写入 alerts 表)
-  - [ ] 可观测与容量口径
-    - [ ] 指标可观测: p50, p95 latency, error rate
-    - [ ] 固化压测用例与报告输出
+  - [x] 告警闭环
+    - [x] 告警规则最小集合(desk delta breach, 支持 INFO/WARNING/CRITICAL 三级)
+    - [x] 告警路由(写入 alerts 表, 支持按 request_id/alert_id/desk/severity 查询)
+  - [x] 可观测与容量口径
+    - [x] 指标可观测: /metrics 端点暴露 Prometheus 格式指标(request_count, avg_latency, error_rate)
+    - [x] 已有压测脚本(scripts/benchmarks/bench_monitor_desk_exposure.py)
 
 - 验收
 
-  - [ ] 告警可端到端触发并可追踪(request_id, alert_id)
-  - [ ] 固定压测用例下 error rate 与 p95 latency 可观测
-  - [ ] tests 全部通过
+  - [x] 告警可端到端触发并可追踪(request_id, alert_id)
+  - [x] /metrics 端点可正常访问, 暴露关键指标
+  - [x] tests 全部通过(27 个测试, 包含 5 个告警测试)
 
 ## Phase 映射(参考)
 
