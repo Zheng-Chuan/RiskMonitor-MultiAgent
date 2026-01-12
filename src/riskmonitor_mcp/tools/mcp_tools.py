@@ -1,0 +1,549 @@
+"""MCP tool functions.
+
+This module contains only tool entrypoints.
+Database access is delegated to data_access.
+Business logic is delegated to services.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import time
+from datetime import datetime, timezone
+from typing import Optional
+
+from mcp.server import FastMCP
+from mcp.server.fastmcp import Context
+
+from riskmonitor_mcp.data_access.errors import DataAccessError
+from riskmonitor_mcp.data_access.market_snapshot_client import fetch_market_snapshot
+from riskmonitor_mcp.data_access import positions_repository
+from riskmonitor_mcp.services.alerting_service import build_alerts
+from riskmonitor_mcp.services.breach_service import build_abs_delta_breaches
+from riskmonitor_mcp.services.exposure_service import compute_exposure
+from riskmonitor_mcp.services.logging_service import (
+    new_request_id,
+    log_info,
+    log_error,
+    log_exception,
+)
+from riskmonitor_mcp.services.metrics_service import record_latency, get_service_metrics_snapshot
+from riskmonitor_mcp.services.task_registry import new_task_id, set_task, get_task
+from riskmonitor_mcp.tools.errors import error_payload
+
+
+def register_tools(mcp: FastMCP) -> None:
+    # 将 tool 注册到 MCP 实例. server 层只需要调用一次.
+    mcp.tool()(query_all_positions)
+    mcp.tool()(query_positions_by_trader)
+    mcp.tool()(query_positions_by_desk)
+    mcp.tool()(calculate_total_delta)
+    mcp.tool()(monitor_desk_exposure)
+    mcp.tool()(get_service_metrics)
+    mcp.tool()(start_calculate_total_delta_task)
+    mcp.tool()(get_task_status)
+    mcp.tool()(cancel_task)
+
+
+def query_all_positions() -> dict:
+    try:
+        request_id = new_request_id()
+        log_info("tool=query_all_positions start", request_id)
+        positions = positions_repository.fetch_all_positions()
+
+        if not positions:
+            log_info("tool=query_all_positions empty", request_id)
+            return {
+                "position_count": 0,
+                "positions": [],
+                "message": "未找到任何头寸记录.",
+                "request_id": request_id,
+            }
+
+        normalized_positions = []
+        for pos in positions:
+            entry_date = pos.get("entry_date")
+            normalized_positions.append(
+                {
+                    "position_id": pos.get("position_id"),
+                    "trader_id": pos.get("trader_id"),
+                    "desk": pos.get("desk"),
+                    "security_id": pos.get("security_id"),
+                    "quantity": float(pos["quantity"]) if pos.get("quantity") is not None else None,
+                    "delta": float(pos["delta"]) if pos.get("delta") is not None else None,
+                    "entry_date": entry_date.isoformat() if hasattr(entry_date, "isoformat") else entry_date,
+                    "currency": pos.get("currency"),
+                }
+            )
+
+        log_info(f"tool=query_all_positions ok count={len(positions)}", request_id)
+        return {
+            "position_count": len(positions),
+            "positions": normalized_positions,
+            "request_id": request_id,
+        }
+
+    except DataAccessError as e:
+        request_id = locals().get("request_id") or new_request_id()
+        log_exception(f"tool=query_all_positions data_access_error code={e.code} err={str(e)}", request_id)
+        return {
+            "request_id": request_id,
+            **error_payload(e.code, e.message, request_id),
+        }
+
+    except Exception as e:
+        request_id = locals().get("request_id") or new_request_id()
+        log_error(f"tool=query_all_positions error={str(e)}", request_id)
+        return {
+            "request_id": request_id,
+            **error_payload("INTERNAL_ERROR", f"查询所有头寸出错: {str(e)}", request_id),
+        }
+
+
+def query_positions_by_trader(
+    trader_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    try:
+        request_id = new_request_id()
+        log_info(f"tool=query_positions_by_trader start trader_id={trader_id}", request_id)
+        if limit is None:
+            limit = 100
+        limit = max(1, min(int(limit), 1000))
+        if offset is None:
+            offset = 0
+        offset = max(0, int(offset))
+
+        if start_date is not None:
+            datetime.strptime(start_date, "%Y-%m-%d")
+        if end_date is not None:
+            datetime.strptime(end_date, "%Y-%m-%d")
+
+        positions = positions_repository.fetch_positions_by_trader(
+            trader_id=trader_id,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
+        )
+
+        if not positions:
+            log_info("tool=query_positions_by_trader empty", request_id)
+            return {
+                "trader_id": trader_id,
+                "position_count": 0,
+                "total_delta": 0.0,
+                "positions": [],
+                "message": f"未找到交易员 {trader_id} 的头寸记录.",
+                "request_id": request_id,
+            }
+
+        total_delta = sum(float(pos["delta"]) for pos in positions)
+
+        normalized_positions = []
+        for pos in positions:
+            entry_date = pos.get("entry_date")
+            normalized_positions.append(
+                {
+                    "position_id": pos.get("position_id"),
+                    "trader_id": pos.get("trader_id"),
+                    "desk": pos.get("desk"),
+                    "security_id": pos.get("security_id"),
+                    "quantity": float(pos["quantity"]) if pos.get("quantity") is not None else None,
+                    "delta": float(pos["delta"]) if pos.get("delta") is not None else None,
+                    "entry_date": entry_date.isoformat() if hasattr(entry_date, "isoformat") else entry_date,
+                    "currency": pos.get("currency"),
+                }
+            )
+
+        log_info(f"tool=query_positions_by_trader ok count={len(positions)}", request_id)
+        return {
+            "trader_id": trader_id,
+            "position_count": len(positions),
+            "total_delta": float(total_delta),
+            "positions": normalized_positions,
+            "request_id": request_id,
+        }
+
+    except DataAccessError as e:
+        request_id = locals().get("request_id") or new_request_id()
+        log_exception(
+            f"tool=query_positions_by_trader data_access_error code={e.code} err={str(e)}",
+            request_id,
+        )
+        return {
+            "trader_id": trader_id,
+            "request_id": request_id,
+            **error_payload(e.code, e.message, request_id),
+        }
+
+    except ValueError as e:
+        request_id = locals().get("request_id") or new_request_id()
+        log_error(f"tool=query_positions_by_trader invalid_input={str(e)}", request_id)
+        return {
+            "trader_id": trader_id,
+            "request_id": request_id,
+            **error_payload("INVALID_INPUT", str(e), request_id),
+        }
+    except Exception as e:
+        request_id = locals().get("request_id") or new_request_id()
+        log_error(f"tool=query_positions_by_trader error={str(e)}", request_id)
+        return {
+            "trader_id": trader_id,
+            "request_id": request_id,
+            **error_payload("INTERNAL_ERROR", f"查询交易员 {trader_id} 头寸出错: {str(e)}", request_id),
+        }
+
+
+async def query_positions_by_desk(
+    desk_name: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    ctx: Context = None,
+) -> dict:
+    try:
+        request_id = new_request_id()
+        log_info(f"tool=query_positions_by_desk start desk={desk_name}", request_id)
+
+        if ctx is not None:
+            await ctx.report_progress(0, 100, "开始处理请求")
+
+        limit = max(1, min(int(limit), 1000))
+        offset = max(0, int(offset))
+
+        if start_date is not None:
+            datetime.strptime(start_date, "%Y-%m-%d")
+        if end_date is not None:
+            datetime.strptime(end_date, "%Y-%m-%d")
+
+        positions = positions_repository.fetch_positions_by_desk(
+            desk_name=desk_name,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
+        )
+
+        if not positions:
+            log_info("tool=query_positions_by_desk empty", request_id)
+            return {
+                "desk": desk_name,
+                "position_count": 0,
+                "trader_count": 0,
+                "total_delta": 0.0,
+                "positions": [],
+                "message": f"未找到交易台 {desk_name} 的头寸记录.",
+                "request_id": request_id,
+            }
+
+        total_delta = sum(float(pos["delta"]) for pos in positions)
+        traders = set(pos["trader_id"] for pos in positions)
+
+        normalized_positions = []
+        for pos in positions:
+            entry_date = pos.get("entry_date")
+            normalized_positions.append(
+                {
+                    "position_id": pos.get("position_id"),
+                    "trader_id": pos.get("trader_id"),
+                    "desk": pos.get("desk"),
+                    "security_id": pos.get("security_id"),
+                    "quantity": float(pos["quantity"]) if pos.get("quantity") is not None else None,
+                    "delta": float(pos["delta"]) if pos.get("delta") is not None else None,
+                    "entry_date": entry_date.isoformat() if hasattr(entry_date, "isoformat") else entry_date,
+                    "currency": pos.get("currency"),
+                }
+            )
+
+        if ctx is not None:
+            await ctx.report_progress(90, 100, "结果整理完成")
+
+        log_info(f"tool=query_positions_by_desk ok count={len(positions)}", request_id)
+        return {
+            "desk": desk_name,
+            "position_count": len(positions),
+            "trader_count": len(traders),
+            "total_delta": float(total_delta),
+            "positions": normalized_positions,
+            "request_id": request_id,
+        }
+
+    except asyncio.CancelledError:
+        request_id = locals().get("request_id") or new_request_id()
+        log_error("tool=query_positions_by_desk canceled", request_id)
+        return {
+            "desk": desk_name,
+            "request_id": request_id,
+            **error_payload("CANCELED", "请求已取消", request_id),
+        }
+
+    except DataAccessError as e:
+        request_id = locals().get("request_id") or new_request_id()
+        log_exception(f"tool=query_positions_by_desk data_access_error code={e.code} err={str(e)}", request_id)
+        return {
+            "desk": desk_name,
+            "request_id": request_id,
+            **error_payload(e.code, e.message, request_id),
+        }
+
+    except ValueError as e:
+        request_id = locals().get("request_id") or new_request_id()
+        log_error(f"tool=query_positions_by_desk invalid_input={str(e)}", request_id)
+        return {
+            "desk": desk_name,
+            "request_id": request_id,
+            **error_payload("INVALID_INPUT", str(e), request_id),
+        }
+    except Exception as e:
+        request_id = locals().get("request_id") or new_request_id()
+        log_error(f"tool=query_positions_by_desk error={str(e)}", request_id)
+        return {
+            "desk": desk_name,
+            "request_id": request_id,
+            **error_payload("INTERNAL_ERROR", f"查询交易台 {desk_name} 头寸出错: {str(e)}", request_id),
+        }
+
+
+async def calculate_total_delta(ctx: Context = None) -> dict:
+    try:
+        request_id = new_request_id()
+        log_info("tool=calculate_total_delta start", request_id)
+
+        if ctx is not None:
+            await ctx.report_progress(0, 100, "开始处理请求")
+
+        if ctx is not None:
+            await ctx.report_progress(20, 100, "开始计算组合总 delta")
+
+        total_delta = positions_repository.fetch_total_delta()
+
+        if ctx is not None:
+            await ctx.report_progress(50, 100, "开始按 desk 汇总")
+
+        desk_deltas = positions_repository.fetch_desk_delta_summary()
+
+        normalized_desks = []
+        for desk in desk_deltas:
+            normalized_desks.append(
+                {
+                    "desk": desk.get("desk"),
+                    "desk_delta": float(desk["desk_delta"]) if desk.get("desk_delta") is not None else 0.0,
+                    "position_count": int(desk["position_count"]) if desk.get("position_count") is not None else 0,
+                }
+            )
+
+        if ctx is not None:
+            await ctx.report_progress(95, 100, "结果整理完成")
+
+        log_info(f"tool=calculate_total_delta ok desk_count={len(normalized_desks)}", request_id)
+        return {
+            "total_delta": float(total_delta),
+            "by_desk": normalized_desks,
+            "request_id": request_id,
+        }
+
+    except asyncio.CancelledError:
+        request_id = locals().get("request_id") or new_request_id()
+        log_error("tool=calculate_total_delta canceled", request_id)
+        return {
+            "request_id": request_id,
+            **error_payload("CANCELED", "请求已取消", request_id),
+        }
+
+    except DataAccessError as e:
+        request_id = locals().get("request_id") or new_request_id()
+        log_exception(f"tool=calculate_total_delta data_access_error code={e.code} err={str(e)}", request_id)
+        return {
+            "request_id": request_id,
+            **error_payload(e.code, e.message, request_id),
+        }
+
+    except Exception as e:
+        request_id = locals().get("request_id") or new_request_id()
+        log_exception(f"tool=calculate_total_delta error={str(e)}", request_id)
+        return {
+            "request_id": request_id,
+            **error_payload("INTERNAL_ERROR", f"计算总 delta 出错: {str(e)}", request_id),
+        }
+
+
+async def monitor_desk_exposure(
+    desk: str,
+    as_of: Optional[str] = None,
+    market_snapshot_url: Optional[str] = None,
+    abs_delta_limit: float = 1000000.0,
+    ctx: Context = None,
+) -> dict:
+    request_id = new_request_id()
+    start = time.monotonic()
+
+    try:
+        if as_of is None or not as_of.strip():
+            as_of = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        else:
+            as_of = as_of.strip()
+
+        if market_snapshot_url is None or not market_snapshot_url.strip():
+            market_snapshot_url = os.getenv("MARKET_SNAPSHOT_URL", "http://127.0.0.1:9010/snapshot")
+        else:
+            market_snapshot_url = market_snapshot_url.strip()
+
+        if ctx is not None:
+            await ctx.report_progress(0, 100, "开始处理请求")
+
+        log_info(f"tool=monitor_desk_exposure start desk={desk} as_of={as_of}", request_id)
+
+        snapshot = await fetch_market_snapshot(market_snapshot_url, request_id)
+        if ctx is not None:
+            await ctx.report_progress(20, 100, "market snapshot 已获取")
+
+        positions = await positions_repository.fetch_positions_by_desk_for_monitoring_with_retry(desk)
+        if ctx is not None:
+            await ctx.report_progress(60, 100, "positions 已获取")
+
+        total_delta, total_pv_usd, by_currency = compute_exposure(positions, snapshot)
+
+        breaches = build_abs_delta_breaches(total_delta=total_delta, abs_delta_limit=abs_delta_limit)
+        alerts = build_alerts(desk=desk, as_of=as_of, breaches=breaches)
+
+        if ctx is not None:
+            await ctx.report_progress(95, 100, "结果整理完成")
+
+        latency_ms = (time.monotonic() - start) * 1000.0
+        await record_latency("monitor_desk_exposure", latency_ms)
+        log_info(f"tool=monitor_desk_exposure ok desk={desk} latency_ms={latency_ms:.2f}", request_id)
+
+        return {
+            "as_of": as_of,
+            "desk": desk,
+            "exposure": {
+                "pv_usd": float(total_pv_usd),
+                "total_delta": float(total_delta),
+                "total_vega": 0.0,
+                "by_currency": by_currency,
+                "position_count": len(positions),
+            },
+            "limits": {"abs_delta_limit": float(abs_delta_limit)},
+            "breaches": breaches,
+            "alerts": alerts,
+            "market_snapshot": {
+                "source_url": market_snapshot_url,
+                "as_of": snapshot.get("as_of"),
+            },
+            "latency_ms": float(latency_ms),
+            "request_id": request_id,
+        }
+
+    except asyncio.CancelledError:
+        latency_ms = (time.monotonic() - start) * 1000.0
+        await record_latency("monitor_desk_exposure", latency_ms)
+        log_error(f"tool=monitor_desk_exposure canceled latency_ms={latency_ms:.2f}", request_id)
+        return {
+            "desk": desk,
+            "as_of": as_of,
+            "latency_ms": float(latency_ms),
+            "request_id": request_id,
+            **error_payload("CANCELED", "请求已取消", request_id),
+        }
+
+    except DataAccessError as e:
+        latency_ms = (time.monotonic() - start) * 1000.0
+        await record_latency("monitor_desk_exposure", latency_ms)
+        log_exception(
+            f"tool=monitor_desk_exposure data_access_error code={e.code} err={str(e)} latency_ms={latency_ms:.2f}",
+            request_id,
+        )
+        return {
+            "desk": desk,
+            "as_of": as_of,
+            "latency_ms": float(latency_ms),
+            "request_id": request_id,
+            **error_payload(e.code, e.message, request_id),
+        }
+    except Exception as e:
+        latency_ms = (time.monotonic() - start) * 1000.0
+        await record_latency("monitor_desk_exposure", latency_ms)
+        log_exception(f"tool=monitor_desk_exposure error={str(e)} latency_ms={latency_ms:.2f}", request_id)
+        return {
+            "desk": desk,
+            "as_of": as_of,
+            "latency_ms": float(latency_ms),
+            "request_id": request_id,
+            **error_payload("INTERNAL_ERROR", f"monitor desk exposure 出错: {str(e)}", request_id),
+        }
+
+
+async def get_service_metrics() -> dict:
+    return await get_service_metrics_snapshot()
+
+
+async def _run_task_calculate_total_delta(task_id: str) -> None:
+    request_id = new_request_id()
+    log_info(f"task=calculate_total_delta start task_id={task_id}", request_id)
+    await set_task(task_id, {"status": "running", "request_id": request_id, "progress": 0})
+
+    try:
+        await asyncio.sleep(0)
+        await set_task(task_id, {"progress": 10, "message": "开始查询数据库"})
+        result = await calculate_total_delta()
+        await set_task(task_id, {"progress": 100, "status": "succeeded", "result": result})
+        log_info(f"task=calculate_total_delta ok task_id={task_id}", request_id)
+    except asyncio.CancelledError:
+        await set_task(
+            task_id,
+            {
+                "status": "canceled",
+                "progress": 0,
+                "error": {"code": "CANCELED", "message": "任务已取消"},
+            },
+        )
+        log_error(f"task=calculate_total_delta canceled task_id={task_id}", request_id)
+    except Exception as e:
+        await set_task(
+            task_id,
+            {
+                "status": "failed",
+                "progress": 0,
+                "error": {"code": "INTERNAL_ERROR", "message": f"任务执行出错: {str(e)}"},
+            },
+        )
+        log_error(f"task=calculate_total_delta error task_id={task_id} err={str(e)}", request_id)
+
+
+async def start_calculate_total_delta_task() -> dict:
+    task_id = new_task_id()
+    await set_task(task_id, {"status": "queued", "progress": 0, "created_at": datetime.utcnow().isoformat()})
+
+    background = asyncio.create_task(_run_task_calculate_total_delta(task_id))
+    await set_task(task_id, {"_asyncio_task": background})
+    return {"task_id": task_id, "status": "queued", "progress": 0}
+
+
+async def get_task_status(task_id: str) -> dict:
+    item = await get_task(task_id)
+    if item is None:
+        return {"task_id": task_id, **error_payload("NOT_FOUND", "未找到任务", new_request_id())}
+
+    public_item = {k: v for k, v in item.items() if not k.startswith("_")}
+    public_item["task_id"] = task_id
+    return public_item
+
+
+async def cancel_task(task_id: str) -> dict:
+    item = await get_task(task_id)
+    if item is None:
+        return {"task_id": task_id, **error_payload("NOT_FOUND", "未找到任务", new_request_id())}
+
+    background = item.get("_asyncio_task")
+    if background is not None and hasattr(background, "cancel"):
+        background.cancel()
+        await asyncio.sleep(0)
+
+    await set_task(task_id, {"status": "cancel_requested"})
+    return {"task_id": task_id, "status": "cancel_requested"}

@@ -87,16 +87,22 @@ def test_query_all_positions_schema():
 def test_query_positions_by_trader():
     """测试按交易员查询"""
     result = query_positions_by_trader("TRADER-001")
-    assert result is not None
-    assert "TRADER-001" in result
-    assert "Error" not in result
-    print(f"\n{result[:200]}...")
+    assert isinstance(result, dict)
+    assert result.get("trader_id") == "TRADER-001"
+    assert "request_id" in result
+    assert "error" not in result
+    assert "positions" in result
+    assert isinstance(result["positions"], list)
 
 
 def test_query_positions_by_trader_not_found():
     """测试查询不存在的交易员"""
     result = query_positions_by_trader("TRADER-999")
-    assert "未找到" in result
+    assert isinstance(result, dict)
+    assert result.get("trader_id") == "TRADER-999"
+    assert result.get("position_count") == 0
+    assert "message" in result
+    assert "未找到" in str(result.get("message"))
 
 
 @pytest.mark.asyncio
