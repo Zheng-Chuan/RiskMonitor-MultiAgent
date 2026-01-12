@@ -8,7 +8,8 @@ from typing import Any
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    return now.isoformat().replace("+00:00", "Z")
 
 
 def default_snapshot() -> dict[str, Any]:
@@ -56,7 +57,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:  # noqa: N802  pylint: disable=invalid-name
         if self.path in {"/snapshot", "/snapshot/"}:
             self._write_json(200, default_snapshot())
             return
@@ -66,7 +67,7 @@ class Handler(BaseHTTPRequestHandler):
 
         self._write_json(404, {"error": {"code": "NOT_FOUND", "message": "not found"}})
 
-    def log_message(self, format: str, *args: Any) -> None:
+    def log_message(self, format: str, *args: Any) -> None:  # pylint: disable=redefined-builtin,unused-argument
         # demo 场景下减少 stdout 噪音.
         return
 

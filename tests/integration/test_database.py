@@ -1,19 +1,13 @@
 """
-集成测试：数据库操作
-需要Docker容器运行
+集成测试: 数据库操作
+需要 Docker 容器运行
 """
 
-import pytest
-import sys
-from pathlib import Path
-
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+import os
 
 import pymysql
+import pytest
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
@@ -39,8 +33,8 @@ def db_connection():
         database=database,
         user=user,
         password=password,
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
     )
     yield conn
     conn.close()
@@ -60,7 +54,7 @@ def test_positions_table_exists(db_connection):
     cursor = db_connection.cursor()
     cursor.execute("""
         SELECT COUNT(*) as count
-        FROM information_schema.tables 
+        FROM information_schema.tables
         WHERE table_schema = 'riskmonitor' AND table_name = 'positions'
     """)
     result = cursor.fetchone()
@@ -87,11 +81,10 @@ def test_query_by_trader(db_connection):
     """)
     positions = cursor.fetchall()
     assert len(positions) > 0
-    
+
     # 验证所有记录都属于TRADER-001
     for pos in positions:
         assert pos['trader_id'] == 'TRADER-001'
-    
     cursor.close()
 
 
@@ -104,11 +97,10 @@ def test_query_by_desk(db_connection):
     """)
     positions = cursor.fetchall()
     assert len(positions) > 0
-    
+
     # 验证所有记录都属于Equity Derivatives
     for pos in positions:
         assert pos['desk'] == 'Equity Derivatives'
-    
     cursor.close()
 
 
@@ -135,11 +127,15 @@ def test_delta_by_desk(db_connection):
     """)
     results = cursor.fetchall()
     assert len(results) > 0
-    
+
     for row in results:
-        print(f"Desk: {row['desk']}, Delta: {row['desk_delta']}, Positions: {row['position_count']}")
+        print(
+            f"Desk: {row['desk']}, "
+            f"Delta: {row['desk_delta']}, "
+            f"Positions: {row['position_count']}"
+        )
         assert row['position_count'] > 0
-    
+
     cursor.close()
 
 

@@ -1,4 +1,4 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp pylint
 
 help:
 	@echo "RiskMonitor-MCP Development Commands"
@@ -22,6 +22,9 @@ help:
 	@echo "make test-all         - Run all tests"
 	@echo "make test             - Alias for test-all"
 	@echo ""
+	@echo "Code Quality Commands:"
+	@echo "make pylint           - Run pylint (Google style guidance)"
+	@echo ""
 	@echo "Other Commands:"
 	@echo "make clean            - Clean up containers and volumes"
 	@echo "make clean-cache      - Clean Python cache files"
@@ -30,6 +33,9 @@ help:
 
 install:
 	pip install -r requirements.txt
+
+pylint:
+	python -m pylint src tests main.py
 
 build:
 	docker-compose build

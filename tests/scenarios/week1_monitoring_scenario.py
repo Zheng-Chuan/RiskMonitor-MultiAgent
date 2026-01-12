@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 
+# pylint: disable=wrong-import-position
+
 import argparse
 import asyncio
 import json
+from pathlib import Path
+import sys
 import threading
 import time
 from typing import Any
-from pathlib import Path
-import sys
 from http.server import HTTPServer
 
 
@@ -28,7 +30,9 @@ def start_snapshot_server(host: str, port: int) -> tuple[HTTPServer, threading.T
     return server, thread
 
 
-async def run_demo(desk: str, abs_delta_limit: float, market_snapshot_url: str) -> dict[str, Any]:
+async def run_demo(
+    desk: str, abs_delta_limit: float, market_snapshot_url: str
+) -> dict[str, Any]:
     result = await monitor_desk_exposure(
         desk=desk,
         market_snapshot_url=market_snapshot_url,
@@ -39,7 +43,9 @@ async def run_demo(desk: str, abs_delta_limit: float, market_snapshot_url: str) 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Week 1 demo: desk exposure monitoring")
+    parser = argparse.ArgumentParser(
+        description="Week 1 demo: desk exposure monitoring"
+    )
     parser.add_argument("--desk", default="Equity Derivatives")
     parser.add_argument("--abs-delta-limit", type=float, default=500.0)
     parser.add_argument("--snapshot-host", default="127.0.0.1")

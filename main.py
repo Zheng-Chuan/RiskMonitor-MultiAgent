@@ -20,18 +20,19 @@ _SRC_ROOT = _PROJECT_ROOT / "src"
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
-from riskmonitor_mcp.server import (  # noqa: E402
-    mcp,
-    query_all_positions,
-    query_positions_by_trader,
-    query_positions_by_desk,
-    calculate_total_delta,
-    monitor_desk_exposure,
-    get_service_metrics,
-    start_calculate_total_delta_task,
-    get_task_status,
-    cancel_task,
-)
+from riskmonitor_mcp import server as _server  # noqa: E402  pylint: disable=wrong-import-position
+
+# 对外暴露工具函数, 便于 tests 继续从 main import.
+mcp = _server.mcp
+query_all_positions = _server.query_all_positions
+query_positions_by_trader = _server.query_positions_by_trader
+query_positions_by_desk = _server.query_positions_by_desk
+calculate_total_delta = _server.calculate_total_delta
+monitor_desk_exposure = _server.monitor_desk_exposure
+get_service_metrics = _server.get_service_metrics
+start_calculate_total_delta_task = _server.start_calculate_total_delta_task
+get_task_status = _server.get_task_status
+cancel_task = _server.cancel_task
 
 
 def main() -> None:

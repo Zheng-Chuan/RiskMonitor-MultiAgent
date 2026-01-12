@@ -121,23 +121,53 @@ async def _run_task_calculate_total_delta(task_id: str) -> None:
     try:
         # 让出一次事件循环, 给客户端机会先拿到 task_id
         await asyncio.sleep(0)
-        await _set_task(task_id, {"progress": 10, "message": "开始查询数据库"})
+        await _set_task(
+            task_id,
+            {
+                "progress": 10,
+                "message": "开始查询数据库",
+            },
+        )
 
         # 复用现有业务实现, 保持口径一致
         # 注意: 这里调用的是工具函数 calculate_total_delta, 其内部也会产生日志与 request_id
         result = await calculate_total_delta()
 
         # 任务完成后将 result 写回注册表, 轮询方即可取回
-        await _set_task(task_id, {"progress": 100, "status": "succeeded", "result": result})
+        await _set_task(
+            task_id,
+            {
+                "progress": 100,
+                "status": "succeeded",
+                "result": result,
+            },
+        )
         log_info(f"task=calculate_total_delta ok task_id={task_id}", request_id)
     except asyncio.CancelledError:
         # background.cancel() 会触发 CancelledError
         # 这里将状态写为 canceled, 并返回统一错误结构
-        await _set_task(task_id, {"status": "canceled", "progress": 0, "error": {"code": "CANCELED", "message": "任务已取消"}})
+        await _set_task(
+            task_id,
+            {
+                "status": "canceled",
+                "progress": 0,
+                "error": {"code": "CANCELED", "message": "任务已取消"},
+            },
+        )
         log_error(f"task=calculate_total_delta canceled task_id={task_id}", request_id)
     except Exception as e:
         # 兜底异常会标记 failed, 便于客户端区分执行失败与主动取消
-        await _set_task(task_id, {"status": "failed", "progress": 0, "error": {"code": "INTERNAL_ERROR", "message": f"任务执行出错: {str(e)}"}})
+        await _set_task(
+            task_id,
+            {
+                "status": "failed",
+                "progress": 0,
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": f"任务执行出错: {str(e)}",
+                },
+            },
+        )
         log_error(f"task=calculate_total_delta error task_id={task_id} err={str(e)}", request_id)
 
 # 数据库连接
@@ -260,18 +290,18 @@ def query_all_positions() -> dict:
         log_info("tool=query_all_positions start", request_id)
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("""
-            SELECT position_id, trader_id, desk, security_id, 
+            SELECT position_id, trader_id, desk, security_id,
                    quantity, delta, entry_date, currency
             FROM positions
             ORDER BY entry_date DESC
         """)
-        
+
         positions = cursor.fetchall()
         cursor.close()
         conn.close()
-        
+
         if not positions:
             log_info("tool=query_all_positions empty", request_id)
             return {
@@ -301,7 +331,7 @@ def query_all_positions() -> dict:
             "positions": normalized_positions,
             "request_id": request_id,
         }
-        
+
     except Exception as e:
         request_id = locals().get("request_id") or new_request_id()
         log_error(f"tool=query_all_positions error={str(e)}", request_id)
@@ -381,18 +411,18 @@ def query_positions_by_trader(
         positions = cursor.fetchall()
         cursor.close()
         conn.close()
-        
+
         if not positions:
             log_info("tool=query_positions_by_trader empty", request_id)
             return f"未找到交易员 {trader_id} 的头寸记录."
-        
+
         # 汇总计算
         total_delta = sum(float(pos['delta']) for pos in positions)
-        
+
         # 格式化输出
         result = f"交易员 {trader_id} - {len(positions)} 个头寸:\n"
         result += f"总 Delta: {total_delta:,.2f}\n\n"
-        
+
         for pos in positions:
             result += f"头寸 ID: {pos['position_id']}\n"
             result += f"  交易台: {pos['desk']}\n"
@@ -402,10 +432,10 @@ def query_positions_by_trader(
             result += f"  入场日期: {pos['entry_date']}\n"
             result += f"  货币: {pos['currency']}\n"
             result += "\n"
-        
+
         log_info(f"tool=query_positions_by_trader ok count={len(positions)}", request_id)
         return result
-        
+
     except ValueError as e:
         request_id = locals().get("request_id") or new_request_id()
         log_error(f"tool=query_positions_by_trader invalid_input={str(e)}", request_id)
@@ -602,7 +632,7 @@ async def calculate_total_delta(ctx: Context = None) -> dict:
             GROUP BY desk
             ORDER BY ABS(SUM(delta)) DESC
         """)
-        
+
         desk_deltas = cursor.fetchall()
         cursor.close()
         conn.close()

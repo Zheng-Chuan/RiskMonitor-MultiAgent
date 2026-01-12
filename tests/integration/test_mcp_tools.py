@@ -1,23 +1,19 @@
 """
-集成测试：MCP工具
-测试MCP Server的工具函数
+集成测试: MCP 工具
+测试 MCP Server 的工具函数
 """
 
-import pytest
-pytest.importorskip("mcp")
-import sys
-from pathlib import Path
+import json
+import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import json
-import os
+from typing import Any
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+import pytest
+pytest.importorskip("mcp")
 
-from main import (
+from main import (  # pylint: disable=wrong-import-position
     query_all_positions,
     query_positions_by_trader,
     query_positions_by_desk,
@@ -52,7 +48,7 @@ class _SnapshotHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:  # noqa: N802  pylint: disable=invalid-name
         if self.path in {"/snapshot", "/snapshot/"}:
             self._write_json(
                 200,
@@ -65,7 +61,7 @@ class _SnapshotHandler(BaseHTTPRequestHandler):
             return
         self._write_json(404, {"error": {"code": "NOT_FOUND", "message": "not found"}})
 
-    def log_message(self, format: str, *args) -> None:
+    def log_message(self, format: str, *args: Any) -> None:  # pylint: disable=redefined-builtin,unused-argument
         return
 
 
