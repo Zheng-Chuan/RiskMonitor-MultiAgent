@@ -19,7 +19,6 @@
 - [docs/QUICKSTART.md](docs/QUICKSTART.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
-- [docs/INTERVIEW.md](docs/INTERVIEW.md) - MCP Transport 机制详解
-- [docs/INTERVIEW_QUESTIONS.md](docs/INTERVIEW_QUESTIONS.md) - 50个硬核面试题 + 20个项目拷打
+- [docs/INTERVIEW.md](docs/INTERVIEW.md) - MCP 完整面试指南(含 70 个硬核面试题)
 
 ---
