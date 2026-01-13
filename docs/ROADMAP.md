@@ -123,6 +123,66 @@
   - [x] /metrics 端点可正常访问, 暴露关键指标
   - [x] tests 全部通过(27 个测试, 包含 5 个告警测试)
 
+### Week 5(Phase 3+): 参数治理与质量口径
+
+- 交付
+
+  - [ ] 参数校验在 tools 层落地
+    - [ ] 将 validation/validators.py 接入到所有对外工具参数
+    - [ ] 统一 INVALID_INPUT 错误结构与 message
+  - [ ] 覆盖率可度量
+    - [ ] make test-cov 生成 html 和 xml 覆盖率
+    - [ ] 为核心链路补齐单测覆盖, 覆盖率目标 80%+
+  - [ ] lint 统一
+    - [ ] 只使用 pylint 作为静态检查入口
+    - [ ] 保持 Makefile 命令和 README 说明一致
+
+- 验收
+
+  - [ ] 所有 tools 对输入做严格校验, 非法输入返回 INVALID_INPUT
+  - [ ] pytest 全量通过
+  - [ ] 覆盖率报告可生成, 指标达到目标
+
+### Week 6(Phase 3+): 流量控制与缓存
+
+- 交付
+
+  - [ ] 流量控制
+    - [ ] 为高频 tools 增加进程内限流
+    - [ ] 支持按 client_id 或全局维度配置
+  - [ ] 缓存
+    - [ ] 基于 data_access/cache.py 引入可选 RedisCache 实现
+    - [ ] 为市场快照或查询类接口增加缓存命中统计
+  - [ ] API 文档
+    - [ ] 补齐 tools 和 http endpoints 的使用文档
+
+- 验收
+
+  - [ ] 固定压测用例下, 限流规则生效且不会误伤正常请求
+  - [ ] 缓存开启后可观测命中率, 并且不影响正确性
+  - [ ] 文档可按步骤复现调用
+
+### Week 7+(Phase 3 扩展): 生产化与工程系统
+
+- 交付
+
+  - [ ] 分布式追踪
+    - [ ] 集成 OpenTelemetry, 提供可开关配置
+  - [ ] 读写分离预留或落地
+    - [ ] 数据访问层抽象读写 engine 或路由策略
+  - [ ] 消息队列
+    - [ ] 长耗时任务从进程内 registry 迁移到外部队列
+  - [ ] CI CD
+    - [ ] GitHub Actions: lint, tests, coverage
+  - [ ] 性能优化与压测
+    - [ ] 固化压测报告输出, 给出 p95 和 error rate 的验收口径
+
+- 验收
+
+  - [ ] CI 可稳定运行并阻断不合格变更
+  - [ ] trace 可用且能关联 request_id
+  - [ ] 固定压测用例下 p95 与 error rate 可量化并达标
+
 ## Phase 映射(参考)
 
 说明:

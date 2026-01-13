@@ -1,4 +1,4 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp pylint
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp pylint lint test-cov
 
 help:
 	@echo "RiskMonitor-MCP Development Commands"
@@ -24,8 +24,7 @@ help:
 	@echo ""
 	@echo "Code Quality Commands:"
 	@echo "make pylint           - Run pylint (Google style guidance)"
-	@echo "make mypy             - Run mypy type checking"
-	@echo "make lint             - Run all linters (pylint + mypy)"
+	@echo "make lint             - Alias for pylint"
 	@echo "make test-cov         - Run tests with coverage report"
 	@echo ""
 	@echo "Other Commands:"
@@ -40,11 +39,8 @@ install:
 pylint:
 	python -m pylint src tests main.py
 
-mypy:
-	python -m mypy src tests main.py
-
-lint: pylint mypy
-	@echo "All linters passed!"
+lint: pylint
+	@echo "Pylint passed!"
 
 test-cov:
 	pytest --cov=src --cov-report=html --cov-report=term --cov-report=xml tests/

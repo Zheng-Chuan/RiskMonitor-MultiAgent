@@ -97,7 +97,6 @@ def evaluate_desk_delta_breach(desk, abs_delta, threshold, request_id):
 
 **建议**:
 - 为所有公共函数添加完整的类型注解
-- 使用 `mypy --strict` 进行类型检查
 - 定义 TypedDict 或 dataclass 替代字典传递数据
 
 **改进示例**:
@@ -505,13 +504,13 @@ async def monitor_endpoint(request: Request):
 ```
 
 #### 2. 完善类型注解
-```bash
-# 添加到 requirements.txt
-mypy>=1.0.0
 
-# 运行类型检查
-mypy src --strict
-```
+建议以 pylint 为主 并逐步补齐类型提示
+
+落地方式:
+- 先为 tools 和 services 的公共函数补齐参数和返回值类型
+- 对关键结构使用 dataclass 或 TypedDict
+- 通过 pylint 规则和 code review 逐步收敛类型质量
 
 #### 3. 添加测试覆盖率
 ```bash
@@ -626,7 +625,6 @@ async def websocket_alerts(websocket: WebSocket):
 ### 8.1 立即执行
 
 - [ ] 运行 `pylint src tests` 并修复所有错误
-- [ ] 运行 `mypy src --strict` 并添加类型注解
 - [ ] 运行 `pytest --cov=src` 并提升覆盖率到 80%+
 - [ ] 添加 pre-commit hooks
 - [ ] 更新所有依赖到最新稳定版本
@@ -671,7 +669,7 @@ async def websocket_alerts(websocket: WebSocket):
 
 **立即执行** (本周):
 1. 添加输入验证和参数检查
-2. 完善类型注解并启用 `mypy --strict`
+2. 完善类型注解 并在 pylint 规则约束下逐步收敛
 3. 添加测试覆盖率报告
 
 **短期改进** (1-2周):
