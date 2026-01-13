@@ -24,6 +24,9 @@ help:
 	@echo ""
 	@echo "Code Quality Commands:"
 	@echo "make pylint           - Run pylint (Google style guidance)"
+	@echo "make mypy             - Run mypy type checking"
+	@echo "make lint             - Run all linters (pylint + mypy)"
+	@echo "make test-cov         - Run tests with coverage report"
 	@echo ""
 	@echo "Other Commands:"
 	@echo "make clean            - Clean up containers and volumes"
@@ -36,6 +39,15 @@ install:
 
 pylint:
 	python -m pylint src tests main.py
+
+mypy:
+	python -m mypy src tests main.py
+
+lint: pylint mypy
+	@echo "All linters passed!"
+
+test-cov:
+	pytest --cov=src --cov-report=html --cov-report=term --cov-report=xml tests/
 
 build:
 	docker-compose build
