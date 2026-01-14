@@ -54,6 +54,47 @@ services:
     stdin_open: true
     tty: true
 
+  # Test runner
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riskmonitor-test
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      APP_ENV: test
+      LOG_LEVEL: INFO
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - riskmonitor-network
+    entrypoint: ["bash", "-lc"]
+    command: ["pytest -q"]
+    profiles:
+      - dev
+
+  # Lint runner
+  lint-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riskmonitor-lint
+    volumes:
+      - .:/app
+    networks:
+      - riskmonitor-network
+    entrypoint: ["bash", "-lc"]
+    command: ["python -m pylint src tests main.py"]
+    profiles:
+      - dev
+
   # phpMyAdmin（数据库管理界面，可选）
   phpmyadmin:
     image: phpmyadmin:latest

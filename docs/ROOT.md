@@ -9,6 +9,7 @@
 ## 核心文档
 
 - [系统架构](ARCHITECTURE.md)
+- [数据字典](DATA.md)
 - [路线图](ROADMAP.md)
 
 ## 入口
