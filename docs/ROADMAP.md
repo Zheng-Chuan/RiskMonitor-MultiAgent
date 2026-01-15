@@ -64,7 +64,7 @@
 - 验收
 
   - [x] p95 latency 在固定用例下达到目标(目标: 500ms 以内, 方法: scripts/benchmarks/bench_monitor_desk_exposure.py --p95-target-ms 500)
-  - [ ] 关键模块可单测, 用例级逻辑可集成测试
+  - [x] 关键模块可单测, 用例级逻辑可集成测试
 
 ### Week 3(Phase 1): 服务化形态与 DX 固化
 
@@ -110,6 +110,7 @@
         - [ ] Kafka message key 保持 Debezium 默认主键
         - [ ] consumer 侧按 desk 做聚合与 breach 判断
       - [ ] risk_alerts topic
+        - [ ] 可选扩展 topic, 用于对外 fan out 或未来拆分独立 notifier
         - [ ] partition key 固定为 alert_id
     - [ ] 将 topic 规划落地到配置
       - [ ] positions_cdc key 使用 position_id
@@ -121,24 +122,32 @@
     - [ ] desk 迁移语义(方案B)
       - [ ] update 时 desk 发生变化: 对 before.desk 扣减 对 after.desk 增加
     - [ ] 明确告警状态
-      - [ ] open
+      - [ ] pending_analysis
+      - [ ] pending_delivery
       - [ ] delivered
-      - [ ] acked
-      - [ ] resolved
+      - [ ] consumed
     - [ ] 定义告警解除规则
-      - [ ] 强制接收方 webhook ack 才能解除
-      - [ ] 未 ack 时持续重试并保持 open
+      - [ ] 强制接收方 webhook ack 才能消费
+      - [ ] 未 ack 时不消费, 告警保持可重试投递
+  - [ ] server 内部事件触发(2A)
+    - [ ] analysis_queue, delivery_queue 使用进程内 asyncio.Queue
+    - [ ] 启动补偿: 扫描 pending_analysis 与 pending_delivery 并重新 enqueue
+    - [ ] 约束: 主链路事件驱动, 扫描仅用于补偿恢复
+  - [ ] 告警落库字段增量
+    - [ ] alerts 表新增 status, analysis_json, analysis_text, delivery_id 等字段
+    - [ ] 新增 processed_cdc_events 与 desk_risk_state 表
   - [ ] 质量口径
     - [ ] 覆盖率可度量
-      - [ ] make test-cov 生成 html 和 xml 覆盖率
+      - [x] make test-cov 生成 html 和 xml 覆盖率
       - [ ] 核心链路覆盖率目标 80 percent plus
     - [ ] lint 统一
-      - [ ] 只使用 pylint 作为静态检查入口
+      - [x] 只使用 pylint 作为静态检查入口
 
 - 验收
 
   - [ ] CDC 事件 schema 和 topic 规划有文档并落地到配置
   - [ ] 本地环境可稳定把 MySQL 变更写入 Kafka 并消费
+  - [ ] server 重启后可通过启动补偿继续处理未完成告警
   - [ ] pytest 全量通过
   - [ ] 覆盖率报告可生成并达到目标
 
@@ -149,23 +158,32 @@
   - [ ] CDC consumer and risk engine
     - [ ] 消费 positions_cdc topic
     - [ ] 以 desk level 口径触发风险计算与 breach 判断
-    - [ ] 将 alerts 写入 alerts 表并产出 risk_alerts topic
-  - [ ] webhook notifier
-    - [ ] 将 alerts 推送到你自建 web 服务 webhook endpoint
-    - [ ] 签名校验与幂等
+    - [ ] 单 desk 超限只生成一次告警, 基于 desk_risk_state 做状态判断
+    - [ ] 将 alerts 写入 alerts 表, 初始状态 pending_analysis
+    - [ ] 可选: 同步发布 risk_alerts topic 用于对外扩展
+  - [ ] LLM analyzer worker(server side)
+    - [ ] 从 analysis_queue 取 alert_id, 组装上下文并调用 LLM
+    - [ ] 写回 analysis_json 与 analysis_text
+    - [ ] 更新告警状态为 pending_delivery, 并 enqueue 到 delivery_queue
+  - [ ] webhook notifier worker
+    - [ ] 从 delivery_queue 取 alert_id 并推送到 webhook endpoint
+    - [ ] 签名校验与幂等, delivery_id 作为幂等键
     - [ ] 重试与死信
     - [ ] 接收方 ack API
-      - [ ] 接收方必须 ack 才能把 alert 标记为 resolved
+      - [ ] 接收方必须 ack 才能把 alert 标记为 consumed
   - [ ] 10s 延迟目标
-    - [ ] 定义从 DB commit 到 webhook delivered 的端到端延迟口径
-    - [ ] 在 /metrics 暴露 consumer lag 和 delivery latency
+    - [ ] 定义从 DB commit 到 webhook delivered 的端到端延迟口径, 默认包含 LLM 分析与投递
+    - [ ] 在 /metrics 暴露分段指标
+      - [ ] consumer lag
+      - [ ] analysis latency
+      - [ ] delivery latency
 
 - 验收
 
   - [ ] 从单笔交易写入到告警推送 delivered 的 p95 延迟小于 10s
-  - [ ] 未 ack 的告警不会解除 且会按策略重试
-  - [ ] ack 后告警状态可追踪并变更为 resolved
-  - [ ] /metrics 可观测 consumer lag 和 webhook 成功率
+  - [ ] 未 ack 的告警不会被消费 且会按策略重试
+  - [ ] ack 后告警状态可追踪并变更为 consumed
+  - [ ] /metrics 可观测 consumer lag analysis latency delivery latency 和 webhook 成功率
 
 ### Week 7+(Phase 3 扩展): k8s 生产化与 CI CD
 
@@ -174,9 +192,13 @@
   - [ ] k8s 部署形态
     - [ ] 组件拆分
       - [ ] mcp server
+        - [ ] 内置 analyzer worker 和 notifier worker
       - [ ] web ui
       - [ ] cdc consumer
       - [ ] webhook notifier
+        - [ ] 可选, 若从 mcp server 中拆出独立部署
+      - [ ] llm analyzer
+        - [ ] 可选, 若从 mcp server 中拆出独立部署
     - [ ] 探针
       - [ ] /health
       - [ ] /ready
