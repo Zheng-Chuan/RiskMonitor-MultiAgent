@@ -364,7 +364,7 @@ async def calculate_total_delta(ctx: Context = None) -> dict:
             **error_payload(e.code, e.message, request_id),
         }
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         request_id = locals().get("request_id") or new_request_id()
         log_exception(f"tool=calculate_total_delta error={str(e)}", request_id)
         return {
