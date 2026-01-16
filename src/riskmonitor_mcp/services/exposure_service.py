@@ -16,6 +16,20 @@ def compute_exposure(
     positions: list[dict[str, Any]],
     snapshot: dict[str, Any],
 ) -> tuple[float, float, dict[str, dict[str, float]]]:
+    """
+    计算组合风险敞口 (Exposure).
+    聚合所有头寸的 Delta 和 PV, 并按币种分组.
+
+    Args:
+        positions: 头寸列表
+        snapshot: 市场快照
+
+    Returns:
+        (total_delta, total_pv_usd, by_currency_map)
+        - total_delta: 组合总 Delta
+        - total_pv_usd: 组合总 PV (USD)
+        - by_currency_map: 按币种聚合的 Delta 和 PV
+    """
     # 聚合计算 total delta, total pv, 并按币种汇总
     total_delta = 0.0
     total_pv_usd = 0.0

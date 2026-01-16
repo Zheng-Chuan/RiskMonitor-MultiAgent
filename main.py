@@ -36,6 +36,15 @@ cancel_task = _server.cancel_task
 
 
 def main() -> None:
+    """
+    主入口函数
+    根据环境变量配置并启动 MCP 服务.
+
+    支持的传输模式 (MCP_TRANSPORT):
+    - stdio: 标准输入输出 (默认开发环境)
+    - streamable-http: SSE over HTTP (生产环境推荐)
+    - sse: 标准 SSE (需要指定挂载路径)
+    """
     transport = os.getenv("MCP_TRANSPORT")
     if transport is None or not transport.strip():
         app_env = os.getenv("APP_ENV", "development").strip().lower()

@@ -29,7 +29,7 @@ from riskmonitor_mcp.services.logging_service import (
     log_error,
     log_exception,
 )
-from riskmonitor_mcp.services.metrics_service import record_latency, get_service_metrics_snapshot
+from riskmonitor_mcp.services.prometheus_metrics_service import record_request, get_metrics_summary
 from riskmonitor_mcp.services.task_registry import new_task_id, set_task, get_task
 from riskmonitor_mcp.tools.errors import error_payload
 from riskmonitor_mcp.tools.tool_helpers import (
@@ -55,6 +55,13 @@ def register_tools(mcp: FastMCP) -> None:
 
 
 def query_all_positions() -> dict:
+    """
+    查询所有头寸.
+    此工具通常仅用于调试或数据量极小的场景.
+
+    Returns:
+        包含所有头寸的字典
+    """
     try:
         request_id = new_request_id()
         log_info("tool=query_all_positions start", request_id)
@@ -102,6 +109,20 @@ def query_positions_by_trader(
     limit: int = 100,
     offset: int = 0,
 ) -> dict:
+    """
+    按 Trader ID 查询头寸.
+    支持日期范围过滤和分页.
+
+    Args:
+        trader_id: 交易员ID
+        start_date: 开始日期 (YYYY-MM-DD), 可选
+        end_date: 结束日期 (YYYY-MM-DD), 可选
+        limit: 返回记录数限制, 默认 100
+        offset: 偏移量, 默认 0
+
+    Returns:
+        包含头寸列表和汇总信息的字典
+    """
     try:
         request_id = new_request_id()
         log_info(f"tool=query_positions_by_trader start trader_id={trader_id}", request_id)
@@ -179,6 +200,21 @@ async def query_positions_by_desk(
     offset: int = 0,
     ctx: Context = None,
 ) -> dict:
+    """
+    按 Desk 查询头寸.
+    支持日期范围过滤和分页.
+
+    Args:
+        desk_name: 交易台名称
+        start_date: 开始日期 (YYYY-MM-DD), 可选
+        end_date: 结束日期 (YYYY-MM-DD), 可选
+        limit: 返回记录数限制, 默认 100
+        offset: 偏移量, 默认 0
+        ctx: MCP 上下文 (用于进度报告)
+
+    Returns:
+        包含头寸列表和汇总信息的字典
+    """
     try:
         request_id = new_request_id()
         log_info(f"tool=query_positions_by_desk start desk={desk_name}", request_id)
@@ -265,6 +301,16 @@ async def query_positions_by_desk(
 
 
 async def calculate_total_delta(ctx: Context = None) -> dict:
+    """
+    计算整个组合的总 Delta (按 Desk 汇总).
+    这是一个重计算工具, 可能比较耗时.
+
+    Args:
+        ctx: MCP 上下文 (用于进度报告)
+
+    Returns:
+        包含总 Delta 和按 Desk 分组详情的字典
+    """
     try:
         request_id = new_request_id()
         log_info("tool=calculate_total_delta start", request_id)
@@ -334,6 +380,24 @@ async def monitor_desk_exposure(
     abs_delta_limit: float = 1000000.0,
     ctx: Context = None,
 ) -> dict:
+    """
+    监控 Desk 风险敞口 (核心工具).
+    1. 获取市场快照 (Market Snapshot).
+    2. 获取 Desk 头寸.
+    3. 计算风险 (Exposure).
+    4. 检查是否违规 (Breach).
+    5. 生成并持久化告警 (Alerts).
+
+    Args:
+        desk: 交易台名称
+        as_of: 计算基准时间 (ISO8601), 可选
+        market_snapshot_url: 市场快照服务地址, 可选
+        abs_delta_limit: Delta 绝对值限额, 默认 1,000,000
+        ctx: MCP 上下文 (用于进度报告)
+
+    Returns:
+        包含风险指标、违规记录和告警信息的字典
+    """
     request_id = new_request_id()
     start = time.monotonic()
 
@@ -381,7 +445,7 @@ async def monitor_desk_exposure(
             await ctx.report_progress(95, 100, "结果整理完成")
 
         latency_ms = (time.monotonic() - start) * 1000.0
-        await record_latency("monitor_desk_exposure", latency_ms)
+        record_request("monitor_desk_exposure", latency_ms)
         log_info(f"tool=monitor_desk_exposure ok desk={desk} latency_ms={latency_ms:.2f}", request_id)
 
         # 格式化告警用于响应
@@ -410,7 +474,7 @@ async def monitor_desk_exposure(
 
     except asyncio.CancelledError:
         latency_ms = (time.monotonic() - start) * 1000.0
-        await record_latency("monitor_desk_exposure", latency_ms)
+        record_request("monitor_desk_exposure", latency_ms, is_error=True)
         log_error(f"tool=monitor_desk_exposure canceled latency_ms={latency_ms:.2f}", request_id)
         return {
             "desk": desk,
@@ -422,7 +486,7 @@ async def monitor_desk_exposure(
 
     except DataAccessError as e:
         latency_ms = (time.monotonic() - start) * 1000.0
-        await record_latency("monitor_desk_exposure", latency_ms)
+        record_request("monitor_desk_exposure", latency_ms, is_error=True)
         log_exception(
             f"tool=monitor_desk_exposure data_access_error code={e.code} err={str(e)} latency_ms={latency_ms:.2f}",
             request_id,
@@ -436,7 +500,7 @@ async def monitor_desk_exposure(
         }
     except Exception as e:
         latency_ms = (time.monotonic() - start) * 1000.0
-        await record_latency("monitor_desk_exposure", latency_ms)
+        record_request("monitor_desk_exposure", latency_ms, is_error=True)
         log_exception(f"tool=monitor_desk_exposure error={str(e)} latency_ms={latency_ms:.2f}", request_id)
         return {
             "desk": desk,
@@ -448,7 +512,14 @@ async def monitor_desk_exposure(
 
 
 async def get_service_metrics() -> dict:
-    return await get_service_metrics_snapshot()
+    """
+    获取服务运行指标摘要.
+    包括 API 延迟统计、请求计数等.
+
+    Returns:
+        指标摘要字典
+    """
+    return get_metrics_summary()
 
 
 async def _run_task_calculate_total_delta(task_id: str) -> None:

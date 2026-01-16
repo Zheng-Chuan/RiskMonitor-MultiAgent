@@ -19,6 +19,13 @@ from riskmonitor_mcp.data_access.mysql_engine import get_engine
 
 
 def fetch_all_positions() -> list[dict[str, Any]]:
+    """
+    获取所有头寸记录.
+    按 entry_date 倒序排列.
+
+    Returns:
+        头寸字典列表
+    """
     conn = get_engine().raw_connection()
     cursor = None
     try:
@@ -46,6 +53,19 @@ def fetch_all_positions() -> list[dict[str, Any]]:
 async def fetch_positions_by_desk_for_monitoring_with_retry(
     desk: str,
 ) -> list[dict[str, Any]]:
+    """
+    带重试的按 Desk 查询头寸 (用于监控链路).
+    因为监控是核心链路, 且对可用性要求高, 这里在应用层实现了简单的重试.
+
+    Args:
+        desk: 交易台名称
+
+    Returns:
+        头寸列表
+
+    Raises:
+        DataAccessError: 重试耗尽或遇到不可重试错误
+    """
     # 监控链路查询通常是热点, 在此处集中实现最小重试策略.
     db_retries = int(os.getenv("MYSQL_RETRIES", "1"))
     last_error: Optional[BaseException] = None
@@ -160,6 +180,16 @@ def fetch_positions_by_desk(
 
 
 def fetch_positions_by_desk_for_monitoring(desk: str) -> list[dict[str, Any]]:
+    """
+    按 Desk 查询头寸 (无重试版, 供底层调用).
+    仅根据 desk 过滤, 不分页, 用于全量计算风险.
+
+    Args:
+        desk: 交易台名称
+
+    Returns:
+        头寸列表
+    """
     conn = get_engine().raw_connection()
     cursor = None
     try:
@@ -186,6 +216,12 @@ def fetch_positions_by_desk_for_monitoring(desk: str) -> list[dict[str, Any]]:
 
 
 def fetch_total_delta() -> float:
+    """
+    计算所有头寸的 Delta 总和.
+
+    Returns:
+        Total Delta
+    """
     conn = get_engine().raw_connection()
     cursor = None
     try:
@@ -208,6 +244,13 @@ def fetch_total_delta() -> float:
 
 
 def fetch_desk_delta_summary() -> list[dict[str, Any]]:
+    """
+    按 Desk 汇总 Delta.
+    按 Delta 绝对值倒序排列.
+
+    Returns:
+        包含 desk, desk_delta, position_count 的字典列表
+    """
     conn = get_engine().raw_connection()
     cursor = None
     try:

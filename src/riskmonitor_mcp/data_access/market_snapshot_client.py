@@ -16,16 +16,32 @@ import httpx
 from riskmonitor_mcp.data_access.errors import map_http_error
 
 def get_market_snapshot_timeout_s() -> float:
+    """从环境变量读取超时配置 (秒)."""
     # 从环境变量读取超时配置
     return float(os.getenv("MARKET_SNAPSHOT_TIMEOUT", "2"))
 
 
 def get_market_snapshot_retries() -> int:
+    """从环境变量读取重试次数."""
     # 从环境变量读取重试次数
     return int(os.getenv("MARKET_SNAPSHOT_RETRIES", "2"))
 
 
 async def fetch_market_snapshot(url: str, request_id: str) -> dict[str, Any]:
+    """
+    获取市场快照 (Market Snapshot).
+    支持超时和重试机制.
+
+    Args:
+        url: 市场快照服务的 URL
+        request_id: 请求追踪 ID (未使用, 但保留接口兼容)
+
+    Returns:
+        快照数据字典
+
+    Raises:
+        DataAccessError: 如果请求失败或超时
+    """
     # 获取 market snapshot, 并校验 JSON 结构为 dict
     del request_id
     timeout_s = get_market_snapshot_timeout_s()

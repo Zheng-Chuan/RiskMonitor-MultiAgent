@@ -18,6 +18,10 @@ from riskmonitor_mcp import config
 
 
 def _build_mysql_url() -> URL:
+    """
+    构建 MySQL 连接 URL.
+    使用环境变量中的配置 (host, port, user, password, db).
+    """
     # 使用 SQLAlchemy URL.create 以正确处理用户名与密码的转义.
     return URL.create(
         drivername="mysql+pymysql",
@@ -32,6 +36,11 @@ def _build_mysql_url() -> URL:
 
 @lru_cache(maxsize=1)
 def get_engine() -> Engine:
+    """
+    获取 SQLAlchemy Engine 单例.
+    Engine 内部维护了连接池.
+    配置了 connect_timeout, read_timeout, write_timeout.
+    """
     # 单例 engine, 由 SQLAlchemy 负责连接池.
     # pool_pre_ping: 避免 stale connection.
     connect_args = {

@@ -45,12 +45,23 @@ tools.register_tools(mcp)
 
 @mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
 async def health_check(request: Request) -> Response:
+    """
+    健康检查端点 (Liveness Probe).
+    Kubernetes 用此端点判断容器是否存活.
+    """
     del request
     return JSONResponse({"status": "ok"})
 
 
 @mcp.custom_route("/ready", methods=["GET"], include_in_schema=False)
 async def readiness_check(request: Request) -> Response:
+    """
+    就绪检查端点 (Readiness Probe).
+    Kubernetes 用此端点判断服务是否准备好接收流量.
+    检查项:
+    - 是否正在关闭 (graceful shutdown)
+    - 数据库连接是否正常
+    """
     del request
 
     if readiness_service.is_shutting_down():
@@ -104,25 +115,4 @@ def _install_signal_handlers() -> None:
     signal.signal(signal.SIGTERM, _handler)
     signal.signal(signal.SIGINT, _handler)
 
-
-if __name__ == "__main__":
-    _install_signal_handlers()
-    transport = os.getenv("MCP_TRANSPORT")
-    if transport is None or not transport.strip():
-        app_env = os.getenv("APP_ENV", "development").strip().lower()
-        if app_env == "production":
-            transport = "streamable-http"
-        else:
-            transport = "stdio"
-    transport = transport.strip().lower()
-
-    mount_path = os.getenv("MCP_MOUNT_PATH")
-    if mount_path is not None:
-        mount_path = mount_path.strip() or None
-
-    if transport == "sse":
-        mcp.run(transport="sse", mount_path=mount_path)
-    elif transport in {"streamable-http", "http"}:
-        mcp.run(transport="streamable-http")
-    else:
-        mcp.run(transport="stdio")
+_install_signal_handlers()

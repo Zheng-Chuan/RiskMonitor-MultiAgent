@@ -16,7 +16,11 @@ import pymysql
 
 @dataclass(frozen=True)
 class DataAccessError(RuntimeError):
-    # code 用于上层 error mapping
+    """
+    数据访问层通用异常.
+    封装底层 DB/HTTP 错误, 提供统一的错误码和重试建议.
+    """
+    # code 用于上层 error mapping (例如 DB_TIMEOUT, UPSTREAM_ERROR)
     code: str
     # 是否建议重试
     retriable: bool
@@ -30,11 +34,22 @@ class DataAccessError(RuntimeError):
 
 
 def _is_timeout_error(err: pymysql.MySQLError) -> bool:
+    """判断是否为 MySQL 超时错误."""
     msg = str(err).lower()
     return "timeout" in msg or "timed out" in msg
 
 
 def map_mysql_error(err: pymysql.MySQLError, operation: str) -> DataAccessError:
+    """
+    将 pymysql 异常映射为 DataAccessError.
+
+    Args:
+        err: 原始 pymysql 异常
+        operation: 操作名称, 用于日志
+
+    Returns:
+        封装后的 DataAccessError
+    """
     # 统一把 pymysql 的异常翻译成稳定 code
     if _is_timeout_error(err):
         return DataAccessError(
@@ -69,6 +84,16 @@ def map_mysql_error(err: pymysql.MySQLError, operation: str) -> DataAccessError:
 
 
 def map_http_error(err: BaseException, operation: str) -> DataAccessError:
+    """
+    将 httpx 异常映射为 DataAccessError.
+
+    Args:
+        err: 原始 httpx 异常或 BaseException
+        operation: 操作名称
+
+    Returns:
+        封装后的 DataAccessError
+    """
     # 统一把 httpx 异常翻译成稳定 code, 用于上游 market snapshot.
     if isinstance(err, httpx.TimeoutException):
         return DataAccessError(

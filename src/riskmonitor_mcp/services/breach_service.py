@@ -11,6 +11,16 @@ from typing import Any
 
 
 def build_abs_delta_breaches(total_delta: float, abs_delta_limit: float) -> list[dict[str, Any]]:
+    """
+    检查总 Delta 是否超过绝对值限额.
+
+    Args:
+        total_delta: 总 Delta
+        abs_delta_limit: Delta 绝对值限额
+
+    Returns:
+        违规记录列表 (如果未违规为空列表)
+    """
     breaches: list[dict[str, Any]] = []
     if abs(float(total_delta)) > float(abs_delta_limit):
         breaches.append(
