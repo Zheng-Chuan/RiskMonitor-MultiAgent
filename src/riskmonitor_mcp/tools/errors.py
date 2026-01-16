@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 
 def error_payload(code: str, message: str, request_id: str) -> dict[str, Any]:
     """

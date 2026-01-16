@@ -57,7 +57,7 @@ async def fetch_market_snapshot(url: str, request_id: str) -> dict[str, Any]:
                 if not isinstance(data, dict):
                     raise ValueError("market snapshot response must be a JSON object")
                 return data
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             last_error = e
             await asyncio.sleep(min(0.2 * (attempt + 1), 1.0))
 

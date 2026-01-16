@@ -12,15 +12,11 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
 
+# Ensure src is in python path
+sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
-_PROJECT_ROOT = Path(__file__).resolve().parent
-_SRC_ROOT = _PROJECT_ROOT / "src"
-if str(_SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SRC_ROOT))
-
-from riskmonitor_mcp import server as _server  # noqa: E402  pylint: disable=wrong-import-position
+from riskmonitor_mcp import server as _server
 
 # 对外暴露工具函数, 便于 tests 继续从 main import.
 mcp = _server.mcp

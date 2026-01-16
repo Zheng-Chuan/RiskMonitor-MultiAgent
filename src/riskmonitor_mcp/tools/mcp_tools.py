@@ -93,7 +93,7 @@ def query_all_positions() -> dict:
             **error_payload(e.code, e.message, request_id),
         }
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         request_id = locals().get("request_id") or new_request_id()
         log_error(f"tool=query_all_positions error={str(e)}", request_id)
         return {
@@ -182,7 +182,7 @@ def query_positions_by_trader(
             "request_id": request_id,
             **error_payload("INVALID_INPUT", str(e), request_id),
         }
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         request_id = locals().get("request_id") or new_request_id()
         log_error(f"tool=query_positions_by_trader error={str(e)}", request_id)
         return {
@@ -290,7 +290,7 @@ async def query_positions_by_desk(
             "request_id": request_id,
             **error_payload("INVALID_INPUT", str(e), request_id),
         }
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         request_id = locals().get("request_id") or new_request_id()
         log_error(f"tool=query_positions_by_desk error={str(e)}", request_id)
         return {
@@ -543,7 +543,7 @@ async def _run_task_calculate_total_delta(task_id: str) -> None:
             },
         )
         log_error(f"task=calculate_total_delta canceled task_id={task_id}", request_id)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         await set_task(
             task_id,
             {

@@ -20,7 +20,7 @@ def to_float(value: Any) -> Optional[float]:
         return None
     try:
         return float(value)
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         return None
 
 
