@@ -498,7 +498,7 @@ async def monitor_desk_exposure(
             "request_id": request_id,
             **error_payload(e.code, e.message, request_id),
         }
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         latency_ms = (time.monotonic() - start) * 1000.0
         record_request("monitor_desk_exposure", latency_ms, is_error=True)
         log_exception(f"tool=monitor_desk_exposure error={str(e)} latency_ms={latency_ms:.2f}", request_id)
