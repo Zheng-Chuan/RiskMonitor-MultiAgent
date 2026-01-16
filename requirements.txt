@@ -20,5 +20,4 @@ pytest>=7.4.3
 pytest-asyncio>=0.21.1
 
 # Code Quality
-pylint>=3.0.0
 pytest-cov>=4.1.0

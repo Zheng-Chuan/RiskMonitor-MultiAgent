@@ -80,21 +80,6 @@ services:
     profiles:
       - dev
 
-  # Lint runner
-  lint-runner:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: riskmonitor-lint
-    volumes:
-      - .:/app
-    networks:
-      - riskmonitor-network
-    entrypoint: ["bash", "-lc"]
-    command: ["python -m pylint src tests main.py"]
-    profiles:
-      - dev
-
   # phpMyAdmin（数据库管理界面，可选）
   phpmyadmin:
     image: phpmyadmin:latest

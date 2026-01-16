@@ -67,7 +67,7 @@ class Handler(BaseHTTPRequestHandler):
 
         self._write_json(404, {"error": {"code": "NOT_FOUND", "message": "not found"}})
 
-    def log_message(self, format: str, *args: Any) -> None:  # pylint: disable=redefined-builtin,unused-argument
+    def log_message(self, format: str, *args: Any) -> None:  
         # demo 场景下减少 stdout 噪音.
         return
 

@@ -25,13 +25,13 @@ import pytest
 
 pytest.importorskip("mcp")
 
-from mcp.client.session import ClientSession  # pylint: disable=wrong-import-position
-from mcp.client.stdio import (  # pylint: disable=wrong-import-position
+from mcp.client.session import ClientSession  
+from mcp.client.stdio import (  
     StdioServerParameters,
     stdio_client,
 )
 
-from tests.fixtures.market_snapshot_server import Handler  # pylint: disable=wrong-import-position
+from tests.fixtures.market_snapshot_server import Handler  
 
 
 project_root = Path(__file__).resolve().parents[2]

@@ -12,31 +12,29 @@ from typing import Optional
 
 
 _lock = threading.Lock()
-_is_shutting_down = False
-_shutdown_reason: Optional[str] = None
+_state: dict[str, Optional[object]] = {
+    "is_shutting_down": False,
+    "shutdown_reason": None,
+}
 
 
 def mark_shutting_down(reason: str) -> None:
-    global _is_shutting_down
-    global _shutdown_reason
     with _lock:
-        _is_shutting_down = True
-        _shutdown_reason = reason
+        _state["is_shutting_down"] = True
+        _state["shutdown_reason"] = reason
 
 
 def is_shutting_down() -> bool:
     with _lock:
-        return bool(_is_shutting_down)
+        return bool(_state["is_shutting_down"])
 
 
 def shutdown_reason() -> Optional[str]:
     with _lock:
-        return _shutdown_reason
+        return _state["shutdown_reason"]  # type: ignore[return-value]
 
 
 def _reset_for_tests() -> None:
-    global _is_shutting_down
-    global _shutdown_reason
     with _lock:
-        _is_shutting_down = False
-        _shutdown_reason = None
+        _state["is_shutting_down"] = False
+        _state["shutdown_reason"] = None

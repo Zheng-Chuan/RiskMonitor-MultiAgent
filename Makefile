@@ -1,4 +1,4 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp pylint lint test-cov
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov
 
 help:
 	@echo "RiskMonitor-MCP Development Commands"
@@ -23,8 +23,6 @@ help:
 	@echo "make test             - Alias for test-all"
 	@echo ""
 	@echo "Code Quality Commands:"
-	@echo "make pylint           - Run pylint (Google style guidance)"
-	@echo "make lint             - Alias for pylint"
 	@echo "make test-cov         - Run tests with coverage report"
 	@echo ""
 	@echo "Other Commands:"

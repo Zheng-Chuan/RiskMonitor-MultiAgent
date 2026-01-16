@@ -22,7 +22,7 @@ def save_alert(alert: Dict[str, Any]) -> None:
         DataAccessError: 数据库操作失败
     """
     engine = get_engine()
-    
+
     sql = text("""
         INSERT INTO alerts (
             alert_id, request_id, alert_type, severity, desk, trader_id,
@@ -57,7 +57,7 @@ def save_alerts_batch(alerts: List[Dict[str, Any]]) -> None:
         return
 
     engine = get_engine()
-    
+
     sql = text("""
         INSERT INTO alerts (
             alert_id, request_id, alert_type, severity, desk, trader_id,
@@ -92,17 +92,17 @@ def get_alert_by_id(alert_id: str) -> Optional[Dict[str, Any]]:
         DataAccessError: 数据库操作失败
     """
     engine = get_engine()
-    
+
     sql = text("""
         SELECT * FROM alerts WHERE alert_id = :alert_id
     """)
 
     try:
         with engine.connect() as conn:
-            result = conn.execute(sql, {"alert_id": alert_id})
+            result = conn.execute(sql, {"alert_id": alert_id}).mappings()
             row = result.fetchone()
             if row:
-                return dict(row._mapping)
+                return dict(row)
             return None
     except Exception as e:
         raise map_mysql_error(e, operation="get_alert_by_id") from e
@@ -122,17 +122,17 @@ def get_alerts_by_request_id(request_id: str) -> List[Dict[str, Any]]:
         DataAccessError: 数据库操作失败
     """
     engine = get_engine()
-    
+
     sql = text("""
-        SELECT * FROM alerts 
+        SELECT * FROM alerts
         WHERE request_id = :request_id
         ORDER BY created_at DESC
     """)
 
     try:
         with engine.connect() as conn:
-            result = conn.execute(sql, {"request_id": request_id})
-            return [dict(row._mapping) for row in result.fetchall()]
+            result = conn.execute(sql, {"request_id": request_id}).mappings()
+            return [dict(row) for row in result.fetchall()]
     except Exception as e:
         raise map_mysql_error(e, operation="get_alerts_by_request_id") from e
 
@@ -157,22 +157,22 @@ def get_recent_alerts(
         DataAccessError: 数据库操作失败
     """
     engine = get_engine()
-    
+
     conditions = []
     params = {"limit": limit}
-    
+
     if severity:
         conditions.append("severity = :severity")
         params["severity"] = severity
-    
+
     if desk:
         conditions.append("desk = :desk")
         params["desk"] = desk
-    
+
     where_clause = " AND ".join(conditions) if conditions else "1=1"
-    
+
     sql = text(f"""
-        SELECT * FROM alerts 
+        SELECT * FROM alerts
         WHERE {where_clause}
         ORDER BY created_at DESC
         LIMIT :limit
@@ -180,7 +180,7 @@ def get_recent_alerts(
 
     try:
         with engine.connect() as conn:
-            result = conn.execute(sql, params)
-            return [dict(row._mapping) for row in result.fetchall()]
+            result = conn.execute(sql, params).mappings()
+            return [dict(row) for row in result.fetchall()]
     except Exception as e:
         raise map_mysql_error(e, operation="get_recent_alerts") from e

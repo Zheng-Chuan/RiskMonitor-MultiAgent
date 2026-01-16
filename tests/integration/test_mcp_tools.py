@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 pytest.importorskip("mcp")
 
-from main import (  # pylint: disable=wrong-import-position
+from main import (  
     query_all_positions,
     query_positions_by_trader,
     query_positions_by_desk,
@@ -61,7 +61,7 @@ class _SnapshotHandler(BaseHTTPRequestHandler):
             return
         self._write_json(404, {"error": {"code": "NOT_FOUND", "message": "not found"}})
 
-    def log_message(self, format: str, *args: Any) -> None:  # pylint: disable=redefined-builtin,unused-argument
+    def log_message(self, format: str, *args: Any) -> None:  
         return
 
 

@@ -18,12 +18,11 @@ class _RequestIdFilter(logging.Filter):
 
 
 _logger = logging.getLogger("riskmonitor")
-_is_configured = False
+_state: dict[str, bool] = {"is_configured": False}
 
 
 def configure_logging() -> None:
-    global _is_configured
-    if _is_configured:
+    if _state["is_configured"]:
         return
 
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -35,7 +34,7 @@ def configure_logging() -> None:
     for handler in logging.getLogger().handlers:
         handler.addFilter(_RequestIdFilter())
 
-    _is_configured = True
+    _state["is_configured"] = True
 
 
 def new_request_id() -> str:

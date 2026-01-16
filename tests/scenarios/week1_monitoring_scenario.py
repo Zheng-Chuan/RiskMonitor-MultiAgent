@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# pylint: disable=wrong-import-position
+
 
 import argparse
 import asyncio

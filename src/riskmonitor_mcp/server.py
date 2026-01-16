@@ -19,18 +19,17 @@ from riskmonitor_mcp.data_access.health_checks import check_mysql_ready
 from riskmonitor_mcp.services import readiness_service
 from riskmonitor_mcp.services.logging_service import configure_logging
 from riskmonitor_mcp.services.prometheus_metrics_service import generate_prometheus_metrics
-from riskmonitor_mcp.tools.mcp_tools import (
-    calculate_total_delta,
-    cancel_task,
-    get_service_metrics,
-    get_task_status,
-    monitor_desk_exposure,
-    query_all_positions,
-    query_positions_by_desk,
-    query_positions_by_trader,
-    register_tools,
-    start_calculate_total_delta_task,
-)
+from riskmonitor_mcp.tools import mcp_tools as tools
+
+query_all_positions = tools.query_all_positions
+query_positions_by_trader = tools.query_positions_by_trader
+query_positions_by_desk = tools.query_positions_by_desk
+calculate_total_delta = tools.calculate_total_delta
+monitor_desk_exposure = tools.monitor_desk_exposure
+get_service_metrics = tools.get_service_metrics
+start_calculate_total_delta_task = tools.start_calculate_total_delta_task
+get_task_status = tools.get_task_status
+cancel_task = tools.cancel_task
 
 
 # 加载环境变量
@@ -41,7 +40,7 @@ load_dotenv(dotenv_path=_repo_root / ".env")
 configure_logging()
 
 mcp = FastMCP("RiskMonitor")
-register_tools(mcp)
+tools.register_tools(mcp)
 
 
 @mcp.custom_route("/health", methods=["GET"], include_in_schema=False)

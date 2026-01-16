@@ -137,11 +137,9 @@
     - [ ] alerts 表新增 status, analysis_json, analysis_text, delivery_id 等字段
     - [ ] 新增 processed_cdc_events 与 desk_risk_state 表
   - [ ] 质量口径
-    - [ ] 覆盖率可度量
-      - [x] make test-cov 生成 html 和 xml 覆盖率
-      - [ ] 核心链路覆盖率目标 80 percent plus
-    - [ ] lint 统一
-      - [x] 只使用 pylint 作为静态检查入口
+      - [ ] 覆盖率可度量
+        - [x] make test-cov 生成 html 和 xml 覆盖率
+        - [ ] 核心链路覆盖率目标 80 percent plus
 
 - 验收
 
@@ -205,7 +203,7 @@
     - [ ] 配置与 secrets
     - [ ] HPA 与资源口径
   - [ ] CI CD
-    - [ ] GitHub Actions: pylint tests coverage
+    - [ ] GitHub Actions: tests coverage
 
 - 验收
 

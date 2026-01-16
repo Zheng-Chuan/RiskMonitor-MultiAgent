@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from mcp.server import FastMCP
@@ -22,7 +22,6 @@ from riskmonitor_mcp.data_access.errors import DataAccessError
 from riskmonitor_mcp.data_access import alerts_repository
 from riskmonitor_mcp.services.exposure_service import compute_exposure
 from riskmonitor_mcp.services.breach_service import build_abs_delta_breaches
-from riskmonitor_mcp.services.alerting_service import build_alerts
 from riskmonitor_mcp.services import alert_rules_service
 from riskmonitor_mcp.services.logging_service import (
     new_request_id,
@@ -33,6 +32,13 @@ from riskmonitor_mcp.services.logging_service import (
 from riskmonitor_mcp.services.metrics_service import record_latency, get_service_metrics_snapshot
 from riskmonitor_mcp.services.task_registry import new_task_id, set_task, get_task
 from riskmonitor_mcp.tools.errors import error_payload
+from riskmonitor_mcp.tools.tool_helpers import (
+    normalize_as_of,
+    normalize_limit_offset,
+    normalize_positions,
+    normalize_str,
+    validate_optional_yyyy_mm_dd,
+)
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -63,21 +69,7 @@ def query_all_positions() -> dict:
                 "request_id": request_id,
             }
 
-        normalized_positions = []
-        for pos in positions:
-            entry_date = pos.get("entry_date")
-            normalized_positions.append(
-                {
-                    "position_id": pos.get("position_id"),
-                    "trader_id": pos.get("trader_id"),
-                    "desk": pos.get("desk"),
-                    "security_id": pos.get("security_id"),
-                    "quantity": float(pos["quantity"]) if pos.get("quantity") is not None else None,
-                    "delta": float(pos["delta"]) if pos.get("delta") is not None else None,
-                    "entry_date": entry_date.isoformat() if hasattr(entry_date, "isoformat") else entry_date,
-                    "currency": pos.get("currency"),
-                }
-            )
+        normalized_positions = normalize_positions(positions)
 
         log_info(f"tool=query_all_positions ok count={len(positions)}", request_id)
         return {
@@ -113,17 +105,9 @@ def query_positions_by_trader(
     try:
         request_id = new_request_id()
         log_info(f"tool=query_positions_by_trader start trader_id={trader_id}", request_id)
-        if limit is None:
-            limit = 100
-        limit = max(1, min(int(limit), 1000))
-        if offset is None:
-            offset = 0
-        offset = max(0, int(offset))
-
-        if start_date is not None:
-            datetime.strptime(start_date, "%Y-%m-%d")
-        if end_date is not None:
-            datetime.strptime(end_date, "%Y-%m-%d")
+        limit, offset = normalize_limit_offset(limit, offset)
+        validate_optional_yyyy_mm_dd(start_date, "start_date")
+        validate_optional_yyyy_mm_dd(end_date, "end_date")
 
         positions = positions_repository.fetch_positions_by_trader(
             trader_id=trader_id,
@@ -146,21 +130,7 @@ def query_positions_by_trader(
 
         total_delta = sum(float(pos["delta"]) for pos in positions)
 
-        normalized_positions = []
-        for pos in positions:
-            entry_date = pos.get("entry_date")
-            normalized_positions.append(
-                {
-                    "position_id": pos.get("position_id"),
-                    "trader_id": pos.get("trader_id"),
-                    "desk": pos.get("desk"),
-                    "security_id": pos.get("security_id"),
-                    "quantity": float(pos["quantity"]) if pos.get("quantity") is not None else None,
-                    "delta": float(pos["delta"]) if pos.get("delta") is not None else None,
-                    "entry_date": entry_date.isoformat() if hasattr(entry_date, "isoformat") else entry_date,
-                    "currency": pos.get("currency"),
-                }
-            )
+        normalized_positions = normalize_positions(positions)
 
         log_info(f"tool=query_positions_by_trader ok count={len(positions)}", request_id)
         return {
@@ -216,13 +186,9 @@ async def query_positions_by_desk(
         if ctx is not None:
             await ctx.report_progress(0, 100, "开始处理请求")
 
-        limit = max(1, min(int(limit), 1000))
-        offset = max(0, int(offset))
-
-        if start_date is not None:
-            datetime.strptime(start_date, "%Y-%m-%d")
-        if end_date is not None:
-            datetime.strptime(end_date, "%Y-%m-%d")
+        limit, offset = normalize_limit_offset(limit, offset)
+        validate_optional_yyyy_mm_dd(start_date, "start_date")
+        validate_optional_yyyy_mm_dd(end_date, "end_date")
 
         positions = positions_repository.fetch_positions_by_desk(
             desk_name=desk_name,
@@ -247,21 +213,7 @@ async def query_positions_by_desk(
         total_delta = sum(float(pos["delta"]) for pos in positions)
         traders = set(pos["trader_id"] for pos in positions)
 
-        normalized_positions = []
-        for pos in positions:
-            entry_date = pos.get("entry_date")
-            normalized_positions.append(
-                {
-                    "position_id": pos.get("position_id"),
-                    "trader_id": pos.get("trader_id"),
-                    "desk": pos.get("desk"),
-                    "security_id": pos.get("security_id"),
-                    "quantity": float(pos["quantity"]) if pos.get("quantity") is not None else None,
-                    "delta": float(pos["delta"]) if pos.get("delta") is not None else None,
-                    "entry_date": entry_date.isoformat() if hasattr(entry_date, "isoformat") else entry_date,
-                    "currency": pos.get("currency"),
-                }
-            )
+        normalized_positions = normalize_positions(positions)
 
         if ctx is not None:
             await ctx.report_progress(90, 100, "结果整理完成")
@@ -386,15 +338,11 @@ async def monitor_desk_exposure(
     start = time.monotonic()
 
     try:
-        if as_of is None or not as_of.strip():
-            as_of = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-        else:
-            as_of = as_of.strip()
-
-        if market_snapshot_url is None or not market_snapshot_url.strip():
-            market_snapshot_url = os.getenv("MARKET_SNAPSHOT_URL", "http://127.0.0.1:9010/snapshot")
-        else:
-            market_snapshot_url = market_snapshot_url.strip()
+        as_of = normalize_as_of(as_of)
+        market_snapshot_url = normalize_str(
+            market_snapshot_url,
+            os.getenv("MARKET_SNAPSHOT_URL", "http://127.0.0.1:9010/snapshot"),
+        )
 
         if ctx is not None:
             await ctx.report_progress(0, 100, "开始处理请求")
@@ -412,7 +360,6 @@ async def monitor_desk_exposure(
         total_delta, total_pv_usd, by_currency = compute_exposure(positions, snapshot)
 
         breaches = build_abs_delta_breaches(total_delta=total_delta, abs_delta_limit=abs_delta_limit)
-        alerts = build_alerts(desk=desk, as_of=as_of, breaches=breaches)
 
         # Week4: 告警闭环 - 评估告警规则并持久化
         abs_delta = abs(total_delta)
@@ -422,7 +369,7 @@ async def monitor_desk_exposure(
             threshold=abs_delta_limit,
             request_id=request_id
         )
-        
+
         if alert_records:
             try:
                 alerts_repository.save_alerts_batch(alert_records)

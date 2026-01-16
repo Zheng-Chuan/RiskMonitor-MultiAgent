@@ -29,10 +29,8 @@ class NoopCache(Generic[T]):
     # 不做任何缓存, 用于默认实现
     def get(self, key: str) -> Optional[T]:
         del key
-        return None
 
     def set(self, key: str, value: T, ttl_s: Optional[int] = None) -> None:
         del key
         del value
         del ttl_s
-        return

@@ -26,7 +26,7 @@ def check_mysql_ready() -> tuple[bool, str, Optional[DataAccessError]]:
     except pymysql.MySQLError as e:
         mapped = map_mysql_error(e, operation="check_mysql_ready")
         return False, mapped.message, mapped
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:  
         mapped = DataAccessError(
             code="DB_ERROR",
             retriable=True,

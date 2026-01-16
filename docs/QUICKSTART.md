@@ -84,19 +84,7 @@ make test-cov
 docker-compose --profile dev run --rm test-runner
 ```
 
-### 5 运行 pylint 作为交付前检查
-
-```bash
-make lint
-```
-
-如果你希望在 Docker 里跑 pylint 也可以
-
-```bash
-docker-compose --profile dev run --rm lint-runner
-```
-
-### 6 配置 MCP 客户端
+### 5 配置 MCP 客户端
 
 以 Windsurf 为例 配置 `~/.codeium/windsurf/mcp_config.json`
 
