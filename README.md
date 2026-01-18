@@ -1,4 +1,4 @@
-# RiskMonitor-MCP
+# RiskMonitor-MultiAgent
 
 ## 项目概述
 

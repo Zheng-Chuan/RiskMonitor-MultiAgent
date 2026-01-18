@@ -26,12 +26,12 @@ services:
       - riskmonitor-network
     restart: unless-stopped
 
-  # RiskMonitor MCP Server
+  # RiskMonitor MultiAgent MCP Server
   mcp-server:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: riskmonitor-mcp
+    container_name: riskmonitor-multiagent
     environment:
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306

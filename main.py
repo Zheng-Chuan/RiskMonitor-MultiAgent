@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RiskMonitor-MCP entrypoint.
+"""RiskMonitor-MultiAgent entrypoint.
 
 此文件保持为薄入口, 便于:
 - 兼容历史 import: tests 仍可从 main import 工具函数
@@ -16,7 +16,7 @@ import sys
 # Ensure src is in python path
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
-from riskmonitor_mcp import server as _server
+from riskmonitor_mcp import server as _server  # pylint: disable=wrong-import-position
 
 # 对外暴露工具函数, 便于 tests 继续从 main import.
 mcp = _server.mcp
@@ -26,9 +26,6 @@ query_positions_by_desk = _server.query_positions_by_desk
 calculate_total_delta = _server.calculate_total_delta
 monitor_desk_exposure = _server.monitor_desk_exposure
 get_service_metrics = _server.get_service_metrics
-start_calculate_total_delta_task = _server.start_calculate_total_delta_task
-get_task_status = _server.get_task_status
-cancel_task = _server.cancel_task
 
 
 def main() -> None:

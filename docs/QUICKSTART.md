@@ -2,7 +2,7 @@
 
 ## 目标
 
-在本地最短路径启动 RiskMonitor-MCP 并让 MCP 客户端能调用工具
+在本地最短路径启动 RiskMonitor-MultiAgent 并让 MCP 客户端能调用工具
 
 交付与验收原则
 
@@ -93,7 +93,7 @@ docker-compose --profile dev run --rm test-runner
   "mcpServers": {
     "riskMonitor": {
       "command": "python",
-      "args": ["/path/to/RiskMonitor-MCP/main.py"]
+      "args": ["/path/to/RiskMonitor-MultiAgent/main.py"]
     }
   }
 }

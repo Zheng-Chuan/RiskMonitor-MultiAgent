@@ -1,7 +1,7 @@
 .PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov
 
 help:
-	@echo "RiskMonitor-MCP Development Commands"
+	@echo "RiskMonitor-MultiAgent Development Commands"
 	@echo "====================================="
 	@echo "make install          - Install Python dependencies"
 	@echo "make build            - Build Docker images"
@@ -55,7 +55,7 @@ up:
 
 setup-mcp:
 	@echo "=================================="
-	@echo "RiskMonitor-MCP Setup"
+	@echo "RiskMonitor-MultiAgent Setup"
 	@echo "=================================="
 	@echo "Building Docker images..."
 	docker-compose build
@@ -67,10 +67,10 @@ setup-mcp:
 	@docker-compose ps
 
 mcp-logs:
-	docker logs -f riskmonitor-mcp
+	docker logs -f riskmonitor-multiagent
 
 mcp-shell:
-	docker exec -it riskmonitor-mcp /bin/bash
+	docker exec -it riskmonitor-multiagent /bin/bash
 
 down:
 	docker-compose down

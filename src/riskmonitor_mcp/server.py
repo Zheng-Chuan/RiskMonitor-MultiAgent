@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RiskMonitor-MCP 服务端
+RiskMonitor-MultiAgent 服务端
 用于金融衍生品风险管理的 MCP 服务
 """
 
@@ -19,6 +19,9 @@ from riskmonitor_mcp.data_access.health_checks import check_mysql_ready
 from riskmonitor_mcp.services import readiness_service
 from riskmonitor_mcp.services.logging_service import configure_logging
 from riskmonitor_mcp.services.prometheus_metrics_service import generate_prometheus_metrics
+from riskmonitor_mcp.services.auth_service import is_authorized
+from riskmonitor_mcp.resources.mcp_resources import register_resources
+from riskmonitor_mcp.prompts.mcp_prompts import register_prompts
 from riskmonitor_mcp.tools import mcp_tools as tools
 
 query_all_positions = tools.query_all_positions
@@ -27,9 +30,6 @@ query_positions_by_desk = tools.query_positions_by_desk
 calculate_total_delta = tools.calculate_total_delta
 monitor_desk_exposure = tools.monitor_desk_exposure
 get_service_metrics = tools.get_service_metrics
-start_calculate_total_delta_task = tools.start_calculate_total_delta_task
-get_task_status = tools.get_task_status
-cancel_task = tools.cancel_task
 
 
 # 加载环境变量
@@ -41,6 +41,8 @@ configure_logging()
 
 mcp = FastMCP("RiskMonitor")
 tools.register_tools(mcp)
+register_resources(mcp)
+register_prompts(mcp)
 
 
 @mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
@@ -62,7 +64,11 @@ async def readiness_check(request: Request) -> Response:
     - 是否正在关闭 (graceful shutdown)
     - 数据库连接是否正常
     """
-    del request
+    if not is_authorized(request.headers):
+        return JSONResponse(
+            {"error": {"code": "UNAUTHORIZED", "message": "unauthorized"}},
+            status_code=401,
+        )
 
     if readiness_service.is_shutting_down():
         return JSONResponse(
@@ -101,7 +107,11 @@ async def readiness_check(request: Request) -> Response:
 @mcp.custom_route("/metrics", methods=["GET"], include_in_schema=False)
 async def metrics_endpoint(request: Request) -> Response:
     """Week4: Prometheus 指标端点"""
-    del request
+    if not is_authorized(request.headers):
+        return JSONResponse(
+            {"error": {"code": "UNAUTHORIZED", "message": "unauthorized"}},
+            status_code=401,
+        )
     metrics_text = generate_prometheus_metrics()
     return Response(content=metrics_text, media_type="text/plain; version=0.0.4")
 

@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-RiskMonitor-MCP 是一个基于 Model Context Protocol (MCP) 的金融衍生品风险监控服务, 为 AI Agent 提供实时风险计算和监控能力. 项目采用分层架构设计, 实现了从数据访问到业务逻辑的完整闭环.
+RiskMonitor-MultiAgent 是一个基于 Model Context Protocol (MCP) 的金融衍生品风险监控服务, 为 AI Agent 提供实时风险计算和监控能力. 项目采用分层架构设计, 实现了从数据访问到业务逻辑的完整闭环.
 
 ### 核心功能
 
@@ -44,7 +44,7 @@ flowchart LR
     RL[Rate limit and auth]
   end
 
-  subgraph Svc[RiskMonitor MCP web server]
+  subgraph Svc[RiskMonitor MultiAgent MCP web server]
     S1[Instance 1]
     S2[Instance 2]
     Tools[MCP tools and HTTP APIs]
