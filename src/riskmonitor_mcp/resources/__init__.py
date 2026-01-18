@@ -1,4 +1,4 @@
-"""服务层包."""
+"""MCP resources."""
 
 from __future__ import annotations
 

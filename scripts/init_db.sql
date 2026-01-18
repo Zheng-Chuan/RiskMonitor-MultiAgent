@@ -21,6 +21,30 @@ CREATE INDEX idx_positions_desk ON positions(desk);
 CREATE INDEX idx_positions_security ON positions(security_id);
 CREATE INDEX idx_positions_date ON positions(entry_date);
 
+-- Create Alerts table (Week4)
+CREATE TABLE IF NOT EXISTS alerts (
+    alert_id VARCHAR(36) PRIMARY KEY,
+    request_id VARCHAR(36) NOT NULL,
+    alert_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    desk VARCHAR(100) NOT NULL,
+    trader_id VARCHAR(50) DEFAULT NULL,
+    metric_name VARCHAR(50) NOT NULL,
+    metric_value DECIMAL(20, 2) NOT NULL,
+    threshold_value DECIMAL(20, 2) NOT NULL,
+    breach_amount DECIMAL(20, 2) NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    acknowledged BOOLEAN DEFAULT FALSE,
+    acknowledged_at TIMESTAMP NULL,
+    acknowledged_by VARCHAR(50) DEFAULT NULL,
+    INDEX idx_request_id (request_id),
+    INDEX idx_alert_type (alert_type),
+    INDEX idx_desk (desk),
+    INDEX idx_created_at (created_at),
+    INDEX idx_severity (severity)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Insert sample data for testing (符合金融领域常识的真实数据)
 INSERT INTO positions (position_id, trader_id, desk, security_id, quantity, delta, entry_date, currency) VALUES
 -- Equity Derivatives (股票衍生品)

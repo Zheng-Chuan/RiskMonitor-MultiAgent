@@ -49,7 +49,7 @@
 ### 1 启动 MySQL
 
 ```bash
-docker-compose up -d mysql
+docker compose up -d mysql
 ```
 
 MySQL 端口映射默认是 3307 -> 3306
@@ -81,7 +81,7 @@ make test-cov
 如果你希望在 Docker 里跑 tests 也可以
 
 ```bash
-docker-compose --profile dev run --rm test-runner
+docker compose --profile dev run --rm test-runner
 ```
 
 ### 5 配置 MCP 客户端
@@ -108,7 +108,7 @@ docker-compose --profile dev run --rm test-runner
 如果你希望本地也使用和 k8s 更接近的形态 可以直接起容器
 
 ```bash
-docker-compose up -d mcp-server
+docker compose up -d mcp-server
 ```
 
 默认端口
@@ -122,7 +122,7 @@ docker-compose up -d mcp-server
 如果你想看数据库界面
 
 ```bash
-docker-compose --profile tools up -d
+docker compose --profile tools up -d
 ```
 
 ## 方式 3 复用你已有的 MySQL 容器

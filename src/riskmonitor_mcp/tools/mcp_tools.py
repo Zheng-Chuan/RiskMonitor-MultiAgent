@@ -8,16 +8,13 @@ Business logic is delegated to services.
 from __future__ import annotations
 
 import asyncio
-import os
 import time
-from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from mcp.server import FastMCP
 from mcp.server.fastmcp import Context
 
 from riskmonitor_mcp.data_access import positions_repository
-from riskmonitor_mcp.data_access.market_snapshot_client import fetch_market_snapshot
 from riskmonitor_mcp.data_access.errors import DataAccessError
 from riskmonitor_mcp.data_access import alerts_repository
 from riskmonitor_mcp.services.exposure_service import compute_exposure
@@ -30,7 +27,7 @@ from riskmonitor_mcp.services.logging_service import (
     log_exception,
 )
 from riskmonitor_mcp.services.prometheus_metrics_service import record_request, get_metrics_summary
-from riskmonitor_mcp.services.task_registry import new_task_id, set_task, get_task
+from riskmonitor_mcp.services.auth_service import get_headers_from_ctx, is_authorized
 from riskmonitor_mcp.tools.errors import error_payload
 from riskmonitor_mcp.tools.tool_helpers import (
     normalize_as_of,
@@ -42,19 +39,18 @@ from riskmonitor_mcp.tools.tool_helpers import (
 
 
 def register_tools(mcp: FastMCP) -> None:
+    """注册所有 MCP 工具."""
     # 将 tool 注册到 MCP 实例. server 层只需要调用一次.
     mcp.tool()(query_all_positions)
     mcp.tool()(query_positions_by_trader)
     mcp.tool()(query_positions_by_desk)
     mcp.tool()(calculate_total_delta)
     mcp.tool()(monitor_desk_exposure)
+    mcp.tool()(submit_alerts)
     mcp.tool()(get_service_metrics)
-    mcp.tool()(start_calculate_total_delta_task)
-    mcp.tool()(get_task_status)
-    mcp.tool()(cancel_task)
 
 
-def query_all_positions() -> dict:
+def query_all_positions(ctx: Context = None) -> dict:
     """
     查询所有头寸.
     此工具通常仅用于调试或数据量极小的场景.
@@ -64,6 +60,8 @@ def query_all_positions() -> dict:
     """
     try:
         request_id = new_request_id()
+        if ctx is not None and not is_authorized(get_headers_from_ctx(ctx)):
+            return {"request_id": request_id, **error_payload("UNAUTHORIZED", "未授权", request_id)}
         log_info("tool=query_all_positions start", request_id)
         positions = positions_repository.fetch_all_positions()
 
@@ -78,7 +76,9 @@ def query_all_positions() -> dict:
 
         normalized_positions = normalize_positions(positions)
 
-        log_info(f"tool=query_all_positions ok count={len(positions)}", request_id)
+        log_info(
+            f"tool=query_all_positions ok count={len(positions)}", request_id
+        )
         return {
             "position_count": len(positions),
             "positions": normalized_positions,
@@ -87,7 +87,10 @@ def query_all_positions() -> dict:
 
     except DataAccessError as e:
         request_id = locals().get("request_id") or new_request_id()
-        log_exception(f"tool=query_all_positions data_access_error code={e.code} err={str(e)}", request_id)
+        log_exception(
+            f"tool=query_all_positions data_access_error code={e.code} err={str(e)}",
+            request_id
+        )
         return {
             "request_id": request_id,
             **error_payload(e.code, e.message, request_id),
@@ -102,12 +105,13 @@ def query_all_positions() -> dict:
         }
 
 
-def query_positions_by_trader(
+def query_positions_by_trader(  # pylint: disable=too-many-arguments, too-many-positional-arguments
     trader_id: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
+    ctx: Context = None,
 ) -> dict:
     """
     按 Trader ID 查询头寸.
@@ -125,6 +129,12 @@ def query_positions_by_trader(
     """
     try:
         request_id = new_request_id()
+        if ctx is not None and not is_authorized(get_headers_from_ctx(ctx)):
+            return {
+                "request_id": request_id,
+                "trader_id": trader_id,
+                **error_payload("UNAUTHORIZED", "未授权", request_id),
+            }
         log_info(f"tool=query_positions_by_trader start trader_id={trader_id}", request_id)
         limit, offset = normalize_limit_offset(limit, offset)
         validate_optional_yyyy_mm_dd(start_date, "start_date")
@@ -188,11 +198,15 @@ def query_positions_by_trader(
         return {
             "trader_id": trader_id,
             "request_id": request_id,
-            **error_payload("INTERNAL_ERROR", f"查询交易员 {trader_id} 头寸出错: {str(e)}", request_id),
+            **error_payload(
+                "INTERNAL_ERROR",
+                f"查询交易员 {trader_id} 头寸出错: {str(e)}",
+                request_id,
+            ),
         }
 
 
-async def query_positions_by_desk(
+async def query_positions_by_desk(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-return-statements
     desk_name: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -217,6 +231,12 @@ async def query_positions_by_desk(
     """
     try:
         request_id = new_request_id()
+        if ctx is not None and not is_authorized(get_headers_from_ctx(ctx)):
+            return {
+                "request_id": request_id,
+                "desk": desk_name,
+                **error_payload("UNAUTHORIZED", "未授权", request_id),
+            }
         log_info(f"tool=query_positions_by_desk start desk={desk_name}", request_id)
 
         if ctx is not None:
@@ -275,7 +295,10 @@ async def query_positions_by_desk(
 
     except DataAccessError as e:
         request_id = locals().get("request_id") or new_request_id()
-        log_exception(f"tool=query_positions_by_desk data_access_error code={e.code} err={str(e)}", request_id)
+        log_exception(
+            f"tool=query_positions_by_desk data_access_error code={e.code} err={str(e)}",
+            request_id,
+        )
         return {
             "desk": desk_name,
             "request_id": request_id,
@@ -313,6 +336,8 @@ async def calculate_total_delta(ctx: Context = None) -> dict:
     """
     try:
         request_id = new_request_id()
+        if ctx is not None and not is_authorized(get_headers_from_ctx(ctx)):
+            return {"request_id": request_id, **error_payload("UNAUTHORIZED", "未授权", request_id)}
         log_info("tool=calculate_total_delta start", request_id)
 
         if ctx is not None:
@@ -330,11 +355,17 @@ async def calculate_total_delta(ctx: Context = None) -> dict:
 
         normalized_desks = []
         for desk in desk_deltas:
+            desk_delta = (
+                float(desk["desk_delta"]) if desk.get("desk_delta") is not None else 0.0
+            )
+            position_count = (
+                int(desk["position_count"]) if desk.get("position_count") is not None else 0
+            )
             normalized_desks.append(
                 {
                     "desk": desk.get("desk"),
-                    "desk_delta": float(desk["desk_delta"]) if desk.get("desk_delta") is not None else 0.0,
-                    "position_count": int(desk["position_count"]) if desk.get("position_count") is not None else 0,
+                    "desk_delta": desk_delta,
+                    "position_count": position_count,
                 }
             )
 
@@ -358,7 +389,10 @@ async def calculate_total_delta(ctx: Context = None) -> dict:
 
     except DataAccessError as e:
         request_id = locals().get("request_id") or new_request_id()
-        log_exception(f"tool=calculate_total_delta data_access_error code={e.code} err={str(e)}", request_id)
+        log_exception(
+            f"tool=calculate_total_delta data_access_error code={e.code} err={str(e)}",
+            request_id
+        )
         return {
             "request_id": request_id,
             **error_payload(e.code, e.message, request_id),
@@ -373,10 +407,11 @@ async def calculate_total_delta(ctx: Context = None) -> dict:
         }
 
 
-async def monitor_desk_exposure(
+async def monitor_desk_exposure(  # pylint: disable=too-many-locals, too-many-arguments, too-many-positional-arguments
     desk: str,
     as_of: Optional[str] = None,
     market_snapshot_url: Optional[str] = None,
+    market_snapshot: Optional[dict[str, Any]] = None,
     abs_delta_limit: float = 1000000.0,
     ctx: Context = None,
 ) -> dict:
@@ -391,7 +426,8 @@ async def monitor_desk_exposure(
     Args:
         desk: 交易台名称
         as_of: 计算基准时间 (ISO8601), 可选
-        market_snapshot_url: 市场快照服务地址, 可选
+        market_snapshot_url: 市场快照来源标识(仅用于回显), 可选
+        market_snapshot: 市场快照(建议由上游 Agent 获取并传入), 可选
         abs_delta_limit: Delta 绝对值限额, 默认 1,000,000
         ctx: MCP 上下文 (用于进度报告)
 
@@ -402,30 +438,52 @@ async def monitor_desk_exposure(
     start = time.monotonic()
 
     try:
+        if ctx is not None and not is_authorized(get_headers_from_ctx(ctx)):
+            latency_ms = (time.monotonic() - start) * 1000.0
+            record_request("monitor_desk_exposure", latency_ms, is_error=True)
+            return {
+                "desk": desk,
+                "as_of": as_of,
+                "latency_ms": float(latency_ms),
+                "request_id": request_id,
+                **error_payload("UNAUTHORIZED", "未授权", request_id),
+            }
         as_of = normalize_as_of(as_of)
-        market_snapshot_url = normalize_str(
-            market_snapshot_url,
-            os.getenv("MARKET_SNAPSHOT_URL", "http://127.0.0.1:9010/snapshot"),
+        market_snapshot_url = normalize_str(market_snapshot_url, "embedded")
+        snapshot = (
+            market_snapshot
+            if isinstance(market_snapshot, dict)
+            else {"as_of": as_of, "prices": {}, "fx_rates": {"USD": 1.0}}
         )
 
         if ctx is not None:
             await ctx.report_progress(0, 100, "开始处理请求")
 
-        log_info(f"tool=monitor_desk_exposure start desk={desk} as_of={as_of}", request_id)
+        log_info(
+            f"tool=monitor_desk_exposure start desk={desk} as_of={as_of}",
+            request_id,
+        )
 
-        snapshot = await fetch_market_snapshot(market_snapshot_url, request_id)
         if ctx is not None:
-            await ctx.report_progress(20, 100, "market snapshot 已获取")
+            await ctx.report_progress(20, 100, "market snapshot 已就绪")
 
-        positions = await positions_repository.fetch_positions_by_desk_for_monitoring_with_retry(desk)
+        positions = (
+            await positions_repository.fetch_positions_by_desk_for_monitoring_with_retry(
+                desk
+            )
+        )
         if ctx is not None:
             await ctx.report_progress(60, 100, "positions 已获取")
 
-        total_delta, total_pv_usd, by_currency = compute_exposure(positions, snapshot)
+        total_delta, total_pv_usd, by_currency = compute_exposure(
+            positions, snapshot
+        )
 
-        breaches = build_abs_delta_breaches(total_delta=total_delta, abs_delta_limit=abs_delta_limit)
+        breaches = build_abs_delta_breaches(
+            total_delta=total_delta, abs_delta_limit=abs_delta_limit
+        )
 
-        # Week4: 告警闭环 - 评估告警规则并持久化
+        # Week4: 告警闭环 - 评估告警规则 (不在此处持久化; 由 submit_alerts 负责写入)
         abs_delta = abs(total_delta)
         alert_records = alert_rules_service.evaluate_desk_delta_breach(
             desk=desk,
@@ -434,19 +492,15 @@ async def monitor_desk_exposure(
             request_id=request_id
         )
 
-        if alert_records:
-            try:
-                alerts_repository.save_alerts_batch(alert_records)
-                log_info(f"tool=monitor_desk_exposure saved {len(alert_records)} alerts", request_id)
-            except DataAccessError as alert_err:
-                log_error(f"tool=monitor_desk_exposure failed to save alerts: {alert_err}", request_id)
-
         if ctx is not None:
             await ctx.report_progress(95, 100, "结果整理完成")
 
         latency_ms = (time.monotonic() - start) * 1000.0
         record_request("monitor_desk_exposure", latency_ms)
-        log_info(f"tool=monitor_desk_exposure ok desk={desk} latency_ms={latency_ms:.2f}", request_id)
+        log_info(
+            f"tool=monitor_desk_exposure ok desk={desk} latency_ms={latency_ms:.2f}",
+            request_id
+        )
 
         # 格式化告警用于响应
         formatted_alerts = alert_rules_service.format_alerts_for_response(alert_records)
@@ -488,7 +542,7 @@ async def monitor_desk_exposure(
         latency_ms = (time.monotonic() - start) * 1000.0
         record_request("monitor_desk_exposure", latency_ms, is_error=True)
         log_exception(
-            f"tool=monitor_desk_exposure data_access_error code={e.code} err={str(e)} latency_ms={latency_ms:.2f}",
+            f"tool=monitor_desk_exposure data_access_error code={e.code} err={str(e)} latency_ms={latency_ms:.2f}",  # pylint: disable=line-too-long
             request_id,
         )
         return {
@@ -501,13 +555,68 @@ async def monitor_desk_exposure(
     except Exception as e:  # pylint: disable=broad-except
         latency_ms = (time.monotonic() - start) * 1000.0
         record_request("monitor_desk_exposure", latency_ms, is_error=True)
-        log_exception(f"tool=monitor_desk_exposure error={str(e)} latency_ms={latency_ms:.2f}", request_id)
+        log_exception(
+            f"tool=monitor_desk_exposure error={str(e)} latency_ms={latency_ms:.2f}",
+            request_id
+        )
         return {
             "desk": desk,
             "as_of": as_of,
             "latency_ms": float(latency_ms),
             "request_id": request_id,
-            **error_payload("INTERNAL_ERROR", f"monitor desk exposure 出错: {str(e)}", request_id),
+            **error_payload(
+                "INTERNAL_ERROR",
+                f"monitor desk exposure 出错: {str(e)}",
+                request_id
+            ),
+        }
+
+
+def submit_alerts(
+    alerts: list[dict[str, Any]],
+    request_id: Optional[str] = None,
+    ctx: Context = None,
+) -> dict:
+    """
+    将告警记录批量写入数据库.
+    这是一个有副作用的工具, 建议由上游 Agent 在明确需要时调用.
+
+    Args:
+        alerts: 告警记录列表 (alert_rules_service.evaluate_* 输出)
+        request_id: 可选, 便于日志追踪
+
+    Returns:
+        写入结果
+    """
+    effective_request_id = request_id or new_request_id()
+    try:
+        if ctx is not None and not is_authorized(get_headers_from_ctx(ctx)):
+            return {
+                "request_id": effective_request_id,
+                **error_payload("UNAUTHORIZED", "未授权", effective_request_id),
+            }
+        if not alerts:
+            return {"request_id": effective_request_id, "saved": 0}
+        alerts_repository.save_alerts_batch(alerts)
+        return {"request_id": effective_request_id, "saved": len(alerts)}
+    except DataAccessError as e:
+        log_exception(
+            f"tool=submit_alerts data_access_error code={e.code} err={str(e)}",
+            effective_request_id,
+        )
+        return {
+            "request_id": effective_request_id,
+            **error_payload(e.code, e.message, effective_request_id),
+        }
+    except Exception as e:  # pylint: disable=broad-except
+        log_exception(f"tool=submit_alerts error={str(e)}", effective_request_id)
+        return {
+            "request_id": effective_request_id,
+            **error_payload(
+                "INTERNAL_ERROR",
+                f"写入 alerts 出错: {str(e)}",
+                effective_request_id,
+            ),
         }
 
 
@@ -519,70 +628,6 @@ async def get_service_metrics() -> dict:
     Returns:
         指标摘要字典
     """
-    return get_metrics_summary()
-
-
-async def _run_task_calculate_total_delta(task_id: str) -> None:
-    request_id = new_request_id()
-    log_info(f"task=calculate_total_delta start task_id={task_id}", request_id)
-    await set_task(task_id, {"status": "running", "request_id": request_id, "progress": 0})
-
-    try:
-        await asyncio.sleep(0)
-        await set_task(task_id, {"progress": 10, "message": "开始查询数据库"})
-        result = await calculate_total_delta()
-        await set_task(task_id, {"progress": 100, "status": "succeeded", "result": result})
-        log_info(f"task=calculate_total_delta ok task_id={task_id}", request_id)
-    except asyncio.CancelledError:
-        await set_task(
-            task_id,
-            {
-                "status": "canceled",
-                "progress": 0,
-                "error": {"code": "CANCELED", "message": "任务已取消"},
-            },
-        )
-        log_error(f"task=calculate_total_delta canceled task_id={task_id}", request_id)
-    except Exception as e:  # pylint: disable=broad-except
-        await set_task(
-            task_id,
-            {
-                "status": "failed",
-                "progress": 0,
-                "error": {"code": "INTERNAL_ERROR", "message": f"任务执行出错: {str(e)}"},
-            },
-        )
-        log_error(f"task=calculate_total_delta error task_id={task_id} err={str(e)}", request_id)
-
-
-async def start_calculate_total_delta_task() -> dict:
-    task_id = new_task_id()
-    await set_task(task_id, {"status": "queued", "progress": 0, "created_at": datetime.utcnow().isoformat()})
-
-    background = asyncio.create_task(_run_task_calculate_total_delta(task_id))
-    await set_task(task_id, {"_asyncio_task": background})
-    return {"task_id": task_id, "status": "queued", "progress": 0}
-
-
-async def get_task_status(task_id: str) -> dict:
-    item = await get_task(task_id)
-    if item is None:
-        return {"task_id": task_id, **error_payload("NOT_FOUND", "未找到任务", new_request_id())}
-
-    public_item = {k: v for k, v in item.items() if not k.startswith("_")}
-    public_item["task_id"] = task_id
-    return public_item
-
-
-async def cancel_task(task_id: str) -> dict:
-    item = await get_task(task_id)
-    if item is None:
-        return {"task_id": task_id, **error_payload("NOT_FOUND", "未找到任务", new_request_id())}
-
-    background = item.get("_asyncio_task")
-    if background is not None and hasattr(background, "cancel"):
-        background.cancel()
-        await asyncio.sleep(0)
-
-    await set_task(task_id, {"status": "cancel_requested"})
-    return {"task_id": task_id, "status": "cancel_requested"}
+    summary = get_metrics_summary()
+    tools = summary.get("tools") if isinstance(summary.get("tools"), dict) else {}
+    return {**summary, **tools}

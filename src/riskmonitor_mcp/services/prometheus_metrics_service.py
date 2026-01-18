@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 import time
 
 
-class MetricsStore:
+class MetricsStore:  # pylint: disable=too-few-public-methods
     """内部指标存储类，用于避免使用 global 语句."""
 
     def __init__(self) -> None:
@@ -45,8 +45,12 @@ def record_request(tool_name: str, latency_ms: float, is_error: bool = False) ->
     _store.request_count[tool_name] = _store.request_count.get(tool_name, 0) + 1
 
     # 延迟统计
-    _store.request_latency_sum[tool_name] = _store.request_latency_sum.get(tool_name, 0.0) + latency_ms
-    _store.request_latency_count[tool_name] = _store.request_latency_count.get(tool_name, 0) + 1
+    _store.request_latency_sum[tool_name] = (
+        _store.request_latency_sum.get(tool_name, 0.0) + latency_ms
+    )
+    _store.request_latency_count[tool_name] = (
+        _store.request_latency_count.get(tool_name, 0) + 1
+    )
 
     # 错误计数
     if is_error:

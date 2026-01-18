@@ -44,27 +44,27 @@ test-cov:
 	pytest --cov=src --cov-report=html --cov-report=term --cov-report=xml tests/
 
 build:
-	docker-compose build
+	docker compose build
 
 up:
-	docker-compose up -d
+	docker compose up -d
 	@echo "Waiting for database to be ready..."
 	@sleep 5
 	@echo "Containers are running!"
-	@docker-compose ps
+	@docker compose ps
 
 setup-mcp:
 	@echo "=================================="
 	@echo "RiskMonitor-MultiAgent Setup"
 	@echo "=================================="
 	@echo "Building Docker images..."
-	docker-compose build
+	docker compose build
 	@echo "Starting services..."
-	docker-compose up -d
+	docker compose up -d
 	@echo "Waiting for MySQL to be ready..."
 	@sleep 10
 	@echo "Containers are running!"
-	@docker-compose ps
+	@docker compose ps
 
 mcp-logs:
 	docker logs -f riskmonitor-multiagent
@@ -73,13 +73,13 @@ mcp-shell:
 	docker exec -it riskmonitor-multiagent /bin/bash
 
 down:
-	docker-compose down
+	docker compose down
 
 restart:
-	docker-compose restart
+	docker compose restart
 
 logs:
-	docker-compose logs -f
+	docker compose logs -f
 
 test-db:
 	@echo "Testing database connection..."
@@ -92,7 +92,7 @@ test-unit:
 test-integration:
 	@echo "Running integration tests..."
 	@echo "Ensuring containers are running..."
-	@docker-compose ps mysql | grep -q "Up" || docker-compose up -d mysql
+	@docker compose ps mysql | grep -q "Up" || docker compose up -d mysql
 	@sleep 5
 	pytest tests/integration/ -v --tb=short
 
@@ -103,7 +103,7 @@ test-all: test-db test-unit test-integration
 test: test-all
 
 clean:
-	docker-compose down -v
+	docker compose down -v
 	@echo "All containers and volumes removed"
 
 clean-cache:
@@ -115,10 +115,10 @@ clean-cache:
 	@echo "Cache files cleaned"
 
 shell-db:
-	docker-compose exec mysql sh -lc 'mysql -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}"'
+	docker compose exec mysql sh -lc 'mysql -u "$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}"'
 
 phpmyadmin:
-	docker-compose --profile tools up -d
+	docker compose --profile tools up -d
 	@echo "phpMyAdmin available at http://localhost:8080"
 	@echo "Server: mysql"
 	@echo "Username: admin"

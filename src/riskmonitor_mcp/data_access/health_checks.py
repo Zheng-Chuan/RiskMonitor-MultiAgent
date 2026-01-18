@@ -48,6 +48,6 @@ def check_mysql_ready() -> tuple[bool, str, Optional[DataAccessError]]:
         try:
             if cursor is not None:
                 cursor.close()
-        finally:
+        finally:  # pylint: disable=duplicate-code
             if conn is not None:
                 conn.close()

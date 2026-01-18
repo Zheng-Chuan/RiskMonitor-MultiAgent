@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import Any, Optional
 
 import pymysql
@@ -18,7 +17,7 @@ from riskmonitor_mcp.data_access.errors import DataAccessError, map_mysql_error
 from riskmonitor_mcp.data_access.mysql_engine import get_engine
 
 
-def fetch_all_positions() -> list[dict[str, Any]]:
+def fetch_all_positions() -> list[dict[str, Any]]:  # pylint: disable=duplicate-code
     """
     获取所有头寸记录.
     按 entry_date 倒序排列.
@@ -52,52 +51,51 @@ def fetch_all_positions() -> list[dict[str, Any]]:
 
 async def fetch_positions_by_desk_for_monitoring_with_retry(
     desk: str,
+    retries: int = 3,
+    delay: float = 0.5
 ) -> list[dict[str, Any]]:
     """
-    带重试的按 Desk 查询头寸 (用于监控链路).
-    因为监控是核心链路, 且对可用性要求高, 这里在应用层实现了简单的重试.
+    带重试机制的 Desk 头寸查询.
+    用于监控场景, 防止网络抖动导致查询失败.
 
     Args:
         desk: 交易台名称
+        retries: 重试次数
+        delay: 重试间隔(秒)
 
     Returns:
         头寸列表
-
-    Raises:
-        DataAccessError: 重试耗尽或遇到不可重试错误
     """
-    # 监控链路查询通常是热点, 在此处集中实现最小重试策略.
-    db_retries = int(os.getenv("MYSQL_RETRIES", "1"))
-    last_error: Optional[BaseException] = None
-
-    for attempt in range(db_retries + 1):
+    for i in range(retries):
         try:
             return fetch_positions_by_desk_for_monitoring(desk)
         except DataAccessError as e:
-            last_error = e
-            if not e.retriable:
-                raise
-            if attempt >= db_retries:
-                break
-            await asyncio.sleep(min(0.2 * (attempt + 1), 1.0))
-
-    if isinstance(last_error, DataAccessError):
-        raise last_error
-    raise DataAccessError(
-        code="DB_QUERY_FAILED",
-        retriable=True,
-        message="mysql query failed op=fetch_positions_by_desk_for_monitoring_with_retry",
-        cause=last_error,
-    )
+            if i == retries - 1:
+                raise e
+            await asyncio.sleep(delay)
+    return []
 
 
 def fetch_positions_by_trader(
     trader_id: str,
-    start_date: Optional[str],
-    end_date: Optional[str],
-    limit: int,
-    offset: int,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0
 ) -> list[dict[str, Any]]:
+    """
+    按 Trader ID 查询头寸.
+
+    Args:
+        trader_id: 交易员 ID
+        start_date: 开始日期
+        end_date: 结束日期
+        limit: 限制条数
+        offset: 偏移量
+
+    Returns:
+        头寸列表
+    """
     query = (
         """
         SELECT position_id, trader_id, desk, security_id,
@@ -142,6 +140,19 @@ def fetch_positions_by_desk(
     limit: int,
     offset: int,
 ) -> list[dict[str, Any]]:
+    """
+    按 Desk 查询头寸.
+
+    Args:
+        desk_name: 交易台名称
+        start_date: 开始日期
+        end_date: 结束日期
+        limit: 限制条数
+        offset: 偏移量
+
+    Returns:
+        头寸列表
+    """
     query = (
         """
         SELECT position_id, trader_id, desk, security_id,
@@ -217,59 +228,66 @@ def fetch_positions_by_desk_for_monitoring(desk: str) -> list[dict[str, Any]]:
 
 def fetch_total_delta() -> float:
     """
-    计算所有头寸的 Delta 总和.
+    获取整个组合的总 Delta.
 
     Returns:
-        Total Delta
+        总 Delta 值
     """
-    conn = get_engine().raw_connection()
+    conn = None
     cursor = None
     try:
-        try:
-            cursor = conn.cursor(pymysql.cursors.DictCursor)
-            cursor.execute("SELECT SUM(delta) as total_delta FROM positions")
-            row = cursor.fetchone()
-            if row is None:
-                return 0.0
-            value = row.get("total_delta")
-            return float(value) if value else 0.0
-        except pymysql.MySQLError as e:
-            raise map_mysql_error(e, operation="fetch_total_delta") from e
+        conn = get_engine().raw_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        sql = """
+            SELECT SUM(delta) as total_delta
+            FROM positions
+        """
+        cursor.execute(sql)
+        row = cursor.fetchone()
+        if row and row["total_delta"] is not None:
+            return float(row["total_delta"])
+        return 0.0
+    except pymysql.MySQLError as e:
+        raise map_mysql_error(e, operation="fetch_total_delta") from e
     finally:
         try:
             if cursor is not None:
                 cursor.close()
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
 
 
 def fetch_desk_delta_summary() -> list[dict[str, Any]]:
     """
-    按 Desk 汇总 Delta.
-    按 Delta 绝对值倒序排列.
+    按 Desk 获取 Delta 汇总.
 
     Returns:
-        包含 desk, desk_delta, position_count 的字典列表
+        包含 desk, desk_delta, position_count 的列表
     """
-    conn = get_engine().raw_connection()
+    conn = None
     cursor = None
     try:
-        try:
-            cursor = conn.cursor(pymysql.cursors.DictCursor)
-            cursor.execute(
-                """
-                SELECT desk, SUM(delta) as desk_delta, COUNT(*) as position_count
-                FROM positions
-                GROUP BY desk
-                ORDER BY ABS(SUM(delta)) DESC
-                """
-            )
-            return list(cursor.fetchall())
-        except pymysql.MySQLError as e:
-            raise map_mysql_error(e, operation="fetch_desk_delta_summary") from e
+        conn = get_engine().raw_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        sql = """
+            SELECT
+                desk,
+                SUM(delta) as desk_delta,
+                COUNT(*) as position_count
+            FROM positions
+            GROUP BY desk
+        """
+        cursor.execute(sql)
+        return cursor.fetchall()
+    except pymysql.MySQLError as e:
+        raise map_mysql_error(e, operation="fetch_desk_delta_summary") from e
     finally:
         try:
             if cursor is not None:
                 cursor.close()
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()

@@ -8,9 +8,10 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+import json
 
 
-class _RequestIdFilter(logging.Filter):
+class _RequestIdFilter(logging.Filter):  # pylint: disable=too-few-public-methods
     """
     日志过滤器.
     确保每条日志都有 request_id 字段, 如果没有则设为 "-".
@@ -19,6 +20,21 @@ class _RequestIdFilter(logging.Filter):
         if not hasattr(record, "request_id"):
             record.request_id = "-"
         return True
+
+
+class JsonFormatter(logging.Formatter):  # pylint: disable=too-few-public-methods
+    """JSON 格式日志 Formatter"""
+
+    def format(self, record: logging.LogRecord) -> str:
+        log_record = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "logger": record.name,
+        }
+        if hasattr(record, "request_id"):
+            log_record["request_id"] = record.request_id
+        return json.dumps(log_record)
 
 
 _logger = logging.getLogger("riskmonitor")

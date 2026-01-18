@@ -20,6 +20,7 @@ env/
 .env
 
 # IDE
+.trae/
 .vscode/*
 !.vscode/settings.json
 .idea/

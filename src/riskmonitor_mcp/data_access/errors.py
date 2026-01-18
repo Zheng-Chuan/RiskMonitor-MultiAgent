@@ -14,7 +14,7 @@ import httpx
 import pymysql
 
 
-@dataclass(frozen=True)
+@dataclass
 class DataAccessError(RuntimeError):
     """
     数据访问层通用异常.
