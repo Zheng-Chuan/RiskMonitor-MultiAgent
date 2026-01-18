@@ -15,14 +15,16 @@ from mcp.server import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from riskmonitor_mcp.data_access.health_checks import check_mysql_ready
-from riskmonitor_mcp.services import readiness_service
-from riskmonitor_mcp.services.logging_service import configure_logging
-from riskmonitor_mcp.services.prometheus_metrics_service import generate_prometheus_metrics
-from riskmonitor_mcp.services.auth_service import is_authorized
-from riskmonitor_mcp.resources.mcp_resources import register_resources
-from riskmonitor_mcp.prompts.mcp_prompts import register_prompts
-from riskmonitor_mcp.tools import mcp_tools as tools
+from riskmonitor_multiagent.data_access.health_checks import check_mysql_ready
+from riskmonitor_multiagent.services import readiness_service
+from riskmonitor_multiagent.services.logging_service import configure_logging
+from riskmonitor_multiagent.services.prometheus_metrics_service import (
+    generate_prometheus_metrics,
+)
+from riskmonitor_multiagent.services.auth_service import is_authorized
+from riskmonitor_multiagent.resources.mcp_resources import register_resources
+from riskmonitor_multiagent.prompts.mcp_prompts import register_prompts
+from riskmonitor_multiagent.tools import mcp_tools as tools
 
 query_all_positions = tools.query_all_positions
 query_positions_by_trader = tools.query_positions_by_trader

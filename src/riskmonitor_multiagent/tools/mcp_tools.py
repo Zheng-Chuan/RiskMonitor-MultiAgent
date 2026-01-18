@@ -14,22 +14,25 @@ from typing import Any, Optional
 from mcp.server import FastMCP
 from mcp.server.fastmcp import Context
 
-from riskmonitor_mcp.data_access import positions_repository
-from riskmonitor_mcp.data_access.errors import DataAccessError
-from riskmonitor_mcp.data_access import alerts_repository
-from riskmonitor_mcp.services.exposure_service import compute_exposure
-from riskmonitor_mcp.services.breach_service import build_abs_delta_breaches
-from riskmonitor_mcp.services import alert_rules_service
-from riskmonitor_mcp.services.logging_service import (
+from riskmonitor_multiagent.data_access import positions_repository
+from riskmonitor_multiagent.data_access.errors import DataAccessError
+from riskmonitor_multiagent.data_access import alerts_repository
+from riskmonitor_multiagent.services.exposure_service import compute_exposure
+from riskmonitor_multiagent.services.breach_service import build_abs_delta_breaches
+from riskmonitor_multiagent.services import alert_rules_service
+from riskmonitor_multiagent.services.logging_service import (
     new_request_id,
     log_info,
     log_error,
     log_exception,
 )
-from riskmonitor_mcp.services.prometheus_metrics_service import record_request, get_metrics_summary
-from riskmonitor_mcp.services.auth_service import get_headers_from_ctx, is_authorized
-from riskmonitor_mcp.tools.errors import error_payload
-from riskmonitor_mcp.tools.tool_helpers import (
+from riskmonitor_multiagent.services.prometheus_metrics_service import (
+    record_request,
+    get_metrics_summary,
+)
+from riskmonitor_multiagent.services.auth_service import get_headers_from_ctx, is_authorized
+from riskmonitor_multiagent.tools.errors import error_payload
+from riskmonitor_multiagent.tools.tool_helpers import (
     normalize_as_of,
     normalize_limit_offset,
     normalize_positions,

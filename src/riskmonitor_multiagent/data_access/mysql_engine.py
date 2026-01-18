@@ -14,7 +14,7 @@ from functools import lru_cache
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine, URL
 
-from riskmonitor_mcp import config
+from riskmonitor_multiagent import config
 
 
 def _build_mysql_url() -> URL:

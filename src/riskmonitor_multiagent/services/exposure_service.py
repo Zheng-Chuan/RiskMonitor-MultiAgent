@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from riskmonitor_mcp.services.exposure_compute import compute_position_pv_usd, to_float
+from riskmonitor_multiagent.services.exposure_compute import (
+    compute_position_pv_usd,
+    to_float,
+)
 
 
 def compute_exposure(

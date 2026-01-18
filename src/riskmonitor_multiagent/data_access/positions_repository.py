@@ -13,8 +13,8 @@ from typing import Any, Optional
 
 import pymysql
 
-from riskmonitor_mcp.data_access.errors import DataAccessError, map_mysql_error
-from riskmonitor_mcp.data_access.mysql_engine import get_engine
+from riskmonitor_multiagent.data_access.errors import DataAccessError, map_mysql_error
+from riskmonitor_multiagent.data_access.mysql_engine import get_engine
 
 
 def fetch_all_positions() -> list[dict[str, Any]]:  # pylint: disable=duplicate-code

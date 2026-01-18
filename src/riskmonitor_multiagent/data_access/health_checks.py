@@ -6,8 +6,8 @@ from typing import Optional
 
 import pymysql
 
-from riskmonitor_mcp.data_access.errors import DataAccessError, map_mysql_error
-from riskmonitor_mcp.data_access.mysql_engine import get_engine
+from riskmonitor_multiagent.data_access.errors import DataAccessError, map_mysql_error
+from riskmonitor_multiagent.data_access.mysql_engine import get_engine
 
 
 def check_mysql_ready() -> tuple[bool, str, Optional[DataAccessError]]:

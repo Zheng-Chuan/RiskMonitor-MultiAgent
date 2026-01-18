@@ -17,8 +17,8 @@ if str(_SRC_ROOT) not in sys.path:
 def test_health_and_ready_endpoints() -> None:
     from starlette.testclient import TestClient
 
-    from riskmonitor_mcp.server import mcp
-    from riskmonitor_mcp.services import readiness_service
+    from riskmonitor_multiagent.server import mcp
+    from riskmonitor_multiagent.services import readiness_service
 
     readiness_service._reset_for_tests()
 
@@ -37,8 +37,8 @@ def test_health_and_ready_endpoints() -> None:
 def test_ready_returns_503_when_shutting_down() -> None:
     from starlette.testclient import TestClient
 
-    from riskmonitor_mcp.server import mcp
-    from riskmonitor_mcp.services import readiness_service
+    from riskmonitor_multiagent.server import mcp
+    from riskmonitor_multiagent.services import readiness_service
 
     readiness_service._reset_for_tests()
     readiness_service.mark_shutting_down("test")

@@ -37,7 +37,7 @@ load_dotenv(dotenv_path=_PROJECT_ROOT / ".env")
 
 def _configure_logging() -> None:
     # 复用服务端结构化日志配置.
-    from riskmonitor_mcp.services.logging_service import (  
+    from riskmonitor_multiagent.services.logging_service import (  
         configure_logging,
     )
 
@@ -115,7 +115,7 @@ class _BenchConfig:
 
 
 async def _run_once(snapshot_url: str, desk: str, abs_delta_limit: float) -> float:
-    from riskmonitor_mcp.tools.mcp_tools import (  
+    from riskmonitor_multiagent.tools.mcp_tools import (  
         monitor_desk_exposure,
     )
 

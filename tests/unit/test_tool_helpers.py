@@ -21,7 +21,7 @@ _SRC_ROOT = _PROJECT_ROOT / "src"
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
-from riskmonitor_mcp.tools import tool_helpers as helpers  
+from riskmonitor_multiagent.tools import tool_helpers as helpers  
 
 def test_normalize_limit_offset_defaults() -> None:
     limit, offset = helpers.normalize_limit_offset(None, None)

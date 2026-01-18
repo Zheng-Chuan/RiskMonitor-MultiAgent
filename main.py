@@ -5,7 +5,7 @@
 - 兼容历史 import: tests 仍可从 main import 工具函数
 - docker 与本地运行统一入口
 
-业务实现位于 src/riskmonitor_mcp/server.py.
+业务实现位于 src/riskmonitor_multiagent/server.py.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import sys
 # Ensure src is in python path
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
-from riskmonitor_mcp import server as _server  # pylint: disable=wrong-import-position
+from riskmonitor_multiagent import server as _server  # pylint: disable=wrong-import-position
 
 # 对外暴露工具函数, 便于 tests 继续从 main import.
 mcp = _server.mcp

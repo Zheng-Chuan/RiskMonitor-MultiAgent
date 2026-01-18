@@ -22,7 +22,7 @@ if str(_SRC_ROOT) not in sys.path:
 @pytest.mark.asyncio
 async def test_alert_rules_evaluation():
     """测试告警规则评估"""
-    from riskmonitor_mcp.services import alert_rules_service
+    from riskmonitor_multiagent.services import alert_rules_service
 
     # 测试超限场景
     alerts = alert_rules_service.evaluate_desk_delta_breach(
@@ -55,7 +55,7 @@ async def test_alert_rules_evaluation():
 @pytest.mark.asyncio
 async def test_alert_severity_determination():
     """测试告警级别判定"""
-    from riskmonitor_mcp.services import alert_rules_service
+    from riskmonitor_multiagent.services import alert_rules_service
 
     # CRITICAL: 超限 50% 以上
     alerts_critical = alert_rules_service.evaluate_desk_delta_breach(
@@ -88,8 +88,8 @@ async def test_alert_severity_determination():
 @pytest.mark.asyncio
 async def test_alert_persistence_and_retrieval():
     """测试告警持久化和查询"""
-    from riskmonitor_mcp.data_access import alerts_repository
-    from riskmonitor_mcp.services import alert_rules_service
+    from riskmonitor_multiagent.data_access import alerts_repository
+    from riskmonitor_multiagent.services import alert_rules_service
 
     # 生成测试告警
     test_request_id = f"test-persist-{pytest.__version__}"
@@ -126,7 +126,7 @@ async def test_alert_persistence_and_retrieval():
 @pytest.mark.asyncio
 async def test_get_recent_alerts():
     """测试查询最近告警"""
-    from riskmonitor_mcp.data_access import alerts_repository
+    from riskmonitor_multiagent.data_access import alerts_repository
 
     # 查询所有最近告警
     recent_alerts = alerts_repository.get_recent_alerts(limit=10)
@@ -148,7 +148,7 @@ async def test_get_recent_alerts():
 @pytest.mark.asyncio
 async def test_alert_format_for_response():
     """测试告警格式化"""
-    from riskmonitor_mcp.services import alert_rules_service
+    from riskmonitor_multiagent.services import alert_rules_service
 
     alerts = alert_rules_service.evaluate_desk_delta_breach(
         desk="Format Test Desk",

@@ -7,8 +7,8 @@ Week4: 可观测与告警闭环
 
 from typing import List, Dict, Any, Optional
 from sqlalchemy import text
-from riskmonitor_mcp.data_access.mysql_engine import get_engine
-from riskmonitor_mcp.data_access.errors import map_mysql_error
+from riskmonitor_multiagent.data_access.mysql_engine import get_engine
+from riskmonitor_multiagent.data_access.errors import map_mysql_error
 
 
 def save_alert(alert: Dict[str, Any]) -> None:
