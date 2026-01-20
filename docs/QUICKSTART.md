@@ -33,6 +33,14 @@
 - MYSQL_USER
 - MYSQL_PASSWORD
 
+如果你需要在服务端直接调用 LLM(通过 OpenRouter)
+
+- OPENROUTER_API_KEY
+- OPENROUTER_MODEL (可选, 默认 openai/gpt-4o-mini)
+- OPENROUTER_BASE_URL (可选, 默认 https://openrouter.ai/api/v1)
+- OPENROUTER_HTTP_REFERER (可选, 用于 OpenRouter 统计)
+- OPENROUTER_APP_TITLE (可选, 用于 OpenRouter 统计)
+
 建议你先验证连通性
 
 - 方式 A 使用 make test-db

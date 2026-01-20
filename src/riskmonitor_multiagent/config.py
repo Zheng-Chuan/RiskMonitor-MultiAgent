@@ -6,6 +6,20 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+
+def _try_load_repo_dotenv() -> None:
+    """
+    尝试从仓库根目录加载 .env.
+    用于在非 server.py 入口场景下也能读取到本地 .env 配置.
+    """
+    try:
+        from dotenv import load_dotenv  # pylint: disable=import-outside-toplevel
+    except Exception:  # pylint: disable=broad-except
+        return
+    repo_root = Path(__file__).resolve().parents[2]
+    load_dotenv(dotenv_path=repo_root / ".env")
 
 
 def get_mysql_host() -> str:
@@ -70,3 +84,57 @@ def get_mysql_max_overflow() -> int:
 def get_mysql_pool_recycle_s() -> int:
     """获取数据库连接回收时间(秒), 默认为 1800秒 (30分钟)."""
     return int(os.getenv("MYSQL_POOL_RECYCLE", "1800"))
+
+
+def get_openrouter_api_key() -> str:
+    """
+    获取 OpenRouter API Key.
+    必须设置 OPENROUTER_API_KEY 环境变量.
+
+    异常:
+        ValueError: 如果未设置 OPENROUTER_API_KEY.
+    """
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if api_key is None or not api_key.strip():
+        _try_load_repo_dotenv()
+        api_key = os.getenv("OPENROUTER_API_KEY")
+    if api_key is None or not api_key.strip():
+        raise ValueError("OPENROUTER_API_KEY is not set")
+    return api_key.strip()
+
+
+def get_openrouter_base_url() -> str:
+    """获取 OpenRouter API Base URL, 默认为 https://openrouter.ai/api/v1."""
+    value = os.getenv("OPENROUTER_BASE_URL")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("OPENROUTER_BASE_URL")
+    return (value or "https://openrouter.ai/api/v1").strip().rstrip("/") or "https://openrouter.ai/api/v1"
+
+
+def get_openrouter_model() -> str:
+    """获取 OpenRouter 默认模型, 默认为免费模型 meta-llama/llama-3.1-8b-instruct:free."""
+    value = os.getenv("OPENROUTER_MODEL")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("OPENROUTER_MODEL")
+    default_model = "meta-llama/llama-3.1-8b-instruct:free"
+    return (value or default_model).strip() or default_model
+
+
+def get_openrouter_http_referer() -> str:
+    """获取 OpenRouter HTTP-Referer(可选)."""
+    value = os.getenv("OPENROUTER_HTTP_REFERER")
+    if value is None:
+        _try_load_repo_dotenv()
+        value = os.getenv("OPENROUTER_HTTP_REFERER")
+    return (value or "").strip()
+
+
+def get_openrouter_app_title() -> str:
+    """获取 OpenRouter X-Title(可选)."""
+    value = os.getenv("OPENROUTER_APP_TITLE")
+    if value is None:
+        _try_load_repo_dotenv()
+        value = os.getenv("OPENROUTER_APP_TITLE")
+    return (value or "").strip()
