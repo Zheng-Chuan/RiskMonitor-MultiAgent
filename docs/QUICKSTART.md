@@ -182,6 +182,6 @@ python main.py
 
 ## 更多文档
 
-- 文档中心: [ROOT.md](ROOT.md)
+- 项目总入口: [../README.md](../README.md)
 - 系统架构: [ARCHITECTURE.md](ARCHITECTURE.md)
 - 路线图: [ROADMAP.md](ROADMAP.md)

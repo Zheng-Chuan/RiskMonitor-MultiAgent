@@ -15,7 +15,6 @@
 
 ## 文档目录
 
-- [docs/ROOT.md](docs/ROOT.md)
 - [docs/QUICKSTART.md](docs/QUICKSTART.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/DATA.md](docs/DATA.md)
