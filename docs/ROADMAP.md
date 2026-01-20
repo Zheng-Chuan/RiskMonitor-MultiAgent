@@ -106,13 +106,13 @@
 **目标**: 清洗现有架构，确保 MCP Server 无状态、安全且 AI 友好。
 
 - **交付**
-  - [ ] **架构清洗 (Stateless & Secure)**
-    - [ ] **删除** `task_registry.py`: 移除内存任务队列，回归无状态。
-    - [ ] **重构** `monitor_desk_exposure`: 拆分为 `calculate` (读) 和 `submit` (写)。
-    - [ ] **Auth**: 实现基于 Token 的 HTTP Header 鉴权桩。
-  - [ ] **Resources & Prompts**
-    - [ ] 实现 `risk://metadata/desks` 和 `risk://limits/global` Resources。
-    - [ ] 内置 `analyze-risk-breach` Prompt 模版。
+  - [x] **架构清洗 (Stateless & Secure)**
+    - [x] **删除** `task_registry.py`: 移除内存任务队列，回归无状态。
+    - [x] **重构** `monitor_desk_exposure`: 拆分为 `calculate` (读) 和 `submit` (写)。
+    - [x] **Auth**: 实现基于 Token 的 HTTP Header 鉴权桩。
+  - [x] **Resources & Prompts**
+    - [x] 实现 `risk://metadata/desks` 和 `risk://limits/global` Resources。
+    - [x] 内置 `analyze-risk-breach` Prompt 模版。
 
 ### Week 6: Infrastructure & CDC (数据动脉)
 **目标**: 搭建 Kafka 生态，打通从 DB 到流的实时通道。
