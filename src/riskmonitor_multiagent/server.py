@@ -41,7 +41,8 @@ load_dotenv(dotenv_path=_repo_root / ".env")
 
 configure_logging()
 
-mcp = FastMCP("RiskMonitor")
+_server_name = os.getenv("MCP_SERVER_NAME", "RiskMonitor MultiAgent").strip()
+mcp = FastMCP(_server_name or "RiskMonitor MultiAgent")
 tools.register_tools(mcp)
 register_resources(mcp)
 register_prompts(mcp)

@@ -99,6 +99,11 @@ docker compose --profile dev run --rm test-runner
 }
 ```
 
+如果你希望 MCP 客户端侧显示的 server 名字更明确
+
+- 设置环境变量 MCP_SERVER_NAME=RiskMonitor MultiAgent
+- 或者在 `.env` 里配置 MCP_SERVER_NAME
+
 如果你希望用 streamable http 连接 MCP
 
 - MCP endpoint: <http://127.0.0.1:8000/mcp>

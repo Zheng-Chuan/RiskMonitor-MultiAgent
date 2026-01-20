@@ -5,6 +5,7 @@
 ## 快速开始
 
 - [QUICKSTART.md](QUICKSTART.md)
+- [UPGRADE.md](UPGRADE.md)
 
 ## 核心文档
 
