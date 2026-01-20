@@ -20,12 +20,12 @@ def build_alerts(
     根据 Breaches 生成告警列表.
     目前实现为简单的聚合告警.
 
-    Args:
+    参数:
         desk: 交易台名称
         as_of: 计算日期
         breaches: 违规记录列表
 
-    Returns:
+    返回:
         告警列表
     """
     alerts: list[dict[str, Any]] = []

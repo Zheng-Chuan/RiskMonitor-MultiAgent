@@ -1,14 +1,14 @@
 """
-Week 1 验收, 真实 MCP client 调用.
+第 1 周验收: 真实 MCP client 调用.
 
 目标:
-- 通过 stdio transport 启动 main.py
-- 使用 mcp.client 连接 server
+- 通过 stdio 传输启动 main.py
+- 使用 mcp.client 连接服务端
 - 至少调用 2 个工具, 并断言返回 schema
 
 说明:
 - 该测试依赖本地 MySQL 可连接
-- server 侧会从仓库根目录加载 .env
+- 服务端会从仓库根目录加载 .env
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ project_root = Path(__file__).resolve().parents[2]
 
 
 def _start_snapshot_server() -> tuple[HTTPServer, str]:
-    # 在测试进程内启动 mock market snapshot server, 避免依赖额外进程.
+    # 在测试进程内启动 mock 行情快照服务, 避免依赖额外进程.
     server = HTTPServer(("127.0.0.1", 0), Handler)
     host_raw, port_raw = server.server_address
     host = (
@@ -78,7 +78,7 @@ def _extract_structured(result: Any) -> dict[str, Any]:
 async def test_week1_mcp_client_calls_two_tools() -> None:
     server, snapshot_url = _start_snapshot_server()
     try:
-        # 使用同一 python 解释器启动 server, 保证依赖一致.
+        # 使用同一 Python 解释器启动服务端, 保证依赖一致.
         params = StdioServerParameters(
             command=sys.executable,
             args=["main.py"],

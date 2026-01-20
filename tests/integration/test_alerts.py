@@ -105,7 +105,7 @@ async def test_alert_persistence_and_retrieval():
     # 保存到数据库
     alerts_repository.save_alerts_batch(alerts)
     
-    # 根据 request_id 查询
+    # 根据请求 request_id 查询
     retrieved_alerts = alerts_repository.get_alerts_by_request_id(test_request_id)
     assert len(retrieved_alerts) >= 1
     
@@ -116,7 +116,7 @@ async def test_alert_persistence_and_retrieval():
     assert float(retrieved_alert["metric_value"]) == 1200000.0
     assert float(retrieved_alert["threshold_value"]) == 1000000.0
     
-    # 根据 alert_id 查询
+    # 根据告警 alert_id 查询
     alert_id = retrieved_alert["alert_id"]
     single_alert = alerts_repository.get_alert_by_id(alert_id)
     assert single_alert is not None
@@ -132,13 +132,13 @@ async def test_get_recent_alerts():
     recent_alerts = alerts_repository.get_recent_alerts(limit=10)
     assert isinstance(recent_alerts, list)
     
-    # 按 severity 过滤
+    # 按严重级别 severity 过滤
     critical_alerts = alerts_repository.get_recent_alerts(limit=10, severity="CRITICAL")
     assert isinstance(critical_alerts, list)
     for alert in critical_alerts:
         assert alert["severity"] == "CRITICAL"
     
-    # 按 desk 过滤
+    # 按交易台 desk 过滤
     desk_alerts = alerts_repository.get_recent_alerts(limit=10, desk="Equity Derivatives")
     assert isinstance(desk_alerts, list)
     for alert in desk_alerts:

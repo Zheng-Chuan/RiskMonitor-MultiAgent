@@ -2,8 +2,8 @@
 """RiskMonitor-MultiAgent 入口.
 
 此文件保持为薄入口, 便于:
-- 兼容历史 import: tests 仍可从 main import 工具函数
-- docker 与本地运行统一入口
+- 兼容历史导入: 测试仍可从 main 导入工具函数
+- Docker 与本地运行统一入口
 
 业务实现位于 src/riskmonitor_multiagent/server.py.
 """
@@ -18,7 +18,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 from riskmonitor_multiagent import server as _server  # pylint: disable=wrong-import-position
 
-# 对外暴露工具函数, 便于 tests 继续从 main import.
+# 对外暴露工具函数, 便于测试继续从 main 导入.
 mcp = _server.mcp
 query_all_positions = _server.query_all_positions
 query_positions_by_trader = _server.query_positions_by_trader
@@ -35,7 +35,7 @@ def main() -> None:
 
     支持的传输模式 (MCP_TRANSPORT):
     - stdio: 标准输入输出 (默认开发环境)
-    - streamable-http: SSE over HTTP (生产环境推荐)
+- streamable-http: 基于 HTTP 的 SSE (生产环境推荐)
     - sse: 标准 SSE (需要指定挂载路径)
     """
     transport = os.getenv("MCP_TRANSPORT")

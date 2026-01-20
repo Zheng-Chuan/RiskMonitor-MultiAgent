@@ -15,13 +15,13 @@ def check_mysql_ready() -> tuple[bool, str, Optional[DataAccessError]]:
     检查 MySQL 数据库连接是否就绪.
     执行简单的 SELECT 1 查询.
 
-    Returns:
+    返回:
         (ok, message, error)
         - ok: 是否连接成功
         - message: 状态描述
         - error: 如果失败, 返回 DataAccessError
     """
-    # 返回 (ok, message, error)
+    # 返回 (ok, 状态信息, 错误)
     conn = None
     cursor = None
     try:

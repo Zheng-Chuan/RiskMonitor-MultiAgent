@@ -36,7 +36,7 @@ def record_request(tool_name: str, latency_ms: float, is_error: bool = False) ->
     """
     记录请求指标
     
-    Args:
+    参数:
         tool_name: 工具名称
         latency_ms: 延迟(毫秒)
         is_error: 是否错误
@@ -61,7 +61,7 @@ def generate_prometheus_metrics() -> str:
     """
     生成 Prometheus 格式的指标
     
-    Returns:
+    返回:
         Prometheus 文本格式的指标
     """
     lines: List[str] = []
@@ -120,7 +120,7 @@ def get_metrics_summary() -> Dict[str, Any]:
     """
     获取指标摘要(用于内部监控)
     
-    Returns:
+    返回:
         指标摘要字典
     """
     summary = {

@@ -22,7 +22,7 @@ from main import monitor_desk_exposure, get_service_metrics  # noqa: E402
 
 
 def start_snapshot_server(host: str, port: int) -> tuple[HTTPServer, threading.Thread]:
-    # 在演示脚本里内嵌启动 snapshot server, 避免依赖额外进程, 提升可复现性.
+    # 在演示脚本里内嵌启动行情快照服务, 避免依赖额外进程, 提升可复现性.
     server = HTTPServer((host, port), Handler)
 
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -43,9 +43,7 @@ async def run_demo(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Week 1 demo: desk exposure monitoring"
-    )
+    parser = argparse.ArgumentParser(description="第 1 周演示: 交易台敞口监控")
     parser.add_argument("--desk", default="Equity Derivatives")
     parser.add_argument("--abs-delta-limit", type=float, default=500.0)
     parser.add_argument("--snapshot-host", default="127.0.0.1")
@@ -54,7 +52,7 @@ def main() -> None:
 
     server, _thread = start_snapshot_server(args.snapshot_host, args.snapshot_port)
 
-    # 等待 server ready.
+    # 等待服务就绪.
     time.sleep(0.1)
 
     snapshot_url = f"http://{args.snapshot_host}:{args.snapshot_port}/snapshot"

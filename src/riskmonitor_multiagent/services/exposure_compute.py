@@ -15,7 +15,7 @@ def to_float(value: Any) -> Optional[float]:
     将任意输入安全转换为 float.
     如果转换失败或为 None, 返回 None.
     """
-    # 将输入尽量转换为 float
+    # 将输入尽量转换为浮点数
     if value is None:
         return None
     try:
@@ -29,14 +29,14 @@ def compute_position_pv_usd(position: dict[str, Any], snapshot: dict[str, Any]) 
     计算单笔头寸的美元现值 (PV).
     公式: PV = quantity * price * fx_rate
 
-    Args:
+    参数:
         position: 头寸字典 (需包含 quantity, security_id, currency)
         snapshot: 市场快照字典 (需包含 prices, fx_rates)
 
-    Returns:
+    返回:
         计算出的 PV (USD)
     """
-    # 简化 PV 计算: quantity * price * fx
+    # 简化 PV 计算: 数量 * 价格 * 汇率
     security_id = position.get("security_id")
     currency = position.get("currency") or "USD"
     quantity = to_float(position.get("quantity")) or 0.0

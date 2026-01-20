@@ -23,17 +23,17 @@ def compute_exposure(
     计算组合风险敞口.
     聚合所有头寸的 Delta 和 PV, 并按币种分组.
 
-    Args:
+    参数:
         positions: 头寸列表
         snapshot: 市场快照
 
-    Returns:
+    返回:
         (total_delta, total_pv_usd, by_currency_map)
         - total_delta: 组合总 Delta
         - total_pv_usd: 组合总 PV(USD)
         - by_currency_map: 按币种聚合的 Delta 和 PV
     """
-    # 聚合计算 total delta、total pv, 并按币种汇总
+    # 聚合计算总 Delta、总 PV, 并按币种汇总
     total_delta = 0.0
     total_pv_usd = 0.0
     by_currency: dict[str, dict[str, float]] = {}

@@ -33,7 +33,7 @@ def get_mysql_password() -> str:
     获取 MySQL 密码.
     必须设置 MYSQL_PASSWORD 环境变量.
 
-    Raises:
+    异常:
         ValueError: 如果未设置 MYSQL_PASSWORD.
     """
     password = os.getenv("MYSQL_PASSWORD")

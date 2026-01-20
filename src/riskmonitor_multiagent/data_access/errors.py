@@ -20,7 +20,7 @@ class DataAccessError(RuntimeError):
     数据访问层通用异常.
     封装底层 DB/HTTP 错误, 提供统一的错误码和重试建议.
     """
-    # code 用于上层错误映射(例如 DB_TIMEOUT, UPSTREAM_ERROR)
+    # 错误码用于上层错误映射(例如 DB_TIMEOUT, UPSTREAM_ERROR)
     code: str
     # 是否建议重试
     retriable: bool
@@ -43,14 +43,14 @@ def map_mysql_error(err: pymysql.MySQLError, operation: str) -> DataAccessError:
     """
     将 pymysql 异常映射为 DataAccessError.
 
-    Args:
+    参数:
         err: 原始 pymysql 异常
         operation: 操作名称, 用于日志
 
-    Returns:
+    返回:
         封装后的 DataAccessError
     """
-    # 统一把 pymysql 的异常翻译成稳定 code
+    # 统一把 pymysql 的异常翻译成稳定错误码
     if _is_timeout_error(err):
         return DataAccessError(
             code="DB_TIMEOUT",
@@ -87,14 +87,14 @@ def map_http_error(err: BaseException, operation: str) -> DataAccessError:
     """
     将 httpx 异常映射为 DataAccessError.
 
-    Args:
+    参数:
         err: 原始 httpx 异常或 BaseException
         operation: 操作名称
 
-    Returns:
+    返回:
         封装后的 DataAccessError
     """
-    # 统一把 httpx 异常翻译成稳定 code, 用于上游行情快照请求.
+    # 统一把 httpx 异常翻译成稳定错误码, 用于上游行情快照请求.
     if isinstance(err, httpx.TimeoutException):
         return DataAccessError(
             code="UPSTREAM_TIMEOUT",

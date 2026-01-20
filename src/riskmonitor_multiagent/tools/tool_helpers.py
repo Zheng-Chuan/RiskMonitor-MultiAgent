@@ -21,13 +21,13 @@ def normalize_limit_offset(
     """
     归一化分页参数.
 
-    Args:
+    参数:
         limit: 每页数量
         offset: 偏移量
         default_limit: 默认每页数量
         max_limit: 最大每页数量
 
-    Returns:
+    返回:
         (limit, offset)
     """
     normalized_limit = default_limit if limit is None else int(limit)
@@ -43,11 +43,11 @@ def validate_optional_yyyy_mm_dd(date_str: Optional[str], field_name: str) -> No
     """
     校验日期格式但不改变原值.
 
-    Args:
+    参数:
         date_str: 日期字符串
         field_name: 字段名
 
-    Raises:
+    异常:
         ValueError: 格式错误
     """
     if date_str is None:
@@ -62,10 +62,10 @@ def normalize_as_of(as_of: Optional[str]) -> str:
     """
     归一化 as_of 为 ISO8601 Z 格式.
 
-    Args:
+    参数:
         as_of: 时间字符串
 
-    Returns:
+    返回:
         ISO8601 时间字符串
     """
     if as_of is None or not as_of.strip():
@@ -77,11 +77,11 @@ def normalize_str(value: Optional[str], default_value: str) -> str:
     """
     归一化字符串.
 
-    Args:
+    参数:
         value: 输入字符串
         default_value: 默认值
 
-    Returns:
+    返回:
         归一化后的字符串
     """
     if value is None or not value.strip():
@@ -93,10 +93,10 @@ def normalize_positions(positions: list[dict[str, Any]]) -> list[dict[str, Any]]
     """
     将 repository 返回的原始 rows 归一化为可序列化的 dict.
 
-    Args:
+    参数:
         positions: 原始头寸列表
 
-    Returns:
+    返回:
         归一化后的头寸列表
     """
     normalized_positions: list[dict[str, Any]] = []

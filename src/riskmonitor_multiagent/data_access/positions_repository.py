@@ -22,7 +22,7 @@ def fetch_all_positions() -> list[dict[str, Any]]:  # pylint: disable=duplicate-
     获取所有头寸记录.
     按 entry_date 倒序排列.
 
-    Returns:
+    返回:
         头寸字典列表
     """
     conn = get_engine().raw_connection()
@@ -58,12 +58,12 @@ async def fetch_positions_by_desk_for_monitoring_with_retry(
     带重试机制的 Desk 头寸查询.
     用于监控场景, 防止网络抖动导致查询失败.
 
-    Args:
+    参数:
         desk: 交易台名称
         retries: 重试次数
         delay: 重试间隔(秒)
 
-    Returns:
+    返回:
         头寸列表
     """
     for i in range(retries):
@@ -86,14 +86,14 @@ def fetch_positions_by_trader(
     """
     按 Trader ID 查询头寸.
 
-    Args:
+    参数:
         trader_id: 交易员 ID
         start_date: 开始日期
         end_date: 结束日期
         limit: 限制条数
         offset: 偏移量
 
-    Returns:
+    返回:
         头寸列表
     """
     query = (
@@ -143,14 +143,14 @@ def fetch_positions_by_desk(
     """
     按 Desk 查询头寸.
 
-    Args:
+    参数:
         desk_name: 交易台名称
         start_date: 开始日期
         end_date: 结束日期
         limit: 限制条数
         offset: 偏移量
 
-    Returns:
+    返回:
         头寸列表
     """
     query = (
@@ -195,10 +195,10 @@ def fetch_positions_by_desk_for_monitoring(desk: str) -> list[dict[str, Any]]:
     按 Desk 查询头寸 (无重试版, 供底层调用).
     仅根据 desk 过滤, 不分页, 用于全量计算风险.
 
-    Args:
+    参数:
         desk: 交易台名称
 
-    Returns:
+    返回:
         头寸列表
     """
     conn = get_engine().raw_connection()
@@ -230,7 +230,7 @@ def fetch_total_delta() -> float:
     """
     获取整个组合的总 Delta.
 
-    Returns:
+    返回:
         总 Delta 值
     """
     conn = None
@@ -263,7 +263,7 @@ def fetch_desk_delta_summary() -> list[dict[str, Any]]:
     """
     按 Desk 获取 Delta 汇总.
 
-    Returns:
+    返回:
         包含 desk, desk_delta, position_count 的列表
     """
     conn = None

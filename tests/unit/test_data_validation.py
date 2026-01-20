@@ -25,11 +25,11 @@ def test_position_id_format():
 
 def test_delta_calculation():
     """测试 Delta 计算逻辑"""
-    # Call 期权: Delta 为正
+    # 看涨期权(Call): Delta 为正
     call_delta = 600.0
     assert call_delta > 0
 
-    # Put 期权: Delta 为负
+    # 看跌期权(Put): Delta 为负
     put_delta = -300.0
     assert put_delta < 0
 

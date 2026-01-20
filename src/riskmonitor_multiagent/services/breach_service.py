@@ -14,11 +14,11 @@ def build_abs_delta_breaches(total_delta: float, abs_delta_limit: float) -> list
     """
     检查总 Delta 是否超过绝对值限额.
 
-    Args:
+    参数:
         total_delta: 总 Delta
         abs_delta_limit: Delta 绝对值限额
 
-    Returns:
+    返回:
         违规记录列表 (如果未违规为空列表)
     """
     breaches: list[dict[str, Any]] = []

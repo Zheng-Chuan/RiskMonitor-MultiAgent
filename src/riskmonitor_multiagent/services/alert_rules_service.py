@@ -19,13 +19,13 @@ def evaluate_desk_delta_breach(
     """
     评估 desk delta 是否超限并生成告警
 
-    Args:
+    参数:
         desk: 交易台名称
         abs_delta: delta 绝对值
         threshold: 阈值
         request_id: 请求ID
 
-    Returns:
+    返回:
         告警列表, 每个告警是一个字典
     """
     alerts = []
@@ -64,11 +64,11 @@ def _determine_severity(breach_amount: float, threshold: float) -> str:
     """
     根据超限金额确定告警级别
 
-    Args:
+    参数:
         breach_amount: 超限金额
         threshold: 阈值
 
-    Returns:
+    返回:
         告警级别: INFO, WARNING, CRITICAL
     """
     breach_ratio = breach_amount / threshold
@@ -84,10 +84,10 @@ def format_alerts_for_response(alerts: List[Dict[str, Any]]) -> List[Dict[str, A
     """
     格式化告警列表用于 MCP 响应
 
-    Args:
+    参数:
         alerts: 告警列表
 
-    Returns:
+    返回:
         格式化后的告警列表
     """
     return [

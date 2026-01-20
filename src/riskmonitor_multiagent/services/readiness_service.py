@@ -23,8 +23,8 @@ def mark_shutting_down(reason: str) -> None:
     标记服务正在关闭.
     调用后 readiness 检查将返回 False.
 
-    Args:
-        reason: 关闭原因 (如 received signal)
+    参数:
+        reason: 关闭原因(如收到信号)
     """
     with _lock:
         _state["is_shutting_down"] = True

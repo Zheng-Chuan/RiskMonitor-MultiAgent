@@ -82,7 +82,7 @@ def test_query_by_trader(db_connection):
     positions = cursor.fetchall()
     assert len(positions) > 0
 
-    # 验证所有记录都属于TRADER-001
+    # 验证所有记录都属于 TRADER-001
     for pos in positions:
         assert pos['trader_id'] == 'TRADER-001'
     cursor.close()
@@ -98,7 +98,7 @@ def test_query_by_desk(db_connection):
     positions = cursor.fetchall()
     assert len(positions) > 0
 
-    # 验证所有记录都属于Equity Derivatives
+    # 验证所有记录都属于 Equity Derivatives
     for pos in positions:
         assert pos['desk'] == 'Equity Derivatives'
     cursor.close()

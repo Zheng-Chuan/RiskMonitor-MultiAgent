@@ -44,7 +44,7 @@ from riskmonitor_multiagent.tools.tool_helpers import (
 
 def register_tools(mcp: FastMCP) -> None:
     """注册所有 MCP 工具."""
-    # 将工具注册到 MCP 实例. server 层只需要调用一次.
+    # 将工具注册到 MCP 实例. 服务端只需要调用一次.
     mcp.tool()(query_all_positions)
     mcp.tool()(query_positions_by_trader)
     mcp.tool()(query_positions_by_desk)
@@ -59,7 +59,7 @@ def query_all_positions(ctx: Context = None) -> dict:
     查询所有头寸.
     此工具通常仅用于调试或数据量极小的场景.
 
-    Returns:
+    返回:
         包含所有头寸的字典
     """
     try:
@@ -121,14 +121,14 @@ def query_positions_by_trader(  # pylint: disable=too-many-arguments, too-many-p
     按 Trader ID 查询头寸.
     支持日期范围过滤和分页.
 
-    Args:
+    参数:
         trader_id: 交易员ID
         start_date: 开始日期 (YYYY-MM-DD), 可选
         end_date: 结束日期 (YYYY-MM-DD), 可选
         limit: 返回记录数限制, 默认 100
         offset: 偏移量, 默认 0
 
-    Returns:
+    返回:
         包含头寸列表和汇总信息的字典
     """
     try:
@@ -222,7 +222,7 @@ async def query_positions_by_desk(  # pylint: disable=too-many-arguments, too-ma
     按 Desk 查询头寸.
     支持日期范围过滤和分页.
 
-    Args:
+    参数:
         desk_name: 交易台名称
         start_date: 开始日期 (YYYY-MM-DD), 可选
         end_date: 结束日期 (YYYY-MM-DD), 可选
@@ -230,7 +230,7 @@ async def query_positions_by_desk(  # pylint: disable=too-many-arguments, too-ma
         offset: 偏移量, 默认 0
         ctx: MCP 上下文 (用于进度报告)
 
-    Returns:
+    返回:
         包含头寸列表和汇总信息的字典
     """
     try:
@@ -332,10 +332,10 @@ async def calculate_total_delta(ctx: Context = None) -> dict:
     计算整个组合的总 Delta (按 Desk 汇总).
     这是一个重计算工具, 可能比较耗时.
 
-    Args:
+    参数:
         ctx: MCP 上下文 (用于进度报告)
 
-    Returns:
+    返回:
         包含总 Delta 和按 Desk 分组详情的字典
     """
     try:
@@ -427,7 +427,7 @@ async def monitor_desk_exposure(  # pylint: disable=too-many-locals, too-many-ar
     4. 检查是否违规 (Breach).
     5. 生成并持久化告警 (Alerts).
 
-    Args:
+    参数:
         desk: 交易台名称
         as_of: 计算基准时间 (ISO8601), 可选
         market_snapshot_url: 市场快照来源标识(仅用于回显), 可选
@@ -435,7 +435,7 @@ async def monitor_desk_exposure(  # pylint: disable=too-many-locals, too-many-ar
         abs_delta_limit: Delta 绝对值限额, 默认 1,000,000
         ctx: MCP 上下文 (用于进度报告)
 
-    Returns:
+    返回:
         包含风险指标、违规记录和告警信息的字典
     """
     request_id = new_request_id()
@@ -585,11 +585,11 @@ def submit_alerts(
     将告警记录批量写入数据库.
     这是一个有副作用的工具, 建议由上游 Agent 在明确需要时调用.
 
-    Args:
+    参数:
         alerts: 告警记录列表 (alert_rules_service.evaluate_* 输出)
         request_id: 可选, 便于日志追踪
 
-    Returns:
+    返回:
         写入结果
     """
     effective_request_id = request_id or new_request_id()
@@ -629,7 +629,7 @@ async def get_service_metrics() -> dict:
     获取服务运行指标摘要.
     包括 API 延迟统计、请求计数等.
 
-    Returns:
+    返回:
         指标摘要字典
     """
     summary = get_metrics_summary()

@@ -1,6 +1,6 @@
 """
 集成测试: MCP 工具
-测试 MCP Server 的工具函数
+测试 MCP 服务端的工具函数
 """
 
 import json
@@ -31,7 +31,7 @@ def _require_env(name: str) -> str:
 
 @pytest.fixture(autouse=True)
 def _require_db_env() -> None:
-    # 所有 MCP 工具都会连接数据库, 缺失环境变量时直接 skip.
+    # 所有 MCP 工具都会连接数据库, 缺失环境变量时直接跳过.
     _require_env("MYSQL_HOST")
     _require_env("MYSQL_PORT")
     _require_env("MYSQL_DATABASE")

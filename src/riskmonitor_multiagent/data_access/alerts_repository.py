@@ -15,10 +15,10 @@ def save_alert(alert: Dict[str, Any]) -> None:
     """
     保存告警记录到数据库
 
-    Args:
+    参数:
         alert: 告警字典, 包含所有字段
 
-    Raises:
+    异常:
         DataAccessError: 数据库操作失败
     """
     engine = get_engine()
@@ -47,10 +47,10 @@ def save_alerts_batch(alerts: List[Dict[str, Any]]) -> None:
     """
     批量保存告警记录
 
-    Args:
+    参数:
         alerts: 告警列表
 
-    Raises:
+    异常:
         DataAccessError: 数据库操作失败
     """
     if not alerts:
@@ -82,13 +82,13 @@ def get_alert_by_id(alert_id: str) -> Optional[Dict[str, Any]]:
     """
     根据 alert_id 查询告警记录
 
-    Args:
+    参数:
         alert_id: 告警ID
 
-    Returns:
+    返回:
         告警字典, 如果不存在返回 None
 
-    Raises:
+    异常:
         DataAccessError: 数据库操作失败
     """
     engine = get_engine()
@@ -112,13 +112,13 @@ def get_alerts_by_request_id(request_id: str) -> List[Dict[str, Any]]:
     """
     根据 request_id 查询所有关联的告警记录
 
-    Args:
+    参数:
         request_id: 请求ID
 
-    Returns:
+    返回:
         告警列表
 
-    Raises:
+    异常:
         DataAccessError: 数据库操作失败
     """
     engine = get_engine()
@@ -145,15 +145,15 @@ def get_recent_alerts(
     """
     查询最近的告警记录
 
-    Args:
+    参数:
         limit: 返回记录数上限
         severity: 可选, 按告警级别过滤
         desk: 可选, 按交易台过滤
 
-    Returns:
+    返回:
         告警列表
 
-    Raises:
+    异常:
         DataAccessError: 数据库操作失败
     """
     engine = get_engine()
