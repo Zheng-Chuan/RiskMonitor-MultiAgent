@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RiskMonitor-MultiAgent entrypoint.
+"""RiskMonitor-MultiAgent 入口.
 
 此文件保持为薄入口, 便于:
 - 兼容历史 import: tests 仍可从 main import 工具函数
@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 import sys
 
-# Ensure src is in python path
+# 确保 src 在 Python 路径中
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 from riskmonitor_multiagent import server as _server  # pylint: disable=wrong-import-position

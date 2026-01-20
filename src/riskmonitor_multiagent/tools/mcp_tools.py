@@ -1,8 +1,9 @@
-"""MCP tool functions.
+"""MCP 工具函数.
 
-This module contains only tool entrypoints.
-Database access is delegated to data_access.
-Business logic is delegated to services.
+说明:
+- 本模块只包含工具入口函数
+- 数据库访问下沉到 data_access
+- 业务逻辑下沉到 services
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ from riskmonitor_multiagent.tools.tool_helpers import (
 
 def register_tools(mcp: FastMCP) -> None:
     """注册所有 MCP 工具."""
-    # 将 tool 注册到 MCP 实例. server 层只需要调用一次.
+    # 将工具注册到 MCP 实例. server 层只需要调用一次.
     mcp.tool()(query_all_positions)
     mcp.tool()(query_positions_by_trader)
     mcp.tool()(query_positions_by_desk)
@@ -486,7 +487,7 @@ async def monitor_desk_exposure(  # pylint: disable=too-many-locals, too-many-ar
             total_delta=total_delta, abs_delta_limit=abs_delta_limit
         )
 
-        # Week4: 告警闭环 - 评估告警规则 (不在此处持久化; 由 submit_alerts 负责写入)
+        # 第 4 周: 告警闭环 - 评估告警规则 (不在此处持久化; 由 submit_alerts 负责写入)
         abs_delta = abs(total_delta)
         alert_records = alert_rules_service.evaluate_desk_delta_breach(
             desk=desk,

@@ -57,7 +57,7 @@ async def test_alert_severity_determination():
     """测试告警级别判定"""
     from riskmonitor_multiagent.services import alert_rules_service
 
-    # CRITICAL: 超限 50% 以上
+    # 严重级别 CRITICAL: 超限 50% 以上
     alerts_critical = alert_rules_service.evaluate_desk_delta_breach(
         desk="Test Desk",
         abs_delta=1600000.0,
@@ -66,7 +66,7 @@ async def test_alert_severity_determination():
     )
     assert alerts_critical[0]["severity"] == "CRITICAL"
     
-    # WARNING: 超限 20%-50%
+    # 严重级别 WARNING: 超限 20%-50%
     alerts_warning = alert_rules_service.evaluate_desk_delta_breach(
         desk="Test Desk",
         abs_delta=1300000.0,
@@ -75,7 +75,7 @@ async def test_alert_severity_determination():
     )
     assert alerts_warning[0]["severity"] == "WARNING"
     
-    # INFO: 超限 20% 以下
+    # 严重级别 INFO: 超限 20% 以下
     alerts_info = alert_rules_service.evaluate_desk_delta_breach(
         desk="Test Desk",
         abs_delta=1100000.0,

@@ -1,7 +1,7 @@
-"""Exposure 服务层.
+"""敞口计算服务层.
 
 说明:
-- 聚合 positions 与 market snapshot, 计算 desk exposure
+- 聚合头寸与行情快照, 计算交易台敞口
 - 只包含纯计算逻辑, 不做数据库或 HTTP IO
 """
 
@@ -20,7 +20,7 @@ def compute_exposure(
     snapshot: dict[str, Any],
 ) -> tuple[float, float, dict[str, dict[str, float]]]:
     """
-    计算组合风险敞口 (Exposure).
+    计算组合风险敞口.
     聚合所有头寸的 Delta 和 PV, 并按币种分组.
 
     Args:
@@ -30,10 +30,10 @@ def compute_exposure(
     Returns:
         (total_delta, total_pv_usd, by_currency_map)
         - total_delta: 组合总 Delta
-        - total_pv_usd: 组合总 PV (USD)
+        - total_pv_usd: 组合总 PV(USD)
         - by_currency_map: 按币种聚合的 Delta 和 PV
     """
-    # 聚合计算 total delta, total pv, 并按币种汇总
+    # 聚合计算 total delta、total pv, 并按币种汇总
     total_delta = 0.0
     total_pv_usd = 0.0
     by_currency: dict[str, dict[str, float]] = {}

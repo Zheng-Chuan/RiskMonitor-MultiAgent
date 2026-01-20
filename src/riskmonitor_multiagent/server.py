@@ -82,8 +82,8 @@ async def readiness_check(request: Request) -> Response:
             status_code=503,
         )
 
-    # DB readiness is optional for local demo.
-    # If env is incomplete, skip MySQL check.
+    # 本地演示场景下, DB readiness 是可选的.
+    # 如果环境变量不完整, 则跳过 MySQL 检查.
     mysql_password = os.getenv("MYSQL_PASSWORD")
     if mysql_password is None or not mysql_password.strip():
         return JSONResponse({"status": "ready", "checks": {"mysql": "skipped"}})
@@ -109,7 +109,7 @@ async def readiness_check(request: Request) -> Response:
 
 @mcp.custom_route("/metrics", methods=["GET"], include_in_schema=False)
 async def metrics_endpoint(request: Request) -> Response:
-    """Week4: Prometheus 指标端点"""
+    """第 4 周: Prometheus 指标端点"""
     if not is_authorized(request.headers):
         return JSONResponse(
             {"error": {"code": "UNAUTHORIZED", "message": "unauthorized"}},
@@ -120,7 +120,7 @@ async def metrics_endpoint(request: Request) -> Response:
 
 
 def _install_signal_handlers() -> None:
-    # 在收到退出信号时, 先将 readiness 置为 not ready.
+    # 在收到退出信号时, 先将 readiness 置为 not_ready.
     def _handler(signum: int, frame: object) -> None:
         del frame
         readiness_service.mark_shutting_down(f"signal={signum}")

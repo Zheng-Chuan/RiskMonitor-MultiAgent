@@ -1,4 +1,4 @@
-"""Integration tests for streamable-http extra endpoints."""
+"""streamable-http 额外端点的集成测试."""
 
 from __future__ import annotations
 

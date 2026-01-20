@@ -1,4 +1,4 @@
-"""MCP prompts."""
+"""MCP 提示词."""
 
 from __future__ import annotations
 

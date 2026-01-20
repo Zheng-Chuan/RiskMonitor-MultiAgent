@@ -1,4 +1,4 @@
-"""MCP prompt registrations."""
+"""MCP 提示词注册."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from mcp.server import FastMCP
 
 
 def register_prompts(mcp: FastMCP) -> None:
-    """注册 MCP Prompts."""
+    """注册 MCP 提示词."""
     @mcp.prompt(
         name="analyze-risk-breach",
         title="Analyze Risk Breach",

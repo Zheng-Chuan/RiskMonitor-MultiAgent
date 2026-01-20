@@ -1,4 +1,4 @@
-"""Data access health checks."""
+"""数据访问层健康检查."""
 
 from __future__ import annotations
 

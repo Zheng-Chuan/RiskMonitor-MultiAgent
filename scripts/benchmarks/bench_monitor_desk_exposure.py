@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Benchmark script for monitor_desk_exposure.
+"""monitor_desk_exposure 压测脚本.
 
 说明:
 - 固化请求集, 输出 p50 与 p95
-- 直接调用 tool 函数, 避免引入额外 client 开销
+- 直接调用工具函数, 避免引入额外客户端开销
 - 使用本地 HTTP server 提供 market snapshot
 """
 
@@ -31,7 +31,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
-# 加载 .env, 避免 benchmark 运行前需要手动 export 环境变量.
+# 加载 .env, 避免压测运行前需要手动导出环境变量.
 load_dotenv(dotenv_path=_PROJECT_ROOT / ".env")
 
 
@@ -149,7 +149,7 @@ async def _run_benchmark(config: _BenchConfig) -> None:
             async with sem:
                 return await _run_once(snapshot_url, config.desk, config.abs_delta_limit)
 
-        # warmup
+        # 预热
         for _ in range(max(0, int(config.warmup))):
             await one()
 

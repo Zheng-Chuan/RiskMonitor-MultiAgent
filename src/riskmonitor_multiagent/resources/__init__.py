@@ -1,4 +1,4 @@
-"""MCP resources."""
+"""MCP 资源."""
 
 from __future__ import annotations
 

@@ -1,8 +1,8 @@
-"""Readiness state.
+"""就绪状态.
 
 说明:
 - 提供 /ready 所需的最小 readiness 状态
-- 支持在 shutdown 前将 readiness 置为 not ready
+- 支持在 shutdown 前将 readiness 置为 not_ready
 """
 
 from __future__ import annotations

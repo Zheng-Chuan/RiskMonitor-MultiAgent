@@ -1,4 +1,4 @@
-"""Auth helpers for HTTP-based usage."""
+"""HTTP 场景的鉴权辅助函数."""
 
 from __future__ import annotations
 

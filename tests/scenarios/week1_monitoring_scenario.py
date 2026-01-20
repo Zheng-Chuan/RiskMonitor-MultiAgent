@@ -13,7 +13,7 @@ from typing import Any
 from http.server import HTTPServer
 
 
-# Add project root to path
+# 将项目根目录加入路径
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -22,7 +22,7 @@ from main import monitor_desk_exposure, get_service_metrics  # noqa: E402
 
 
 def start_snapshot_server(host: str, port: int) -> tuple[HTTPServer, threading.Thread]:
-    # 在 demo 脚本里内嵌启动 snapshot server, 避免依赖额外进程, 提升可复现性.
+    # 在演示脚本里内嵌启动 snapshot server, 避免依赖额外进程, 提升可复现性.
     server = HTTPServer((host, port), Handler)
 
     thread = threading.Thread(target=server.serve_forever, daemon=True)

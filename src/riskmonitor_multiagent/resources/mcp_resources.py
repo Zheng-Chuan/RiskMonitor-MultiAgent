@@ -1,4 +1,4 @@
-"""MCP resource registrations."""
+"""MCP 资源注册."""
 
 from __future__ import annotations
 

@@ -42,7 +42,7 @@ def get_engine() -> Engine:
     配置了 connect_timeout, read_timeout, write_timeout.
     """
     # 单例 engine, 由 SQLAlchemy 负责连接池.
-    # pool_pre_ping: 避免 stale connection.
+    # pool_pre_ping: 避免陈旧连接.
     connect_args = {
         "connect_timeout": config.get_mysql_connect_timeout_s(),
         "read_timeout": config.get_mysql_read_timeout_s(),

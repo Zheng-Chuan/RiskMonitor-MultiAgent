@@ -1,6 +1,8 @@
-"""Logging and request context.
+"""日志与请求上下文.
 
-This module centralizes structured logging and request id creation.
+说明:
+- 统一结构化日志配置
+- 统一 request_id 生成
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ class _RequestIdFilter(logging.Filter):  # pylint: disable=too-few-public-method
 
 
 class JsonFormatter(logging.Formatter):  # pylint: disable=too-few-public-methods
-    """JSON 格式日志 Formatter"""
+    """JSON 格式日志格式化器."""
 
     def format(self, record: logging.LogRecord) -> str:
         log_record = {
@@ -62,7 +64,7 @@ def configure_logging() -> None:
 
 
 def new_request_id() -> str:
-    """生成新的唯一请求 ID (UUID hex)."""
+    """生成新的唯一请求 ID(UUID hex)."""
     return uuid.uuid4().hex
 
 

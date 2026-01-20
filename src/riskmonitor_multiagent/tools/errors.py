@@ -1,4 +1,4 @@
-"""Tool error payload helpers."""
+"""工具层错误响应辅助函数."""
 
 from __future__ import annotations
 

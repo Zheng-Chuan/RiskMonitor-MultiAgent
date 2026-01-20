@@ -1,5 +1,5 @@
 services:
-  # MySQL数据库
+  # MySQL 数据库
   mysql:
     image: mysql:8.0
     container_name: riskmonitor-mysql
@@ -24,7 +24,7 @@ services:
       - riskmonitor-network
     restart: unless-stopped
 
-  # RiskMonitor MultiAgent MCP Server
+  # RiskMonitor MultiAgent MCP 服务
   mcp-server:
     build:
       context: .
@@ -52,7 +52,7 @@ services:
     stdin_open: true
     tty: true
 
-  # Test runner
+  # 测试运行器
   test-runner:
     build:
       context: .

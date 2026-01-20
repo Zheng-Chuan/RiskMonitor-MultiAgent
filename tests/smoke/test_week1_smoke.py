@@ -13,7 +13,7 @@ from pathlib import Path
 import sys
 
 
-# Add project root to path
+# 将项目根目录加入路径
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -58,7 +58,7 @@ async def run_smoke(snapshot_url: str) -> dict[str, Any]:
 
 
 def test_week1_smoke() -> None:
-    # Week 1 验收: 端到端 smoke test 覆盖 monitoring 链路.
+    # 第 1 周验收: 端到端冒烟测试覆盖监控链路.
     server = start_snapshot_server("127.0.0.1", 9010)
     try:
         snapshot_url = "http://127.0.0.1:9010/snapshot"

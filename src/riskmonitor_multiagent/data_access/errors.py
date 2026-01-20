@@ -20,7 +20,7 @@ class DataAccessError(RuntimeError):
     数据访问层通用异常.
     封装底层 DB/HTTP 错误, 提供统一的错误码和重试建议.
     """
-    # code 用于上层 error mapping (例如 DB_TIMEOUT, UPSTREAM_ERROR)
+    # code 用于上层错误映射(例如 DB_TIMEOUT, UPSTREAM_ERROR)
     code: str
     # 是否建议重试
     retriable: bool
@@ -94,7 +94,7 @@ def map_http_error(err: BaseException, operation: str) -> DataAccessError:
     Returns:
         封装后的 DataAccessError
     """
-    # 统一把 httpx 异常翻译成稳定 code, 用于上游 market snapshot.
+    # 统一把 httpx 异常翻译成稳定 code, 用于上游行情快照请求.
     if isinstance(err, httpx.TimeoutException):
         return DataAccessError(
             code="UPSTREAM_TIMEOUT",

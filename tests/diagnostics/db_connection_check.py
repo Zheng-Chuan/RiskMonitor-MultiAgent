@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 """
-Database connection test script
-Tests the connection to MySQL database
+数据库连接测试脚本
+用于验证与 MySQL 数据库的连通性
 """
 
 import os
 import sys
 from pathlib import Path
 
-# Add project root to path
+# 将项目根目录加入路径
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import pymysql
 from dotenv import load_dotenv
 
-# Load environment variables
+# 加载环境变量
 load_dotenv(dotenv_path=project_root / ".env")
 
 def test_connection():
-    """Test database connection"""
+    """测试数据库连接"""
     
-    # Get database credentials from environment
+    # 从环境变量读取数据库连接信息
     db_config = {
         'host': os.getenv('MYSQL_HOST', 'localhost'),
         'port': int(os.getenv('MYSQL_PORT', '3306')),
@@ -46,18 +46,18 @@ def test_connection():
     print("-" * 60)
     
     try:
-        # Attempt connection
+        # 尝试连接
         print("Connecting to database...")
         conn = pymysql.connect(**db_config)
         cursor = conn.cursor()
         
-        # Test query
+        # 测试查询
         cursor.execute("SELECT VERSION();")
         version = cursor.fetchone()
         print(f"✓ Connection successful!")
         print(f"MySQL version: {version[0]}")
         
-        # Check if positions table exists
+        # 检查 positions 表是否存在
         cursor.execute("""
             SELECT COUNT(*) 
             FROM information_schema.tables 
@@ -68,12 +68,12 @@ def test_connection():
         if table_exists:
             print("✓ 'positions' table exists")
             
-            # Count records
+            # 统计记录数
             cursor.execute("SELECT COUNT(*) FROM positions;")
             count = cursor.fetchone()[0]
             print(f"✓ Found {count} records in positions table")
             
-            # Show sample data
+            # 打印样例数据
             if count > 0:
                 cursor.execute("SELECT * FROM positions LIMIT 3;")
                 records = cursor.fetchall()
@@ -84,7 +84,7 @@ def test_connection():
             print("⚠ 'positions' table does not exist yet")
             print("  Run init_db.sql to create the schema")
         
-        # Close connection
+        # 关闭连接
         cursor.close()
         conn.close()
         
