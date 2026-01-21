@@ -3,6 +3,11 @@
 本文件记录当前项目已落地的 MySQL schema 与 Kafka topic 设计
 同时记录事件驱动告警链路需要的增量设计, 用于后续实现与评审
 
+说明
+
+- “已落地”部分以当前仓库 `scripts/init_db.sql` 与 tools/data_access 实现为准
+- “增量设计 / Kafka topics / 增量表”属于 Week 6+ 规划内容, 当前尚未在代码与 docker-compose 中实现
+
 ## MySQL schema
 
 ### positions
@@ -35,7 +40,7 @@
 
 来源
 
-- db/migrations/003_create_alerts_table.sql
+- scripts/init_db.sql
 
 字段
 
@@ -84,7 +89,7 @@
 
 ## Kafka topics
 
-本项目当前仅保留 2 个 topic
+本项目当前的 Kafka topics 仅为规划, Week 6+ 才会落地
 
 ### positions_cdc
 

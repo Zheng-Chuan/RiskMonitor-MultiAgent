@@ -1,7 +1,7 @@
--- RiskMonitor Database Initialization Script (MySQL)
--- This script creates the initial database schema
+-- RiskMonitor 数据库初始化脚本 (MySQL)
+-- 用于创建最小可运行的数据库 schema 与演示数据
 
--- Create Positions table (simplified version for Phase 1)
+-- 创建 positions 表(Phase 1 简化版)
 CREATE TABLE IF NOT EXISTS positions (
     position_id VARCHAR(50) PRIMARY KEY,
     trader_id VARCHAR(50) NOT NULL,
@@ -15,13 +15,13 @@ CREATE TABLE IF NOT EXISTS positions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Create index for common queries
+-- 为常用查询创建索引
 CREATE INDEX idx_positions_trader ON positions(trader_id);
 CREATE INDEX idx_positions_desk ON positions(desk);
 CREATE INDEX idx_positions_security ON positions(security_id);
 CREATE INDEX idx_positions_date ON positions(entry_date);
 
--- Create Alerts table (Week4)
+-- 创建 alerts 表(Week 4: 告警闭环)
 CREATE TABLE IF NOT EXISTS alerts (
     alert_id VARCHAR(36) PRIMARY KEY,
     request_id VARCHAR(36) NOT NULL,
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     INDEX idx_severity (severity)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Insert sample data for testing (符合金融领域常识的真实数据)
+-- 插入测试用演示数据(符合金融领域常识的简化样例)
 INSERT INTO positions (position_id, trader_id, desk, security_id, quantity, delta, entry_date, currency) VALUES
 -- Equity Derivatives (股票衍生品)
 ('POS-2024-001', 'TRADER-001', 'Equity Derivatives', 'AAPL-CALL-175-20250331', 1000, 600.0, '2024-10-01', 'USD'),

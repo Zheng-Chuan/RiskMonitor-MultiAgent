@@ -96,7 +96,7 @@
 - 验收
   - [x] 告警可端到端触发并可追踪(request_id, alert_id)
   - [x] /metrics 端点可正常访问, 暴露关键指标
-  - [x] tests 全部通过(27 个测试, 包含 5 个告警测试)
+  - [x] tests 全部通过(截至目前 36 个测试)
 
 ---
 
@@ -108,11 +108,15 @@
 - **交付**
   - [x] **架构清洗 (Stateless & Secure)**
     - [x] **删除** `task_registry.py`: 移除内存任务队列，回归无状态。
-    - [x] **重构** `monitor_desk_exposure`: 拆分为 `calculate` (读) 和 `submit` (写)。
+    - [x] **拆分读写边界**: `monitor_desk_exposure` 保持无副作用, 写入动作由 `submit_alerts` 承担。
     - [x] **Auth**: 实现基于 Token 的 HTTP Header 鉴权桩。
   - [x] **Resources & Prompts**
     - [x] 实现 `risk://metadata/desks` 和 `risk://limits/global` Resources。
     - [x] 内置 `analyze-risk-breach` Prompt 模版。
+  - [x] **LLM Provider 适配 (OpenRouter)**
+    - [x] 新增独立模块 `riskmonitor_multiagent.llm.openrouter_client` 统一封装 OpenRouter 调用。
+    - [x] 从仓库根目录 `.env` 自动读取 `OPENROUTER_API_KEY` 等配置, 默认使用免费模型。
+    - [x] 不注册为 MCP 工具, 供后续 server/worker 在业务流程内直接调用。
 
 ### Week 6: Infrastructure & CDC (数据动脉)
 **目标**: 搭建 Kafka 生态，打通从 DB 到流的实时通道。

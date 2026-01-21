@@ -9,12 +9,12 @@ RiskMonitor-MultiAgent 是一个基于 Model Context Protocol (MCP) 的金融衍
 - 模块一 交互式问答链路
   - MCP tools, positions 查询, exposure 计算, desk monitor
   - HTTP APIs, health, ready, metrics
-  - server 端 LLM 汇总解释, 输出结构化数据和自然语言结论
+  - (规划) 服务端调用 LLM 汇总解释, 输出结构化数据和自然语言结论
   - 结构化日志, 指标采集, trace_id request_id 贯穿链路
-- 模块二 事件驱动告警链路
+- 模块二 (规划) 事件驱动告警链路
   - CDC, Debezium 订阅 MySQL binlog, 输出 positions_cdc
   - risk engine, desk 级聚合与 breach 判断, 单 desk 超限只生成一次告警
-  - analyzer, server 端调用 LLM 生成分析结论并落库
+  - analyzer, server/worker 调用 LLM 生成分析结论并落库
   - notifier, webhook 推送给 risk manager, ack 后告警被消费
   - 健壮性, 幂等, 重试, 启动补偿, 端到端时效性
 
@@ -23,10 +23,11 @@ RiskMonitor-MultiAgent 是一个基于 Model Context Protocol (MCP) 的金融衍
 本项目由两个核心模块组成
 
 - 交互式问答链路
-  - 用户主动提问, MCP tools 获取结构化数据, server 端调用 LLM 汇总解释并返回
+  - 用户主动提问, MCP tools 获取结构化数据并返回(当前已落地)
+  - (规划) server/worker 调用 LLM 汇总解释并返回自然语言总结
   - 关注点, 高可用, 可观测, 限流, 失败隔离
 - 事件驱动告警链路
-  - positions 变更触发 desk 聚合与 breach 判断, server 端调用 LLM 生成结论, webhook 主动推送给 risk manager
+  - (规划) positions 变更触发 desk 聚合与 breach 判断, 调用 LLM 生成结论, webhook 主动推送给 risk manager
   - 关注点, 端到端健壮性, 时效性, 幂等, 可恢复
 
 ### 模块一 交互式问答链路
@@ -54,7 +55,7 @@ flowchart LR
   subgraph Deps[Dependencies]
     DB[(MySQL positions alerts limits)]
     MS[Market snapshot service]
-    LLM[LLM provider]
+    LLM[LLM provider (planned)]
   end
 
   subgraph ObsStack[Observability]
@@ -74,7 +75,7 @@ flowchart LR
   S2 --> Tools
   Tools --> DB
   Tools --> MS
-  Tools --> LLM
+  Tools -.-> LLM
   Tools -->|response| A
   Tools -->|response| H
 
@@ -94,11 +95,14 @@ flowchart LR
 
 - MCP web server
   - 提供 MCP tools 与 HTTP APIs
-  - 组装结构化上下文并调用 LLM
+  - (规划) 组装结构化上下文并调用 LLM
   - 统一错误结构与 request_id
 - data access
   - MySQL 查询与错误映射
   - 外部 market snapshot 调用与超时重试
+- LLM 适配层
+  - 当前已提供 `riskmonitor_multiagent.llm.openrouter_client` 作为 OpenRouter 调用封装
+  - (规划) 由 server/worker 在业务流程内决定何时调用, 避免把策略固化到 tool 层
 
 #### 健壮性与高可用
 
@@ -120,23 +124,23 @@ sequenceDiagram
   participant S as MCP web server
   participant DB as MySQL
   participant MS as market snapshot
-  participant L as LLM
+  participant L as LLM (planned)
 
   U->>S: question or tool call
   S->>DB: query positions and limits
   S->>MS: fetch snapshot
-  S->>L: summarize and explain
-  L-->>S: analysis
+  S-.->L: summarize and explain
+  L-.->>S: analysis
   S-->>U: structured response plus explanation
 ```
 
-### 模块二 事件驱动告警链路
+### 模块二 (规划) 事件驱动告警链路
 
-说明
+说明(规划)
 
-- 主链路以事件驱动为主, 进程内使用 `asyncio.Queue` 做低延迟触发
-- 为避免进程重启丢任务, 启动时会补偿 enqueue 未完成告警
-- 详细链路见下文 CDC 与告警推送架构
+- Week 6+ 引入 Debezium + Kafka 后落地
+- 当前仓库仅实现了告警规则评估与 alerts 表写入/查询, 尚未实现 CDC/流式聚合/worker
+- 下文涉及的告警状态机(status/analysis/delivery 等字段)也属于规划内容, 以 docs/DATA.md 为准
 
 ```mermaid
 flowchart LR
@@ -154,8 +158,8 @@ flowchart LR
   Ack -->|mark consumed| DB
 ```
 
-- 目标: positions 变更触发风险聚合, 超限只生成一次告警, server 端调用 LLM 生成分析, webhook 推送给 risk manager, ack 后告警被消费
-- 方案: 采用 2A, 进程内 `asyncio.Queue` 做事件驱动, 启动时做补偿扫描避免丢任务
+- 目标(规划): positions 变更触发风险聚合, 超限只生成一次告警, 由 worker 调用 LLM 生成分析, webhook 推送给 risk manager, ack 后告警被消费
+- 方案(规划): 以 Kafka 为主干; 分析与投递可先在同一进程内实现, 后续再拆分独立 worker 服务
 
 #### 数据流与组件
 

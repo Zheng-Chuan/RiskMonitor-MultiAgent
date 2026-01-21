@@ -36,10 +36,15 @@
 如果你需要在服务端直接调用 LLM(通过 OpenRouter)
 
 - OPENROUTER_API_KEY
-- OPENROUTER_MODEL (可选, 默认 openai/gpt-4o-mini)
+- OPENROUTER_MODEL (可选, 默认 meta-llama/llama-3.1-8b-instruct:free)
 - OPENROUTER_BASE_URL (可选, 默认 https://openrouter.ai/api/v1)
 - OPENROUTER_HTTP_REFERER (可选, 用于 OpenRouter 统计)
 - OPENROUTER_APP_TITLE (可选, 用于 OpenRouter 统计)
+
+说明
+
+- 当前仓库仅提供 OpenRouter 客户端封装模块, 供服务端/worker 在业务流程内直接调用
+- 暂未将 LLM 调用注册为 MCP tool, 以避免把上游调用策略耦合到工具层
 
 建议你先验证连通性
 
