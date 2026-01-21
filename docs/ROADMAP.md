@@ -122,13 +122,13 @@
 **目标**: 搭建 Kafka 生态，打通从 DB 到流的实时通道。
 
 - **交付**
-  - [ ] **容器化基础设施**
-    - [ ] `docker-compose.yml`: 添加 Zookeeper, Kafka, Kafka UI, Debezium Connect。
-  - [ ] **CDC Pipeline**
-    - [ ] 配置 Debezium Connector 监听 MySQL `positions` 表。
-    - [ ] 验证 Binlog 变更能实时进入 Kafka Topic `risk.positions.cdc`。
-  - [ ] **Schema Registry**
-    - [ ] 定义并固化 CDC 事件的 JSON Schema，确保下游 Consumer 类型安全。
+  - [x] **容器化基础设施**
+    - [x] `docker-compose.yml`: 添加 Zookeeper, Kafka, Kafka UI, Debezium Connect, Schema Registry。
+  - [x] **CDC Pipeline**
+    - [x] 配置 Debezium Connector 监听 MySQL `positions` 表。
+    - [x] 验证 Binlog 变更能实时进入 Kafka Topic `risk.positions.cdc`。
+  - [x] **Schema Registry**
+    - [x] 定义 CDC 事件 JSON Schema 并提供注册脚本, 供下游 Consumer 类型对齐与演进。
 
 ### Week 7: Stream Processing (实时聚合 - 脊髓)
 **目标**: 构建“脊髓”反射层，处理高频数据，生成聚合信号。

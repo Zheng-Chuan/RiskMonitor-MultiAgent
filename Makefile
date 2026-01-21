@@ -1,4 +1,4 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-infra register-cdc register-cdc-schema
 
 help:
 	@echo "RiskMonitor-MultiAgent Development Commands"
@@ -30,6 +30,11 @@ help:
 	@echo "make clean-cache      - Clean Python cache files"
 	@echo "make shell-db         - Open MySQL shell"
 	@echo "make phpmyadmin       - Start with phpMyAdmin (optional tool)"
+	@echo ""
+	@echo "Week6 CDC Commands:"
+	@echo "make up-infra         - Start Kafka/Debezium/Schema Registry stack"
+	@echo "make register-cdc     - Register Debezium positions connector"
+	@echo "make register-cdc-schema - Register JSON schema to Schema Registry"
 
 install:
 	pip install -r requirements.txt
@@ -52,6 +57,15 @@ up:
 	@sleep 5
 	@echo "Containers are running!"
 	@docker compose ps
+
+up-infra:
+	docker compose --profile infra up -d zookeeper kafka kafka-ui debezium schema-registry
+
+register-cdc:
+	./scripts/debezium/register_positions_connector.sh
+
+register-cdc-schema:
+	./scripts/schema_registry/register_positions_cdc_schema.sh
 
 setup-mcp:
 	@echo "=================================="

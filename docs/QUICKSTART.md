@@ -22,9 +22,7 @@
 本地依赖组件
 
 - MySQL 在 Docker
-- Kafka Debezium 等事件驱动组件在 Docker
-
-后续 Week5 Week6 会引入 Kafka 和 binlog CDC 相关组件 并同样放在 Docker
+- Kafka Debezium Schema Registry 等 CDC 组件在 Docker(Week 6)
 
 你需要准备以下环境变量
 
@@ -66,6 +64,30 @@ docker compose up -d mysql
 ```
 
 MySQL 端口映射默认是 3307 -> 3306
+
+如果你准备做 Week 6 的 CDC 链路(可选)
+
+```bash
+docker compose --profile infra up -d zookeeper kafka kafka-ui debezium schema-registry
+```
+
+服务端口
+
+- Kafka UI: <http://127.0.0.1:8081>
+- Debezium Connect: <http://127.0.0.1:8083>
+- Schema Registry: <http://127.0.0.1:8085>
+
+注册 Debezium positions connector(输出到 topic `risk.positions.cdc`)
+
+```bash
+./scripts/debezium/register_positions_connector.sh
+```
+
+注册 positions CDC JSON Schema(可选)
+
+```bash
+./scripts/schema_registry/register_positions_cdc_schema.sh
+```
 
 ### 2 安装依赖
 

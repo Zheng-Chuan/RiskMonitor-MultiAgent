@@ -89,7 +89,8 @@
 
 ## Kafka topics
 
-本项目当前的 Kafka topics 仅为规划, Week 6+ 才会落地
+本项目在 Week 6 引入了 Kafka + Debezium Connect, 并打通了 positions 表的 CDC 输出.
+当前仅落地 CDC 产出侧, 下游 consumer/risk engine 仍属于后续 Week 7+.
 
 ### positions_cdc
 
@@ -97,6 +98,13 @@
 
 - Debezium 从 MySQL binlog 捕获 positions 表变更
 - CDC consumer 消费后触发 desk 级风险计算与 breach 判断
+
+当前落地
+
+- topic: `risk.positions.cdc`
+- payload: Debezium 事件经 ExtractNewRecordState 展开后的行级变更(包含 op/ts_ms/source 字段)
+- JSON Schema: `schemas/cdc/positions_cdc_v1.schema.json` (可注册到 Schema Registry)
+- connector 配置: `scripts/debezium/positions-connector.json`
 
 建议配置
 

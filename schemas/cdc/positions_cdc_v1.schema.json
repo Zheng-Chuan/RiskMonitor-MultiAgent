@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "riskmonitor://schemas/cdc/positions_cdc_v1",
+  "title": "Positions CDC Event v1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "position_id": { "type": "string" },
+    "trader_id": { "type": ["string", "null"] },
+    "desk": { "type": ["string", "null"] },
+    "security_id": { "type": ["string", "null"] },
+    "quantity": { "type": ["number", "string", "null"] },
+    "delta": { "type": ["number", "string", "null"] },
+    "entry_date": { "type": ["string", "null"], "description": "YYYY-MM-DD" },
+    "currency": { "type": ["string", "null"] },
+    "op": { "type": ["string", "null"], "description": "c|u|d" },
+    "ts_ms": { "type": ["integer", "null"] },
+    "source_db": { "type": ["string", "null"] },
+    "source_table": { "type": ["string", "null"] }
+  },
+  "required": ["position_id"]
+}
+

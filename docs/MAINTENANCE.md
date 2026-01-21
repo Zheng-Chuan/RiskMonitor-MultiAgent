@@ -17,6 +17,7 @@
 - 传输模式变化(stdio/sse/streamable-http)、端点变化(/health /ready /metrics /mcp)
 - 数据表或 schema 变化(positions/alerts 及后续 CDC 相关表)
 - 新增基础设施组件(docker-compose, Kafka, Debezium 等)
+- 新增/变更 schema 文件与注册脚本(例如 schemas/ 与 scripts/schema_registry/)
 
 ## 何时必须更新注释与 docstring
 

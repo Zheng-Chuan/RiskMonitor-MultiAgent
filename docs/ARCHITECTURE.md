@@ -11,7 +11,7 @@ RiskMonitor-MultiAgent 是一个基于 Model Context Protocol (MCP) 的金融衍
   - HTTP APIs, health, ready, metrics
   - (规划) 服务端调用 LLM 汇总解释, 输出结构化数据和自然语言结论
   - 结构化日志, 指标采集, trace_id request_id 贯穿链路
-- 模块二 (规划) 事件驱动告警链路
+- 模块二 事件驱动告警链路(Week 6+ 逐步落地)
   - CDC, Debezium 订阅 MySQL binlog, 输出 positions_cdc
   - risk engine, desk 级聚合与 breach 判断, 单 desk 超限只生成一次告警
   - analyzer, server/worker 调用 LLM 生成分析结论并落库
@@ -27,6 +27,7 @@ RiskMonitor-MultiAgent 是一个基于 Model Context Protocol (MCP) 的金融衍
   - (规划) server/worker 调用 LLM 汇总解释并返回自然语言总结
   - 关注点, 高可用, 可观测, 限流, 失败隔离
 - 事件驱动告警链路
+  - Week 6: 已完成 positions CDC 输出到 Kafka topic
   - (规划) positions 变更触发 desk 聚合与 breach 判断, 调用 LLM 生成结论, webhook 主动推送给 risk manager
   - 关注点, 端到端健壮性, 时效性, 幂等, 可恢复
 
@@ -134,12 +135,12 @@ sequenceDiagram
   S-->>U: structured response plus explanation
 ```
 
-### 模块二 (规划) 事件驱动告警链路
+### 模块二 事件驱动告警链路(部分已落地)
 
-说明(规划)
+说明
 
-- Week 6+ 引入 Debezium + Kafka 后落地
-- 当前仓库仅实现了告警规则评估与 alerts 表写入/查询, 尚未实现 CDC/流式聚合/worker
+- Week 6: Kafka + Debezium Connect 已落地, 并可将 `positions` 的变更写入 topic `risk.positions.cdc`
+- 当前仓库尚未实现 CDC consumer/流式聚合/risk engine/worker, 下文这些部分均属于规划
 - 下文涉及的告警状态机(status/analysis/delivery 等字段)也属于规划内容, 以 docs/DATA.md 为准
 
 ```mermaid
