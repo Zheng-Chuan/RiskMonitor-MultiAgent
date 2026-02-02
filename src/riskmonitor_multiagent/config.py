@@ -148,3 +148,15 @@ def get_kafka_bootstrap_servers() -> str:
 def get_kafka_topic_cdc_positions() -> str:
     """获取 CDC Positions Topic, 默认为 risk.positions.cdc."""
     return os.getenv("KAFKA_TOPIC_CDC_POSITIONS", "risk.positions.cdc").strip() or "risk.positions.cdc"
+
+
+def get_knowledge_db_path() -> str:
+    """获取知识库 SQLite 文件路径, 默认为 repo_root/data/knowledge.sqlite."""
+    value = os.getenv("KNOWLEDGE_DB_PATH")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("KNOWLEDGE_DB_PATH")
+    if value is not None and value.strip():
+        return value.strip()
+    repo_root = Path(__file__).resolve().parents[2]
+    return str(repo_root / "data" / "knowledge.sqlite")

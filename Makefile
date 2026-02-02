@@ -1,4 +1,4 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-infra register-cdc register-cdc-schema
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-infra register-cdc register-cdc-schema run-sentinel ingest-knowledge
 
 help:
 	@echo "RiskMonitor-MultiAgent Development Commands"
@@ -38,6 +38,9 @@ help:
 	@echo ""
 	@echo "Week7 Stream Processing Commands:"
 	@echo "make run-sentinel     - Start the Sentinel Service (simple breach detector)"
+	@echo ""
+	@echo "Week8 Knowledge Base Commands:"
+	@echo "make ingest-knowledge - Ingest recent alerts into local knowledge base"
 
 install:
 	pip install -r requirements.txt
@@ -72,6 +75,9 @@ register-cdc-schema:
 
 run-sentinel:
 	python ./scripts/run_sentinel.py
+
+ingest-knowledge:
+	python ./scripts/knowledge/ingest_alerts.py
 
 setup-mcp:
 	@echo "=================================="

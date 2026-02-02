@@ -39,6 +39,10 @@
 - OPENROUTER_HTTP_REFERER (可选, 用于 OpenRouter 统计)
 - OPENROUTER_APP_TITLE (可选, 用于 OpenRouter 统计)
 
+如果你需要自定义知识库文件路径(Week 8)
+
+- KNOWLEDGE_DB_PATH (可选, 默认 data/knowledge.sqlite)
+
 说明
 
 - 当前仓库仅提供 OpenRouter 客户端封装模块, 供服务端/worker 在业务流程内直接调用
@@ -118,6 +122,20 @@ make run-sentinel
 - Kafka 对宿主机暴露的端口是 29092
 - Sentinel 默认连接 localhost:29092 并订阅 risk.positions.cdc
 - 如果 OpenRouter 模型不可用或返回 404 系统会自动走 fallback 保证链路可跑通 你可以在 .env 里覆盖 OPENROUTER_MODEL
+
+如果你希望让 Agent 具备知识库检索能力(Week 8)
+
+先把最近的 alerts 写入本地知识库
+
+```bash
+make ingest-knowledge
+```
+
+默认会生成 data/knowledge.sqlite
+
+然后在 MCP 客户端里调用 tool
+
+- search_similar_alerts query="desk Equity Derivatives breach" top_k=5
 
 如果你希望跑覆盖率
 

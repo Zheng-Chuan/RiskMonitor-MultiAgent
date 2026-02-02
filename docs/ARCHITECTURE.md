@@ -64,12 +64,18 @@ Junior Analyst Agent
 Risk Manager Agent  
 给出决策和动作建议  
 
-代码在 [agents](file:///Users/zhengchuan/Documents/TECH/Repo/RiskMonitor-MultiAgent/src/riskmonitor_multiagent/agents/)  
+代码在 [agents](../src/riskmonitor_multiagent/agents/)  
 核心编排入口在 src/riskmonitor_multiagent/agents/pipeline.py  
+
+### Knowledge Base
+
+知识库用一个本地 SQLite 文件保存向量化后的历史告警  
+默认路径是 data/knowledge.sqlite  
+你可以用 make ingest-knowledge 从 alerts 表把最近告警写入知识库  
+MCP tool search_similar_alerts 会读取这个文件并返回相似告警列表  
 
 ### LLM OpenRouter
 
-OpenRouter 客户端封装在 [openrouter_client.py](file:///Users/zhengchuan/Documents/TECH/Repo/RiskMonitor-MultiAgent/src/riskmonitor_multiagent/llm/openrouter_client.py)  
 OpenRouter 客户端封装在 [openrouter_client.py](../src/riskmonitor_multiagent/llm/openrouter_client.py)  
 当 LLM 不可用时 仍然会使用 fallback 结果保证链路可跑通  
 

@@ -150,13 +150,20 @@
 **目标**: 让 Agent 拥有记忆，能参考历史案例。
 
 - **交付**
-  - [ ] **Vector DB 部署**
-    - [ ] 部署 **Milvus** (或 Chroma) 向量数据库。
-  - [ ] **Knowledge Ingestion**
-    - [ ] 编写脚本，将历史 `alerts` 表数据向量化存入 Milvus。
-    - [ ] (可选) 导入一份 Mock 的 "Risk Management Handbook" 文档。
-  - [ ] **Context Retrieval Tool**
-    - [ ] 新增 MCP Tool `search_similar_alerts(embedding)`: 给定当前情况，查找最相似的历史告警及处理结果。
+  - [x] **Vector Store 部署**
+    - [x] 使用本地 SQLite 文件实现轻量向量存储 默认路径 data/knowledge.sqlite
+  - [x] **Knowledge Ingestion**
+    - [x] 提供脚本 将最近 `alerts` 表数据向量化存入知识库
+    - [ ] (可选) 导入一份 Mock 的 Risk Management Handbook 文档
+  - [x] **Context Retrieval Tool**
+    - [x] 新增 MCP Tool `search_similar_alerts` 给定查询文本 返回相似历史告警
+ - **验收**
+   - [x] 一键复现
+     - [x] 本地启动 MySQL 与 infra 后 运行 ingest 脚本能生成知识库文件
+   - [x] 检索可用
+     - [x] MCP tool `search_similar_alerts` 可返回 top_k 结果 每条包含 similarity 与 alert_id
+   - [x] 回归覆盖
+     - [x] tests 覆盖 ingest 与检索核心逻辑 且 pytest 全量通过
 
 ### Week 9: Multi-Agent Orchestration (Advanced)
 **目标**: 将线性流程升级为 LangGraph 状态机，处理更复杂的交互（如 Manager 驳回分析报告）。
@@ -166,6 +173,15 @@
     - [ ] 迁移 Pipeline 逻辑到 LangGraph Graph。
     - [ ] 增加 "Human-in-the-loop" 节点。
     - [ ] 增加 "Rewrite" 回路（当分析报告质量不达标时）。
+ - **验收**
+   - [ ] 工作流可运行
+     - [ ] 提供 demo 脚本 输入一个 breach event 能跑完整状态机并输出最终决策
+   - [ ] 人工介入
+     - [ ] 高风险动作必须进入 human in loop 节点 未确认不得执行写库动作
+   - [ ] 回路生效
+     - [ ] 当分析报告缺字段时触发 rewrite 回路 至少重写一次后再进入 manager
+   - [ ] 测试覆盖
+     - [ ] tests 覆盖状态机关键分支 且 pytest 全量通过
 
 ### Week 10: Production Readiness (生产化)
 **目标**: 全链路压测与可观测性。
@@ -178,6 +194,13 @@
     - [ ] 监控：CDC 延迟, Flink/Faust 吞吐, Agent Token 消耗, RAG 检索命中率。
   - [ ] **Documentation**
     - [ ] 完整的架构图与操作手册。
+ - **验收**
+   - [ ] 压测可复现
+     - [ ] 提供脚本能在本地注入 N 条 positions 变更并触发 Sentinel 与 Agent
+   - [ ] 指标可观测
+     - [ ] /metrics 至少新增 CDC lag 与 pipeline latency 指标
+   - [ ] 稳定性
+     - [ ] 连续运行 30 分钟 无崩溃 无明显内存泄漏 关键错误有结构化日志
 
 ---
 
