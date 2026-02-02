@@ -11,36 +11,31 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 
-def test_sqlite_vector_store_query_returns_best_match(tmp_path: Path) -> None:
-    from riskmonitor_multiagent.knowledge.store import SqliteVectorStore
+def test_chroma_vector_store_query_returns_best_match(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore
 
-    db_path = tmp_path / "kb.sqlite"
-    store = SqliteVectorStore(path=db_path)
-    store.init()
+    monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
+    monkeypatch.setenv("CHROMA_COLLECTION", "test-knowledge-unit")
 
-    store.upsert(
-        doc_id="a1",
-        doc_type="alert",
-        content="desk Equity Derivatives severity CRITICAL delta breach",
+    store = ChromaVectorStore()
+    store.upsert_alert(
+        alert_id="a1",
+        document="desk Equity Derivatives severity CRITICAL delta breach",
         metadata={"alert_id": "a1", "desk": "Equity Derivatives"},
-        updated_at_ms=1,
     )
-    store.upsert(
-        doc_id="a2",
-        doc_type="alert",
-        content="desk Fixed Income severity INFO ok",
+    store.upsert_alert(
+        alert_id="a2",
+        document="desk Fixed Income severity INFO ok",
         metadata={"alert_id": "a2", "desk": "Fixed Income"},
-        updated_at_ms=1,
     )
 
-    res = store.query(query_text="Equity Derivatives breach", top_k=1, doc_type="alert")
+    res = store.query_alerts(query_text="Equity Derivatives breach", top_k=1)
     assert len(res) == 1
     assert res[0].doc_id == "a1"
     assert res[0].metadata.get("desk") == "Equity Derivatives"
 
 
 def test_embed_text_empty_returns_empty_vector() -> None:
-    from riskmonitor_multiagent.knowledge.store import embed_text
+    from riskmonitor_multiagent.knowledge.chroma_store import embed_text_dense
 
-    assert embed_text("") == {}
-
+    assert embed_text_dense("") == [0.0] * 256

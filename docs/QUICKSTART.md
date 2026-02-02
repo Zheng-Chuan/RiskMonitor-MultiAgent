@@ -39,9 +39,11 @@
 - OPENROUTER_HTTP_REFERER (可选, 用于 OpenRouter 统计)
 - OPENROUTER_APP_TITLE (可选, 用于 OpenRouter 统计)
 
-如果你需要自定义知识库文件路径(Week 8)
+如果你需要自定义知识库向量库连接(Week 8)
 
-- KNOWLEDGE_DB_PATH (可选, 默认 data/knowledge.sqlite)
+- CHROMA_HOST (可选, 默认 localhost)
+- CHROMA_PORT (可选, 默认 8001)
+- CHROMA_COLLECTION (可选, 默认 riskmonitor-alerts)
 
 说明
 
@@ -125,15 +127,25 @@ make run-sentinel
 
 如果你希望让 Agent 具备知识库检索能力(Week 8)
 
-先把最近的 alerts 写入本地知识库
+先启动向量数据库
+
+```bash
+make up-kb
+```
+
+再把最近的 alerts 写入向量库
 
 ```bash
 make ingest-knowledge
 ```
 
-默认会生成 data/knowledge.sqlite
+然后你可以用 CLI 验证检索
 
-然后在 MCP 客户端里调用 tool
+```bash
+make kb-query QUERY="desk Equity Derivatives breach" TOP_K=5
+```
+
+再在 MCP 客户端里调用 tool
 
 - search_similar_alerts query="desk Equity Derivatives breach" top_k=5
 

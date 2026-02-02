@@ -160,3 +160,35 @@ def get_knowledge_db_path() -> str:
         return value.strip()
     repo_root = Path(__file__).resolve().parents[2]
     return str(repo_root / "data" / "knowledge.sqlite")
+
+
+def get_chroma_host() -> str:
+    value = os.getenv("CHROMA_HOST")
+    if value is None:
+        _try_load_repo_dotenv()
+        value = os.getenv("CHROMA_HOST")
+    return (value or "localhost").strip() or "localhost"
+
+
+def get_chroma_port() -> int:
+    value = os.getenv("CHROMA_PORT")
+    if value is None:
+        _try_load_repo_dotenv()
+        value = os.getenv("CHROMA_PORT")
+    return int((value or "8001").strip() or "8001")
+
+
+def get_chroma_collection() -> str:
+    value = os.getenv("CHROMA_COLLECTION")
+    if value is None:
+        _try_load_repo_dotenv()
+        value = os.getenv("CHROMA_COLLECTION")
+    return (value or "riskmonitor-alerts").strip() or "riskmonitor-alerts"
+
+
+def get_chroma_persist_dir() -> str:
+    value = os.getenv("CHROMA_PERSIST_DIR")
+    if value is None:
+        _try_load_repo_dotenv()
+        value = os.getenv("CHROMA_PERSIST_DIR")
+    return (value or "").strip()

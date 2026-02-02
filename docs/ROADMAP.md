@@ -150,18 +150,22 @@
 **目标**: 让 Agent 拥有记忆，能参考历史案例。
 
 - **交付**
-  - [x] **Vector Store 部署**
-    - [x] 使用本地 SQLite 文件实现轻量向量存储 默认路径 data/knowledge.sqlite
+  - [x] **Vector DB 部署**
+    - [x] 在 docker compose 中增加 **Chroma** 服务并提供持久化 volume
   - [x] **Knowledge Ingestion**
-    - [x] 提供脚本 将最近 `alerts` 表数据向量化存入知识库
+    - [x] 提供 CLI 将最近 `alerts` 表数据向量化写入 Chroma
     - [ ] (可选) 导入一份 Mock 的 Risk Management Handbook 文档
   - [x] **Context Retrieval Tool**
-    - [x] 新增 MCP Tool `search_similar_alerts` 给定查询文本 返回相似历史告警
+    - [x] 新增 MCP Tool `search_similar_alerts` 读取 Chroma 并返回相似历史告警
+  - [x] **CLI 工具**
+    - [x] 提供 `kb ingest-alerts` 与 `kb query` 两个子命令 用于本地验证与排障
  - **验收**
    - [x] 一键复现
-     - [x] 本地启动 MySQL 与 infra 后 运行 ingest 脚本能生成知识库文件
+     - [x] `docker compose --profile kb up -d` 可启动 Chroma 且重启后数据仍在
+     - [x] `make ingest-knowledge` 成功写入向量库 并输出写入条数
    - [x] 检索可用
-     - [x] MCP tool `search_similar_alerts` 可返回 top_k 结果 每条包含 similarity 与 alert_id
+     - [x] CLI query 能返回 top_k 结果 每条包含 similarity 与 alert_id
+     - [x] MCP tool `search_similar_alerts` 返回结构与 CLI 一致
    - [x] 回归覆盖
      - [x] tests 覆盖 ingest 与检索核心逻辑 且 pytest 全量通过
 

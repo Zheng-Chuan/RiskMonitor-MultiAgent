@@ -3,10 +3,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from riskmonitor_multiagent import config
 from riskmonitor_multiagent.data_access import alerts_repository
-from riskmonitor_multiagent.knowledge.store import SqliteVectorStore
-from riskmonitor_multiagent.knowledge.store import stable_alert_text
+from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore
 
 
 def _alert_to_doc(alert: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
@@ -17,7 +15,7 @@ def _alert_to_doc(alert: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
     metric_name = str(alert.get("metric_name") or "")
     message = str(alert.get("message") or "")
 
-    content = stable_alert_text(
+    content = " ".join(
         [
             "alert",
             f"desk {desk}",
@@ -26,7 +24,7 @@ def _alert_to_doc(alert: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
             f"metric {metric_name}",
             message,
         ]
-    )
+    ).strip()
 
     metadata = {
         "alert_id": alert_id,
@@ -47,8 +45,7 @@ def ingest_recent_alerts(
     severity: str | None = None,
     desk: str | None = None,
 ) -> dict[str, Any]:
-    store = SqliteVectorStore(path=config.get_knowledge_db_path())
-    store.init()
+    store = ChromaVectorStore()
 
     alerts = alerts_repository.get_recent_alerts(limit=limit, severity=severity, desk=desk)
     now_ms = int(time.time() * 1000)
@@ -60,14 +57,13 @@ def ingest_recent_alerts(
         if not doc_id:
             skipped += 1
             continue
-        store.upsert(doc_id=doc_id, doc_type="alert", content=content, metadata=metadata, updated_at_ms=now_ms)
+        metadata["updated_at_ms"] = now_ms
+        store.upsert_alert(alert_id=doc_id, document=content, metadata=metadata)
         ingested += 1
 
     return {
-        "knowledge_db_path": store.path,
-        "doc_type": "alert",
+        "vector_db": "chroma",
+        "collection": "alerts",
         "ingested": ingested,
         "skipped": skipped,
-        "total_docs": store.count(doc_type="alert"),
     }
-

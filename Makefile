@@ -1,4 +1,4 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-infra register-cdc register-cdc-schema run-sentinel ingest-knowledge
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-infra register-cdc register-cdc-schema run-sentinel up-kb ingest-knowledge kb-query
 
 help:
 	@echo "RiskMonitor-MultiAgent Development Commands"
@@ -40,7 +40,9 @@ help:
 	@echo "make run-sentinel     - Start the Sentinel Service (simple breach detector)"
 	@echo ""
 	@echo "Week8 Knowledge Base Commands:"
-	@echo "make ingest-knowledge - Ingest recent alerts into local knowledge base"
+	@echo "make up-kb            - Start vector database (Chroma)"
+	@echo "make ingest-knowledge - Ingest recent alerts into vector database"
+	@echo "make kb-query         - Query vector database, usage: make kb-query QUERY='...' TOP_K=5"
 
 install:
 	pip install -r requirements.txt
@@ -77,7 +79,13 @@ run-sentinel:
 	python ./scripts/run_sentinel.py
 
 ingest-knowledge:
-	python ./scripts/knowledge/ingest_alerts.py
+	python ./scripts/knowledge/kb.py ingest-alerts
+
+up-kb:
+	docker compose --profile kb up -d chroma
+
+kb-query:
+	python ./scripts/knowledge/kb.py query --query "$(QUERY)" --top-k "$(if $(TOP_K),$(TOP_K),5)"
 
 setup-mcp:
 	@echo "=================================="

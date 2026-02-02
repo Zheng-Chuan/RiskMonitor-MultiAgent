@@ -91,6 +91,22 @@
 
 本项目在 Week 6 引入了 Kafka + Debezium Connect, 并打通了 positions 表的 CDC 输出.
 本项目在 Week 7 增加了 Sentinel consumer, 可以直接消费 CDC 事件并触发多智能体流水线.
+本项目在 Week 8 增加向量数据库 Chroma, 用于存储历史告警的向量化表示并提供相似度检索.
+
+## 向量数据库
+
+### Chroma
+
+用途
+
+- 存储 alerts 的向量化表示, 支持相似度检索
+- MCP tool search_similar_alerts 与 CLI 都会查询这里
+
+当前落地
+
+- docker compose profile: kb
+- service: chroma (端口 8001)
+- collection: 默认 riskmonitor-alerts 可用 CHROMA_COLLECTION 覆盖
 
 ### positions_cdc
 

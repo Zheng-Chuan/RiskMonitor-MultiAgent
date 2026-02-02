@@ -69,10 +69,12 @@ Risk Manager Agent
 
 ### Knowledge Base
 
-知识库用一个本地 SQLite 文件保存向量化后的历史告警  
-默认路径是 data/knowledge.sqlite  
-你可以用 make ingest-knowledge 从 alerts 表把最近告警写入知识库  
-MCP tool search_similar_alerts 会读取这个文件并返回相似告警列表  
+知识库使用向量数据库 Chroma  
+Chroma 在 docker compose profile kb 中运行 对宿主机暴露端口 8001  
+你可以用 make up-kb 启动向量库  
+再用 make ingest-knowledge 从 alerts 表把最近告警写入向量库  
+CLI 也可以用于排障 scripts/knowledge/kb.py query  
+MCP tool search_similar_alerts 会读取 Chroma 并返回相似告警列表  
 
 ### LLM OpenRouter
 

@@ -208,8 +208,26 @@ services:
     profiles:
       - infra
 
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: riskmonitor-chroma
+    environment:
+      IS_PERSISTENT: "true"
+      PERSIST_DIRECTORY: /chroma/chroma
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - riskmonitor-network
+    restart: unless-stopped
+    profiles:
+      - kb
+
 volumes:
   mysql_data:
+    driver: local
+  chroma_data:
     driver: local
 
 networks:

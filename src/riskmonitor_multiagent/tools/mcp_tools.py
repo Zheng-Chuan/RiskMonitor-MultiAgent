@@ -32,8 +32,7 @@ from riskmonitor_multiagent.services.prometheus_metrics_service import (
     get_metrics_summary,
 )
 from riskmonitor_multiagent.services.auth_service import get_headers_from_ctx, is_authorized
-from riskmonitor_multiagent.knowledge.store import SqliteVectorStore
-from riskmonitor_multiagent import config
+from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore
 from riskmonitor_multiagent.tools.errors import error_payload
 from riskmonitor_multiagent.tools.tool_helpers import (
     normalize_as_of,
@@ -89,20 +88,20 @@ def search_similar_alerts(
         if k > 20:
             k = 20
 
-        store = SqliteVectorStore(path=config.get_knowledge_db_path())
-        results = store.query(query_text=q, top_k=k, doc_type="alert")
+        store = ChromaVectorStore()
+        results = store.query_alerts(query_text=q, top_k=k)
 
         return {
             "request_id": request_id,
             "query": q,
             "top_k": k,
-            "knowledge_db_path": store.path,
+            "vector_db": "chroma",
             "results": [
                 {
                     "alert_id": r.metadata.get("alert_id") or r.doc_id,
-                    "similarity": float(round(r.score, 6)),
+                    "similarity": float(round(r.similarity, 6)),
                     "metadata": r.metadata,
-                    "snippet": r.content[:200],
+                    "snippet": r.document[:200],
                 }
                 for r in results
             ],
