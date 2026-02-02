@@ -34,7 +34,7 @@
 如果你需要在服务端直接调用 LLM(通过 OpenRouter)
 
 - OPENROUTER_API_KEY
-- OPENROUTER_MODEL (可选, 默认 meta-llama/llama-3.1-8b-instruct:free)
+- OPENROUTER_MODEL (可选, 默认值见 src/riskmonitor_multiagent/config.py)
 - OPENROUTER_BASE_URL (可选, 默认 https://openrouter.ai/api/v1)
 - OPENROUTER_HTTP_REFERER (可选, 用于 OpenRouter 统计)
 - OPENROUTER_APP_TITLE (可选, 用于 OpenRouter 统计)
@@ -68,7 +68,7 @@ MySQL 端口映射默认是 3307 -> 3306
 如果你准备做 Week 6 的 CDC 链路(可选)
 
 ```bash
-docker compose --profile infra up -d zookeeper kafka kafka-ui debezium schema-registry
+make up-infra
 ```
 
 服务端口
@@ -80,7 +80,7 @@ docker compose --profile infra up -d zookeeper kafka kafka-ui debezium schema-re
 注册 Debezium positions connector(输出到 topic `risk.positions.cdc`)
 
 ```bash
-./scripts/debezium/register_positions_connector.sh
+make register-cdc
 ```
 
 注册 positions CDC JSON Schema(可选)
@@ -106,6 +106,18 @@ python main.py
 ```bash
 make test
 ```
+
+如果你希望把数据库变化推送到 Sentinel 并触发多智能体流水线(Week 7)
+
+```bash
+make run-sentinel
+```
+
+说明
+
+- Kafka 对宿主机暴露的端口是 29092
+- Sentinel 默认连接 localhost:29092 并订阅 risk.positions.cdc
+- 如果 OpenRouter 模型不可用或返回 404 系统会自动走 fallback 保证链路可跑通 你可以在 .env 里覆盖 OPENROUTER_MODEL
 
 如果你希望跑覆盖率
 

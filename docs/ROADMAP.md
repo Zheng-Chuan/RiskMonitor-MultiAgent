@@ -130,18 +130,21 @@
   - [x] **Schema Registry**
     - [x] 定义 CDC 事件 JSON Schema 并提供注册脚本, 供下游 Consumer 类型对齐与演进。
 
-### Week 7: Stream Processing (实时聚合 - 脊髓)
-**目标**: 构建“脊髓”反射层，处理高频数据，生成聚合信号。
+### Week 7: Sentinel & Agent Pipeline (哨兵与智能体流水线)
+**目标**: 放弃复杂的流计算框架，使用轻量级 Sentinel 脚本直接连接 Kafka 与 Multi-Agent 系统，实现 "Event -> Agent" 的快速闭环。
 
 - **交付**
-  - [ ] **Faust Streaming Application**
-    - [ ] 搭建 `risk-stream-processor` 服务 (Python Faust)。
-    - [ ] 定义 `Table` (KV Store) 用于存储窗口内的聚合状态 (如 Desk Delta)。
-  - [ ] **Sliding Window Aggregation**
-    - [ ] 实现 "1分钟滑动窗口"，实时计算 `Desk Delta` 的变化率 (Velocity)。
-    - [ ] 实现 "Breach Detector": 当聚合值超过阈值，立即向下游 Topic `risk.signals.breach` 发送信号。
-- **验收**
-  - [ ] 模拟每秒 100 笔交易注入，系统能实时输出聚合后的 Risk Metrics，而不是单笔流水。
+  - [x] **Sentinel Service (轻量级哨兵)**
+    - [x] 编写 `riskmonitor_multiagent.sentinel.service`，使用 `aiokafka` 监听 `risk.positions.cdc`。
+    - [x] 实现基础过滤逻辑：解析 CDC 事件，发现 Exposure > Limit 即触发后续流程。
+  - [x] **Agent Roles Implementation (三大角色)**
+    - [x] **System Engineer Agent (IT 运维)**: 第一道防线，检查数据延迟与事件字段完整性，过滤明显技术故障。
+    - [x] **Junior Analyst Agent (初级分析师)**: 第二道防线，基于事件生成事实报告，后续可补充调用 `monitor_desk_exposure` 拉取详情。
+    - [x] **Risk Manager Agent (风险经理)**: 最终决策者，基于分析报告给出处置建议 (Watch/Critical)。
+  - [x] **Sequential Pipeline (线性编排)**
+    - [x] 在 Sentinel 中串联 `Engineer -> Analyst -> Manager` 的调用链。
+  - [x] **Verification**
+    - [x] 修改数据库 `positions` 表 -> Kafka 产出事件 -> Sentinel 捕获 -> 触发 Agent -> 输出决策日志。
 
 ### Week 8: RAG & Knowledge Base (知识记忆 - 海马体)
 **目标**: 让 Agent 拥有记忆，能参考历史案例。
@@ -155,21 +158,14 @@
   - [ ] **Context Retrieval Tool**
     - [ ] 新增 MCP Tool `search_similar_alerts(embedding)`: 给定当前情况，查找最相似的历史告警及处理结果。
 
-### Week 9: Multi-Agent Orchestration (多智能体编排 - 大脑)
-**目标**: 使用 LangGraph 组装 Sentinel, Analyst, Manager 三大角色。
+### Week 9: Multi-Agent Orchestration (Advanced)
+**目标**: 将线性流程升级为 LangGraph 状态机，处理更复杂的交互（如 Manager 驳回分析报告）。
 
 - **交付**
-  - [ ] **Agent 角色定义**
-    - [ ] **Sentinel (哨兵)**: 监听 `risk.signals.breach` Topic，组装初始上下文，唤醒 Analyst。
-    - [ ] **Analyst (分析师)**: 
-        - 调用 `search_similar_alerts` (RAG) 获取历史参考。
-        - 调用 `calculate_exposure` (MCP) 复核数据。
-        - 生成分析报告 (Root Cause Analysis)。
-    - [ ] **Risk Manager (决策者)**: 
-        - 评估报告，给出操作建议 (Call Margin / Liquidate)。
-        - **Human-in-the-loop**: 对于高风险操作，挂起工作流等待 API 确认。
   - [ ] **LangGraph Workflow**
-    - [ ] 实现 `Sentinel -> Analyst -> Risk Manager -> (Human) -> Tool Execution` 的状态机。
+    - [ ] 迁移 Pipeline 逻辑到 LangGraph Graph。
+    - [ ] 增加 "Human-in-the-loop" 节点。
+    - [ ] 增加 "Rewrite" 回路（当分析报告质量不达标时）。
 
 ### Week 10: Production Readiness (生产化)
 **目标**: 全链路压测与可观测性。
@@ -189,8 +185,8 @@
 
 | Layer | Component | Technology | Responsibility |
 | :--- | :--- | :--- | :--- |
-| **Brain** | **Multi-Agent System** | **LangGraph**, LLM | 复杂决策, 根因分析, 人机协作 |
+| **Brain** | **Multi-Agent Pipeline** | LLM, Pipeline | 三角色协作, 生成报告与决策 |
 | **Memory**| **Knowledge Base** | **Milvus**, RAG | 历史经验检索, 规则文档查询 |
-| **Reflex**| **Stream Processor** | **Faust/Flink** | 实时聚合, 降噪, 信号触发 |
+| **Reflex**| **Sentinel** | Python, Kafka Consumer | 轻量过滤与阈值检测, 触发智能体 |
 | **Nerves**| **Event Bus** | **Kafka**, Debezium | 实时数据捕获与传输 |
 | **Hands** | **MCP Server** | **FastMCP** | 数据库读写, 原子工具暴露 |

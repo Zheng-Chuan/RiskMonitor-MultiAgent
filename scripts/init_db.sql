@@ -67,3 +67,7 @@ INSERT INTO positions (position_id, trader_id, desk, security_id, quantity, delt
 ('POS-2024-013', 'TRADER-007', 'Commodities', 'WTI-FUT-20250228', 1000, 50000.0, '2024-10-30', 'USD'),
 ('POS-2024-014', 'TRADER-007', 'Commodities', 'GOLD-FUT-20250331', 500, 100000.0, '2024-10-31', 'USD'),
 ('POS-2024-015', 'TRADER-008', 'Credit Trading', 'JPM-CDS-20250630', 10000000, 50000.0, '2024-10-31', 'USD')
+;
+
+GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'admin'@'%';
+FLUSH PRIVILEGES;

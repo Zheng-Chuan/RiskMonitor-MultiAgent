@@ -6,17 +6,21 @@
 
     "database.hostname": "mysql",
     "database.port": "3306",
-    "database.user": "${env:MYSQL_USER}",
-    "database.password": "${env:MYSQL_PASSWORD}",
+    "database.user": "admin",
+    "database.password": "riskmonitor2024",
     "database.server.id": "184054",
 
     "topic.prefix": "risk",
-    "database.include.list": "${env:MYSQL_DATABASE}",
-    "table.include.list": "${env:MYSQL_DATABASE}.positions",
+    "database.include.list": "riskmonitor",
+    "table.include.list": "riskmonitor.positions",
 
     "include.schema.changes": "false",
     "snapshot.mode": "initial",
     "tombstones.on.delete": "false",
+    "decimal.handling.mode": "double",
+
+    "key.converter.schemas.enable": "false",
+    "value.converter.schemas.enable": "false",
 
     "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
     "schema.history.internal.kafka.topic": "risk.schema_history",

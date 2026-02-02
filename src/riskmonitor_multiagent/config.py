@@ -113,12 +113,12 @@ def get_openrouter_base_url() -> str:
 
 
 def get_openrouter_model() -> str:
-    """获取 OpenRouter 默认模型, 默认为免费模型 meta-llama/llama-3.1-8b-instruct:free."""
+    """获取 OpenRouter 默认模型, 默认为免费模型 meta-llama/llama-3.3-70b-instruct:free."""
     value = os.getenv("OPENROUTER_MODEL")
     if value is None or not value.strip():
         _try_load_repo_dotenv()
         value = os.getenv("OPENROUTER_MODEL")
-    default_model = "meta-llama/llama-3.1-8b-instruct:free"
+    default_model = "meta-llama/llama-3.3-70b-instruct:free"
     return (value or default_model).strip() or default_model
 
 
@@ -138,3 +138,13 @@ def get_openrouter_app_title() -> str:
         _try_load_repo_dotenv()
         value = os.getenv("OPENROUTER_APP_TITLE")
     return (value or "").strip()
+
+
+def get_kafka_bootstrap_servers() -> str:
+    """获取 Kafka Bootstrap Servers, 默认为 localhost:29092."""
+    return os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092").strip() or "localhost:29092"
+
+
+def get_kafka_topic_cdc_positions() -> str:
+    """获取 CDC Positions Topic, 默认为 risk.positions.cdc."""
+    return os.getenv("KAFKA_TOPIC_CDC_POSITIONS", "risk.positions.cdc").strip() or "risk.positions.cdc"

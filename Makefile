@@ -35,6 +35,9 @@ help:
 	@echo "make up-infra         - Start Kafka/Debezium/Schema Registry stack"
 	@echo "make register-cdc     - Register Debezium positions connector"
 	@echo "make register-cdc-schema - Register JSON schema to Schema Registry"
+	@echo ""
+	@echo "Week7 Stream Processing Commands:"
+	@echo "make run-sentinel     - Start the Sentinel Service (simple breach detector)"
 
 install:
 	pip install -r requirements.txt
@@ -66,6 +69,9 @@ register-cdc:
 
 register-cdc-schema:
 	./scripts/schema_registry/register_positions_cdc_schema.sh
+
+run-sentinel:
+	python ./scripts/run_sentinel.py
 
 setup-mcp:
 	@echo "=================================="

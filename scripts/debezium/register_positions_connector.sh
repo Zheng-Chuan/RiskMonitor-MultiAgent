@@ -19,20 +19,11 @@ fi
 
 echo "Register connector from ${CONNECTOR_FILE}"
 payload="$(cat "${CONNECTOR_FILE}")"
-name="$(python - <<'PY'
-import json,sys
-print(json.loads(sys.stdin.read())["name"])
-PY
-<<<"${payload}")"
+name="$(python -c 'import json,sys; print(json.loads(sys.stdin.read())["name"])' <<<"${payload}")"
 
 if curl -fsS "${CONNECT_URL}/connectors/${name}" >/dev/null 2>&1; then
   echo "Connector exists, updating: ${name}"
-  config="$(python - <<'PY'
-import json,sys
-obj=json.loads(sys.stdin.read())
-print(json.dumps(obj["config"]))
-PY
-<<<"${payload}")"
+  config="$(python -c 'import json,sys; obj=json.loads(sys.stdin.read()); print(json.dumps(obj["config"]))' <<<"${payload}")"
   curl -fsS -X PUT "${CONNECT_URL}/connectors/${name}/config" \
     -H "Content-Type: application/json" \
     -d "${config}" >/dev/null
@@ -45,4 +36,3 @@ curl -fsS -X POST "${CONNECT_URL}/connectors" \
   -d "${payload}" >/dev/null
 
 echo "Created: ${name}"
-

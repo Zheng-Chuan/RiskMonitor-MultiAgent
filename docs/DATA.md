@@ -90,7 +90,7 @@
 ## Kafka topics
 
 本项目在 Week 6 引入了 Kafka + Debezium Connect, 并打通了 positions 表的 CDC 输出.
-当前仅落地 CDC 产出侧, 下游 consumer/risk engine 仍属于后续 Week 7+.
+本项目在 Week 7 增加了 Sentinel consumer, 可以直接消费 CDC 事件并触发多智能体流水线.
 
 ### positions_cdc
 
@@ -102,9 +102,14 @@
 当前落地
 
 - topic: `risk.positions.cdc`
-- payload: Debezium 事件经 ExtractNewRecordState 展开后的行级变更(包含 op/ts_ms/source 字段)
+- payload: Debezium 事件经 ExtractNewRecordState 展开后的行级变更, 当前为 Kafka Connect JSON 格式(schema + payload)
 - JSON Schema: `schemas/cdc/positions_cdc_v1.schema.json` (可注册到 Schema Registry)
 - connector 配置: `scripts/debezium/positions-connector.json`
+
+消费侧说明
+
+- Sentinel 会从 payload 中提取 desk 与 delta 字段, 并把 delta 作为 exposure 口径进行阈值判断
+- delta 为 DECIMAL 类型时可能以 base64 形式出现, Sentinel 已做兼容解码
 
 建议配置
 
