@@ -3,18 +3,97 @@
 本项目旨在构建一个**金融级、实时、知识增强的 Multi-Agent 风控系统**。
 对标 Datadog/PagerDuty 的高级智能监控架构，集成 CDC、流计算、RAG 和多智能体编排。
 
+## 技术架构亮点与必须落地清单 (工程作品集标准)
+
+说明
+
+- 这些是必须落地的技术点, 用 checklist 方式确保可衡量 可测试 可验证
+- Week 内容只是实现路径, 但无论如何这些能力最终都要落地
+
+### A. 事件驱动架构 (必须实现)
+
+- [x] CDC 数据动脉: MySQL -> Debezium -> Kafka topic
+- [ ] 标准事件 Envelope (企业对齐)
+  - [ ] schema_version + event_id + correlation_id + causation_id + occurred_at + producer
+  - [ ] Schema Registry 与兼容策略 (breaking change 流程)
+- [ ] 事件分级与性质分类
+  - [ ] severity (INFO/WARNING/CRITICAL) 与 category (system/business)
+  - [ ] actionability (是否可执行) 与 confidence (置信度)
+  - [ ] 每类事件的默认处理策略 (拦截/降级/升级/人工审批)
+- [ ] 幂等与去重
+  - [ ] 基于 event_id 或 partition+offset 的去重表
+  - [ ] 同一事件重放不重复写库/不重复推送
+- [ ] 重试与 DLQ
+  - [ ] 可配置重试次数与退避
+  - [ ] 不可恢复错误进入 DLQ 并可追溯
+- [ ] 可回放 Replay
+  - [ ] 选定 event_id 可重放并产出一致的结构化输出 (允许文本不同)
+
+### B. Multi-Agent 协作 (必须实现)
+
+- [x] 三角色拆分
+  - [x] System Engineer Agent: 专注 IT 报错与抖动分析
+  - [x] Risk Analyst Agent: 专注业务风险分析与事实报告
+  - [x] Manager Agent: 汇总信息, 向人类汇报, 下发可执行指令并等待结果
+- [ ] Manager 指令协议 (可执行且可验证)
+  - [ ] 指令 schema: target_agent + action + params + timeout + expected_output_schema
+  - [ ] 执行回执 schema: ok + evidence + artifacts + latency_ms + error
+- [ ] 状态机编排 (LangGraph)
+  - [ ] Quality Gate + RewriteLoop + Human-in-the-loop
+  - [ ] 可回放与幂等内置在编排层
+
+### C. Agent 上下文共享机制 (必须实现)
+
+- [x] RAG 知识库 (Chroma)
+- [ ] Context Store (共享上下文)
+  - [ ] 黑板模型: event snapshot + tool results + rag hits + decisions + approvals
+  - [ ] 结构化引用 evidence (每条结论必须能追溯到 tool/rag/事件字段)
+- [ ] 预算与策略
+  - [ ] token 预算与截断策略
+  - [ ] 缓存策略 (相同事件/相同检索 query 的缓存与失效)
+  - [ ] Prompt/Policy 版本化 (可回放)
+    - [ ] 每次 Agent run 记录 prompt_version, model, temperature, tool_versions
+
+### D. 工程化质量门禁 (必须实现)
+
+- [ ] Contract Tests (结构化输出质量)
+  - [ ] JSON 可解析率, 字段齐全率, 类型正确率
+  - [ ] evidence 非空率 (关键结论必须有来源)
+- [ ] 离线评测与回归集
+  - [ ] 固定回归集 events + 期望结构化输出 (base vs new 版本一键对比)
+  - [ ] LLM-as-judge 或规则评分作为质量闸门
+  - [ ] 防幻觉与引用治理
+    - [ ] 关键结论必须引用 tool 或 rag evidence, 否则降级或拒答
+
+### E. 安全与权限治理 (必须实现)
+
+- [ ] Role-based 工具权限
+  - [ ] System Engineer 只允许读取与诊断类工具
+  - [ ] Risk Analyst 允许读取业务数据与检索
+  - [ ] Manager 才能发起写库/推送, 且 CRITICAL 必须 HITL
+- [ ] 审计与追责
+  - [ ] 每次写库/推送都有 correlation_id 且可追溯到 event_id 与审批记录
+
+### F. 可观测性与生产化 (必须实现)
+
+- [ ] 端到端指标: CDC lag, consumer lag, pipeline latency (分节点), LLM error rate, Chroma latency
+- [ ] 可视化运维界面 (后期)
+  - [ ] 事件流 + Agent runs 全链路轨迹
+  - [ ] Human-in-the-loop 审批与审计
+  - [ ] Replay 重放入口
+
 ## 核心架构愿景 (The Advanced Stack)
 
-1.  **Level 1: The Nerves (感知层)**
-    *   **CDC**: Debezium + Kafka，实时捕获每一笔交易。
-    *   **Resource**: MCP Server 暴露静态元数据 (Limits, Desks)。
-2.  **Level 2: The Reflexes (脊髓层 - 实时聚合)**
-    *   **Stream Processing**: 使用 **Faust** (Python Streaming) 进行时间窗口聚合 (Time-Window Aggregation)。
-    *   **Signal Detection**: 过滤 99% 的噪音，只将“高价值信号” (High-Value Signals) 传递给 Agent。
-3.  **Level 3: The Brain (大脑层 - 决策分发)**
-    *   **Memory (RAG)**: **Milvus** (Vector DB) 存储历史案例、操作手册、市场新闻。
-    *   **Orchestration**: **LangGraph** 编排多智能体协作 (Sentinel -> Analyst -> Manager)。
-    *   **Action**: MCP Server 提供原子化操作工具 (Submit Alert, Update Limit)。
+1. **Level 1: The Nerves (感知层)**
+   - **Event Ingestion**: Debezium + Kafka 实时捕获变更
+   - **Contracts**: 事件 envelope + schema registry + 兼容策略
+2. **Level 2: The Reflexes (快速反射层)**
+   - **Sentinel**: 轻量过滤与阈值检测, 把噪音挡在 LLM 外
+   - **Deterministic Guardrails**: 技术故障拦截, 幂等, 降级, 重试
+3. **Level 3: The Brain (大脑层)**
+   - **Memory (RAG)**: Chroma 存储历史告警与知识
+   - **Orchestration**: LangGraph 编排多智能体协作与人机协作
+   - **Action**: MCP Server 提供原子化操作工具 (读写分离, HITL 约束)
 
 ---
 
@@ -138,11 +217,11 @@
     - [x] 编写 `riskmonitor_multiagent.sentinel.service`，使用 `aiokafka` 监听 `risk.positions.cdc`。
     - [x] 实现基础过滤逻辑：解析 CDC 事件，发现 Exposure > Limit 即触发后续流程。
   - [x] **Agent Roles Implementation (三大角色)**
-    - [x] **System Engineer Agent (IT 运维)**: 第一道防线，检查数据延迟与事件字段完整性，过滤明显技术故障。
-    - [x] **Junior Analyst Agent (初级分析师)**: 第二道防线，基于事件生成事实报告，后续可补充调用 `monitor_desk_exposure` 拉取详情。
-    - [x] **Risk Manager Agent (风险经理)**: 最终决策者，基于分析报告给出处置建议 (Watch/Critical)。
+    - [x] **System Engineer Agent (IT 运维)**: 专门分析 IT 系统报错与抖动，检查数据延迟、字段完整性与依赖可用性，过滤技术故障。
+    - [x] **Risk Analyst Agent (风险分析师)**: 专门分析业务风险，基于事件与上下文生成客观事实报告与风险点列表。
+    - [x] **Manager Agent (管理者/指挥官)**: 汇总前两者信息进行分析与处理，向人类汇报，并向其他两个 Agent 下发可执行指令并等待执行结果。
   - [x] **Sequential Pipeline (线性编排)**
-    - [x] 在 Sentinel 中串联 `Engineer -> Analyst -> Manager` 的调用链。
+    - [x] 在 Sentinel 中串联 `SystemEngineer -> RiskAnalyst -> Manager` 的调用链。
   - [x] **Verification**
     - [x] 修改数据库 `positions` 表 -> Kafka 产出事件 -> Sentinel 捕获 -> 触发 Agent -> 输出决策日志。
 
@@ -170,22 +249,32 @@
      - [x] tests 覆盖 ingest 与检索核心逻辑 且 pytest 全量通过
 
 ### Week 9: Multi-Agent Orchestration (Advanced)
-**目标**: 将线性流程升级为 LangGraph 状态机，处理更复杂的交互（如 Manager 驳回分析报告）。
+**目标**: 将线性流程升级为可治理的状态机，支持质量门禁、重写回路、人机协作与可回放。
 
 - **交付**
-  - [ ] **LangGraph Workflow**
-    - [ ] 迁移 Pipeline 逻辑到 LangGraph Graph。
-    - [ ] 增加 "Human-in-the-loop" 节点。
-    - [ ] 增加 "Rewrite" 回路（当分析报告质量不达标时）。
+  - [ ] **Contracts (输入输出契约)**
+    - [ ] 定义并固化 `RiskEvent` 事件结构与版本号（event_id, correlation_id, causation_id, occurred_at, producer, schema_version）。
+    - [ ] 定义事件分级与性质分类（severity, category/system_or_business, actionability, confidence），并明确每类事件的默认处理策略。
+    - [ ] 定义并固化三个 Agent 的结构化输出 schema，并提供校验与兼容策略。
+  - [ ] **State Machine (LangGraph)**
+    - [ ] 节点建议: NormalizeEvent -> EngineerCheck -> RetrieveContext(tools + Chroma) -> RiskAnalyst -> QualityGate -> RewriteLoop -> Manager -> HumanApproval -> Execute.
+    - [ ] Manager 节点支持向 System Engineer 与 Risk Analyst 下发可执行指令并等待执行结果。
+  - [ ] **Quality Gate**
+    - [ ] 当报告缺字段或置信度过低时触发 rewrite 回路，并限制最大重试次数。
+    - [ ] 当 LLM 不可用时自动降级到规则化输出，保证闭环不中断。
+  - [ ] **Human-in-the-loop**
+    - [ ] 对 CRITICAL 级别动作必须人工确认后才能执行有副作用操作（至少写库/推送）。
  - **验收**
    - [ ] 工作流可运行
-     - [ ] 提供 demo 脚本 输入一个 breach event 能跑完整状态机并输出最终决策
-   - [ ] 人工介入
-     - [ ] 高风险动作必须进入 human in loop 节点 未确认不得执行写库动作
+     - [ ] 提供 demo 脚本 输入一个 breach event 能跑完整状态机并输出最终决策（结构化 JSON）。
+   - [ ] 可回放与幂等
+     - [ ] 同一 event_id 重放不会重复写入/重复推送，并且输出结构保持一致。
    - [ ] 回路生效
-     - [ ] 当分析报告缺字段时触发 rewrite 回路 至少重写一次后再进入 manager
+     - [ ] 当 Risk Analyst 输出缺字段时触发 rewrite 回路，至少重写一次后再进入 Manager。
+   - [ ] 人工介入
+     - [ ] CRITICAL 动作必须进入 human approval，未确认不得执行写库动作。
    - [ ] 测试覆盖
-     - [ ] tests 覆盖状态机关键分支 且 pytest 全量通过
+     - [ ] tests 覆盖 system_issue、rewrite、human approval、fallback 等关键分支，pytest 全量通过。
 
 ### Week 10: Production Readiness (生产化)
 **目标**: 全链路压测与可观测性。
@@ -195,16 +284,41 @@
     - [ ] 制造“风暴场景”：短时间内大量交易触发多个 Desk 违规。
     - [ ] 验证 Kafka Backpressure 和 Agent 响应延迟。
   - [ ] **Observability Dashboard**
-    - [ ] 监控：CDC 延迟, Flink/Faust 吞吐, Agent Token 消耗, RAG 检索命中率。
+    - [ ] 监控：CDC 延迟, Kafka consumer lag, Sentinel 吞吐, pipeline latency(分节点), LLM 调用成功率与 token 消耗, Chroma query p95 与命中率。
   - [ ] **Documentation**
-    - [ ] 完整的架构图与操作手册。
+    - [ ] 完整的架构图、操作手册与故障排查 Runbook。
  - **验收**
    - [ ] 压测可复现
      - [ ] 提供脚本能在本地注入 N 条 positions 变更并触发 Sentinel 与 Agent
+     - [ ] 证明在风暴场景下无重复告警（同一 event_id/alert_id 幂等）。
    - [ ] 指标可观测
-     - [ ] /metrics 至少新增 CDC lag 与 pipeline latency 指标
+     - [ ] /metrics 至少新增 CDC lag, consumer lag, pipeline latency, LLM error rate, Chroma latency 指标
    - [ ] 稳定性
      - [ ] 连续运行 30 分钟 无崩溃 无明显内存泄漏 关键错误有结构化日志
+   - [ ] 故障演练
+     - [ ] LLM 不可用时自动降级仍能产出结构化决策
+     - [ ] Chroma 不可用时仍可运行但明确标注 memory 不可用
+
+### Week 11: Enterprise Event-Driven & Ops UI (Backlog)
+**目标**: 将模块二升级为主流企业风格的事件驱动架构，并为多智能体提供可视化运维界面。
+
+- **交付**
+  - [ ] **Event-Driven Hardening (主流企业方案对齐)**
+    - [ ] 标准化事件 envelope（schema_version, event_id, correlation_id, causation_id, producer, occurred_at）。
+    - [ ] Topic 规划与命名规范（raw/normalized/alerts/agent_runs 等），并记录到 docs/DATA.md。
+    - [ ] 幂等与去重（基于 event_id 或 partition+offset 的持久化去重表），避免重复告警与重复执行。
+    - [ ] 重试与死信（DLQ）策略：可配置重试次数与退避，对不可恢复错误落盘/落库。
+    - [ ] Schema 演进策略：兼容旧版本 consumer，明确 breaking change 流程。
+  - [ ] **Multi-Agent 可视化界面 (Operations Console)**
+    - [ ] 展示事件流与处理状态（最新事件、延迟、成功/失败/被拦截原因）。
+    - [ ] 展示每次 Agent run 的完整轨迹（输入、检索命中、输出、质量门禁、HITL 状态）。
+    - [ ] 支持 Human-in-the-loop 审批（approve/reject）与审计记录。
+    - [ ] 支持重放与回滚演练（选定 event_id 进行回放，保证幂等）。
+- **验收**
+  - [ ] 事件驱动一致性
+    - [ ] 端到端链路全部基于事件驱动执行，核心状态可在事件与数据库中回溯。
+  - [ ] 控制台可用
+    - [ ] 本地启动后可看见近 1 小时的事件与 Agent runs，并可执行一次审批与一次重放。
 
 ---
 
@@ -212,8 +326,8 @@
 
 | Layer | Component | Technology | Responsibility |
 | :--- | :--- | :--- | :--- |
-| **Brain** | **Multi-Agent Pipeline** | LLM, Pipeline | 三角色协作, 生成报告与决策 |
-| **Memory**| **Knowledge Base** | **Milvus**, RAG | 历史经验检索, 规则文档查询 |
+| **Brain** | **Manager Orchestrator** | LLM, State Machine | 汇总信息, 下发指令, 等待执行, 向人类汇报 |
+| **Memory**| **Knowledge Base** | **Chroma**, RAG | 历史经验检索, 规则文档查询 |
 | **Reflex**| **Sentinel** | Python, Kafka Consumer | 轻量过滤与阈值检测, 触发智能体 |
 | **Nerves**| **Event Bus** | **Kafka**, Debezium | 实时数据捕获与传输 |
 | **Hands** | **MCP Server** | **FastMCP** | 数据库读写, 原子工具暴露 |
