@@ -13,8 +13,12 @@ from riskmonitor_multiagent.sentinel.service import MAX_EXPOSURE_THRESHOLD, Sent
 
 
 class _Msg:
-    def __init__(self, value):
+    def __init__(self, value, *, topic: str = "risk.positions.cdc", partition: int = 0, offset: int = 1, timestamp: int = 1700000000000):
         self.value = value
+        self.topic = topic
+        self.partition = partition
+        self.offset = offset
+        self.timestamp = timestamp
 
 
 def _encode_decimal(value: float, scale: int = 4) -> str:
@@ -29,10 +33,8 @@ async def test_process_message_triggers_alert_for_schema_payload_decimal():
     svc = SentinelService()
     called = {}
 
-    async def _trigger_alert(*, desk: str, exposure: float, record: dict):
-        called["desk"] = desk
-        called["exposure"] = exposure
-        called["record"] = record
+    async def _trigger_alert(*, event: dict):
+        called["event"] = event
 
     svc._trigger_alert = _trigger_alert  # type: ignore[attr-defined]
 
@@ -50,8 +52,9 @@ async def test_process_message_triggers_alert_for_schema_payload_decimal():
 
     await svc._process_message(msg)
 
-    assert called["desk"] == "Commodities"
-    assert called["exposure"] > MAX_EXPOSURE_THRESHOLD
+    event = called["event"]
+    assert event["payload"]["desk"] == "Commodities"
+    assert event["payload"]["exposure"] > MAX_EXPOSURE_THRESHOLD
 
 
 @pytest.mark.asyncio
@@ -59,9 +62,8 @@ async def test_process_message_handles_envelope_after_format():
     svc = SentinelService()
     called = {}
 
-    async def _trigger_alert(*, desk: str, exposure: float, record: dict):
-        called["desk"] = desk
-        called["exposure"] = exposure
+    async def _trigger_alert(*, event: dict):
+        called["event"] = event
 
     svc._trigger_alert = _trigger_alert  # type: ignore[attr-defined]
 
@@ -76,5 +78,6 @@ async def test_process_message_handles_envelope_after_format():
 
     await svc._process_message(msg)
 
-    assert called["desk"] == "Equity Derivatives"
-    assert called["exposure"] > MAX_EXPOSURE_THRESHOLD
+    event = called["event"]
+    assert event["payload"]["desk"] == "Equity Derivatives"
+    assert event["payload"]["exposure"] > MAX_EXPOSURE_THRESHOLD

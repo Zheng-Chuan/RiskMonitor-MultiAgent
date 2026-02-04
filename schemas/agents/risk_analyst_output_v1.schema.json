@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RiskAnalystOutput v1",
+  "type": "object",
+  "required": ["schema_version", "report", "key_facts", "confidence", "evidence"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "risk_analyst_output.v1"
+    },
+    "report": {
+      "type": "string",
+      "minLength": 1
+    },
+    "key_facts": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "confidence": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
+

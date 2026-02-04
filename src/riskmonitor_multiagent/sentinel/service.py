@@ -9,11 +9,16 @@ import base64
 import json
 import logging
 import signal
+import time
 
 from aiokafka import AIOKafkaConsumer
+from aiokafka.structs import TopicPartition
 
 from riskmonitor_multiagent import config
 from riskmonitor_multiagent.agents import run_agent_pipeline
+from riskmonitor_multiagent.contracts.risk_event import build_breach_event, normalize_cdc_event
+from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
+from riskmonitor_multiagent.orchestration import run_state_machine
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +32,9 @@ class SentinelService:
     def __init__(self):
         self._running = False
         self._consumer = None
+        self._last_end_offsets_ms: dict[tuple[str, int], int] = {}
+        self._last_lag_update_ms: int = 0
+        self._cached_end_offsets: dict[tuple[str, int], int] = {}
 
     async def start(self):
         """启动服务."""
@@ -75,6 +83,7 @@ class SentinelService:
 
     async def _process_message(self, msg):
         """处理单条消息."""
+        started = time.monotonic()
         try:
             value = msg.value
             if not value:
@@ -100,6 +109,15 @@ class SentinelService:
             if not record or not isinstance(record, dict):
                 return
 
+            topic = getattr(msg, "topic", "unknown")
+            partition = getattr(msg, "partition", 0)
+            offset = getattr(msg, "offset", 0)
+            message_ts_ms = getattr(msg, "timestamp", None)
+            if not isinstance(message_ts_ms, int):
+                message_ts_ms = None
+
+            await self._update_consumer_lag_metrics(topic=str(topic), partition=int(partition), offset=int(offset))
+
             desk = record.get("desk")
             # 注意: Debezium 传过来的可能是 string 或 number, 视 schema 而定, 这里强转 float
             # 兼容 MySQL Decimal 类型传过来可能是 string
@@ -115,21 +133,50 @@ class SentinelService:
 
             logger.info(f"Received event op={op}, desk={desk}, exposure={exposure}")
 
+            source_event = normalize_cdc_event(
+                raw_record=record,
+                topic=str(topic),
+                partition=int(partition),
+                offset=int(offset),
+                message_ts_ms=message_ts_ms,
+            )
+
             # 简单的阈值检测 (Breach Detection)
             if abs(exposure) > MAX_EXPOSURE_THRESHOLD:
-                await self._trigger_alert(desk=desk, exposure=exposure, record=record)
+                inc_counter("rm_sentinel_breaches_total")
+                breach_event = build_breach_event(
+                    source_event=source_event,
+                    desk=str(desk) if isinstance(desk, str) else "unknown",
+                    exposure=float(exposure),
+                    threshold=float(MAX_EXPOSURE_THRESHOLD),
+                )
+                await self._trigger_alert(event=breach_event.to_dict())
 
         except Exception as e:
+            inc_counter("rm_sentinel_errors_total")
             logger.error(f"Failed to process message: {e}", exc_info=True)
+        finally:
+            inc_counter("rm_sentinel_messages_total")
+            observe_ms("rm_sentinel_process_message", (time.monotonic() - started) * 1000.0)
 
-    async def _trigger_alert(self, *, desk: str, exposure: float, record: dict):
+    async def _trigger_alert(self, *, event: dict):
         """触发告警."""
+        started = time.monotonic()
+        desk = event.get("payload", {}).get("desk") if isinstance(event.get("payload"), dict) else None
+        exposure = event.get("payload", {}).get("exposure") if isinstance(event.get("payload"), dict) else None
         logger.warning(
-            f"⚠️ [BREACH DETECTED] Desk '{desk}' exposure {exposure} exceeds limit {MAX_EXPOSURE_THRESHOLD}!"
+            f"⚠️ [BREACH DETECTED] desk={desk} exposure={exposure} limit={MAX_EXPOSURE_THRESHOLD}"
         )
-        event = dict(record)
-        event["desk"] = desk
-        event["exposure"] = exposure
+        state_machine = await run_state_machine(event=event)
+        if state_machine.get("ok") is True:
+            result = state_machine.get("result") or {}
+            manager = result.get("manager") if isinstance(result, dict) else None
+            decision = manager.get("decision") if isinstance(manager, dict) else None
+            action = manager.get("action") if isinstance(manager, dict) else None
+            logger.warning(f"StateMachine decision={decision}, action={action}")
+            observe_ms("rm_sentinel_trigger_alert", (time.monotonic() - started) * 1000.0, labels={"path": "state_machine"})
+            return
+
         result = await run_agent_pipeline(event=event)
         if result.get("blocked"):
             logger.warning(f"Pipeline blocked: {result.get('engineer')}")
@@ -138,6 +185,34 @@ class SentinelService:
         decision = manager.get("decision")
         action = manager.get("action")
         logger.warning(f"Pipeline decision={decision}, action={action}")
+        observe_ms("rm_sentinel_trigger_alert", (time.monotonic() - started) * 1000.0, labels={"path": "pipeline"})
+
+    async def _update_consumer_lag_metrics(self, *, topic: str, partition: int, offset: int) -> None:
+        if self._consumer is None:
+            return
+        now_ms = int(time.time() * 1000)
+        if now_ms - int(self._last_lag_update_ms) < 1000:
+            end = self._cached_end_offsets.get((topic, partition))
+            if isinstance(end, int):
+                lag = max(0, int(end) - int(offset) - 1)
+                from riskmonitor_multiagent.observability.metrics import set_gauge
+
+                set_gauge("rm_kafka_consumer_lag", float(lag), labels={"topic": topic, "partition": str(partition)})
+            return
+
+        self._last_lag_update_ms = now_ms
+        try:
+            tp = TopicPartition(topic, partition)
+            ends = await self._consumer.end_offsets([tp])
+            end = ends.get(tp)
+            if isinstance(end, int):
+                self._cached_end_offsets[(topic, partition)] = int(end)
+                lag = max(0, int(end) - int(offset) - 1)
+                from riskmonitor_multiagent.observability.metrics import set_gauge
+
+                set_gauge("rm_kafka_consumer_lag", float(lag), labels={"topic": topic, "partition": str(partition)})
+        except Exception:
+            inc_counter("rm_sentinel_kafka_lag_errors_total")
 
     def _try_decode_connect_decimal(self, value) -> float | None:
         if not isinstance(value, str):

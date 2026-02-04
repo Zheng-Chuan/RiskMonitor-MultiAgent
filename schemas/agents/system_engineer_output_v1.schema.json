@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SystemEngineerOutput v1",
+  "type": "object",
+  "required": ["schema_version", "system_issue", "reason", "latency_ms", "evidence"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "system_engineer_output.v1"
+    },
+    "system_issue": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "latency_ms": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
+

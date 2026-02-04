@@ -19,7 +19,10 @@
 
 - [docs/QUICKSTART.md](docs/QUICKSTART.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [docs/STATE_MACHINE.md](docs/STATE_MACHINE.md)
 - [docs/DATA.md](docs/DATA.md)
+- [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)
+- [docs/RUNBOOK.md](docs/RUNBOOK.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/MAINTENANCE.md](docs/MAINTENANCE.md)
 - [docs/INTERVIEW.md](docs/INTERVIEW.md) - MCP 完整面试指南(含 70 个硬核面试题)

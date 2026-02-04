@@ -10,17 +10,19 @@
 Hands 是 MCP Server 负责查库和写库  
 Nerves 是 CDC 负责把数据库变化变成事件  
 Reflex 是 Sentinel 负责做第一层快速判断  
-Brain 是 Multi Agent 负责写报告和给决策  
+Brain 是状态机编排的 Multi Agent 负责写报告 给决策 下发指令并收集证据  
 
 ```mermaid
 flowchart LR
   DB[(MySQL)] -->|binlog| Deb[Debezium]
   Deb -->|CDC event| K[(Kafka)]
   K --> Sen[Sentinel]
-  Sen --> Eng[System Engineer Agent]
-  Eng --> Ana[Junior Analyst Agent]
-  Ana --> Mgr[Risk Manager Agent]
-  Mgr --> Out[Decision log]
+  Sen --> SM[State Machine]
+  SM --> Eng[System Engineer]
+  SM --> Ana[Risk Analyst]
+  SM --> Mgr[Manager]
+  SM --> CS[(Context Store)]
+  SM --> Out[Final output]
 
   Client[MCP client] --> MCP[MCP Server]
   MCP --> DB
@@ -50,7 +52,7 @@ connector 配置文件在 [positions-connector.json](../scripts/debezium/positio
 
 Sentinel 是一个轻量消费者  
 它从 `risk.positions.cdc` 读取事件  
-做阈值检测 发现超限就触发多智能体流水线  
+做阈值检测 发现超限就触发状态机编排  
 入口在 [service.py](../src/riskmonitor_multiagent/sentinel/service.py)  
 
 ### Multi Agent 三角色
@@ -58,14 +60,16 @@ Sentinel 是一个轻量消费者
 System Engineer Agent  
 先检查事件是否像技术问题 比如字段缺失 延迟过大  
 
-Junior Analyst Agent  
+Risk Analyst Agent  
 把事件翻译成事实报告  
 
-Risk Manager Agent  
+Manager Agent  
 给出决策和动作建议  
 
 代码在 [agents](../src/riskmonitor_multiagent/agents/)  
-核心编排入口在 src/riskmonitor_multiagent/agents/pipeline.py  
+线性编排入口在 src/riskmonitor_multiagent/agents/pipeline.py  
+状态机编排入口在 [state_machine.py](../src/riskmonitor_multiagent/orchestration/state_machine.py)  
+状态机说明文档在 [STATE_MACHINE.md](STATE_MACHINE.md)  
 
 ### Knowledge Base
 
@@ -106,31 +110,38 @@ sequenceDiagram
   participant Deb as Debezium
   participant K as Kafka
   participant Sen as Sentinel
+  participant SM as State Machine
   participant Eng as System Engineer
-  participant Ana as Junior Analyst
-  participant Mgr as Risk Manager
+  participant Ana as Risk Analyst
+  participant Mgr as Manager
+  participant CS as Context Store
 
   DB->>Deb: binlog update positions
   Deb->>K: publish risk.positions.cdc
   K->>Sen: consume event
-  Sen->>Eng: validate event
-  Eng-->>Sen: ok or blocked
-  Sen->>Ana: build report
-  Ana-->>Sen: report
-  Sen->>Mgr: decision
-  Mgr-->>Sen: decision and action
+  Sen->>SM: invoke
+  SM->>Eng: engineer check
+  Eng-->>SM: output
+  SM->>CS: write snapshots
+  SM->>Ana: analyst report
+  Ana-->>SM: output
+  SM->>Mgr: manager decision
+  Mgr-->>SM: output and commands
+  SM->>CS: persist final output
 ```
 
 ## 现状与下一步
 
 当前已完成  
 - CDC topic 打通  
-- Sentinel 消费并触发三角色流水线  
-- 结果以日志形式输出  
+- Sentinel 消费并优先触发状态机编排  
+- Context Store 写入 run 轨迹 支持 replay  
+- 状态机失败时自动 fallback 到线性流水线  
 
 下一步建议  
-- Risk Manager 的 CRITICAL 决策写入 alerts 表  
-- Junior Analyst 在生成报告前调用 MCP 的 monitor 工具拉取更多上下文  
+- Manager 输出必须引用 receipts evidence 并做契约门禁  
+- 把最终结论摘要写入 Chroma 形成同步记忆闭环  
+- 引入真实 HumanApproval 界面替换自动审批开关  
 
 ## 关键入口一览
 

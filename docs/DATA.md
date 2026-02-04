@@ -162,6 +162,106 @@
 - 推荐新建 processed_cdc_events 表用于存储已处理 event_id
 - event_id 可以优先使用 Debezium 自带 source 元数据, 或使用 topic partition offset 组合
 
+### 标准事件 Envelope (RiskEvent)
+
+用途
+
+- 用统一的事件结构承载 module2 的所有输入输出
+- 让编排层可回放 可幂等 可审计
+
+当前落地
+
+- schema_version: `risk_event.v1`
+- JSON Schema: `schemas/events/risk_event_v1.schema.json`
+- Sentinel 消费 `risk.positions.cdc` 后会先 normalize 成 RiskEvent (producer=debezium)
+- 当 breach 触发时 Sentinel 会生成派生事件 RiskEvent (producer=sentinel, causation_id=source_event_id)
+
+核心字段
+
+- schema_version: string, 固定 risk_event.v1
+- event_id: string, 默认使用 topic:partition:offset 组合, 可用于幂等去重与回放定位
+- correlation_id: string, 默认等于 event_id, 用于端到端串联
+- causation_id: string or null, 派生事件指向上游事件 id
+- occurred_at: string, ISO8601
+- producer: string, 例如 debezium 或 sentinel
+- severity: INFO WARNING CRITICAL
+- category: system 或 business
+- actionability: boolean
+- confidence: number 0到1
+- payload: object, 业务载荷与证据引用
+
+默认处理策略
+
+- category=system 或 system_issue 时优先拦截并输出可观测证据
+- category=business 且 actionability=true 且 severity=CRITICAL 时默认进入人工审批后再执行有副作用动作
+
+### Agent 输出契约
+
+用途
+
+- 固化三个 Agent 的结构化输出
+- 让质量门禁可测试可回归
+
+当前落地
+
+- System Engineer 输出 schema: `schemas/agents/system_engineer_output_v1.schema.json`
+- Risk Analyst 输出 schema: `schemas/agents/risk_analyst_output_v1.schema.json`
+- Manager 输出 schema: `schemas/agents/manager_output_v1.schema.json`
+
+兼容策略
+
+- schema_version 固定为 v1
+- 新增字段只允许向后兼容 consumer 必须忽略未知字段
+
+### Agent 协作对话格式
+
+用途
+
+- Manager 向其他 Agent 下发指令并等待回执
+- 让协作闭环可测试可回放可审计
+
+当前落地
+
+- 指令 schema: `schemas/agents/agent_command_v1.schema.json`
+- 回执 schema: `schemas/agents/agent_receipt_v1.schema.json`
+
+字段约定
+
+- run_id: 串联一次完整状态机运行
+- command_id: 串联一次指令与回执
+- target_agent: system_engineer 或 risk_analyst
+- action: 约定动作名, 例如 collect_metrics, query_positions, search_similar_alerts
+- params: 动作参数对象
+- timeout_ms: 超时时间
+- expected_output_schema: 期望的 output 结构标识, 用于质量门禁与兼容治理
+
+回执约定
+
+- ok: 是否执行成功
+- evidence: 证据引用, 必须可追溯到 tool 或事件字段
+- artifacts: 附件列表, 例如 metrics snapshot, query results, links
+- latency_ms: 端到端执行耗时
+- error: 失败时的结构化错误摘要
+- output: 结构化输出, 由 expected_output_schema 约束
+
+### Context Store
+
+用途
+
+- 保存一次 run 的共享上下文与同步记忆
+- 用于 replay 与审计
+
+当前落地
+
+- 文件落盘形式, 每个 run_id 一个 json 文件
+- 路径由 CONTEXT_STORE_DIR 控制 默认 data/context_store
+- 写入内容包含 event_snapshot receipts rag hits agent outputs approval final_output
+
+同步记忆落地
+
+- 状态机会把 final_output 摘要写入 Chroma
+- 默认 collection riskmonitor-memory 可用 CHROMA_MEMORY_COLLECTION 覆盖
+
 ### risk_alerts
 
 用途

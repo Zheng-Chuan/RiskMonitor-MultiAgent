@@ -8,6 +8,9 @@ Week4: 可观测与告警闭环
 from typing import Any, Dict, List
 import time
 
+from riskmonitor_multiagent.observability.metrics import render_prometheus_metrics
+from riskmonitor_multiagent.observability.metrics import reset_observability_metrics
+
 
 class MetricsStore:  # pylint: disable=too-few-public-methods
     """内部指标存储类，用于避免使用 global 语句."""
@@ -113,6 +116,7 @@ def generate_prometheus_metrics() -> str:
             lines.append(f'mcp_error_rate{{tool="{tool_name}"}} {error_rate:.4f}')
     lines.append("")
 
+    lines.append(render_prometheus_metrics())
     return "\n".join(lines)
 
 
@@ -149,3 +153,4 @@ def get_metrics_summary() -> Dict[str, Any]:
 def reset_metrics() -> None:
     """重置所有指标(用于测试)"""
     _store.reset()
+    reset_observability_metrics()

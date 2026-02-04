@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ManagerOutput v1",
+  "type": "object",
+  "required": ["schema_version", "decision", "action", "rationale", "commands", "evidence"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "manager_output.v1"
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["WATCH", "CRITICAL"]
+    },
+    "action": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "commands": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "plan_steps": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,10 +1,23 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from riskmonitor_multiagent.agents.base import AgentResult
 from riskmonitor_multiagent.agents.base import BaseAgent
+from riskmonitor_multiagent.contracts.agent_outputs import (
+    MANAGER_OUTPUT_SCHEMA_VERSION,
+    RISK_ANALYST_OUTPUT_SCHEMA_VERSION,
+    SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
+    normalize_manager_output,
+    normalize_risk_analyst_output,
+    normalize_system_engineer_output,
+    validate_manager_output,
+    validate_risk_analyst_output,
+    validate_system_engineer_output,
+)
+from riskmonitor_multiagent.contracts.risk_event import validate_risk_event
 
 
 class SystemEngineerAgent:
@@ -12,95 +25,183 @@ class SystemEngineerAgent:
         self._max_event_latency_ms = int(max_event_latency_ms)
 
     def analyze(self, *, event: dict[str, Any]) -> AgentResult:
-        now_ms = int(time.time() * 1000)
-        ts_ms = event.get("__ts_ms") or event.get("ts_ms") or event.get("event_ts_ms")
-        latency_ms = None
-        if isinstance(ts_ms, int):
-            latency_ms = max(0, now_ms - ts_ms)
-        elif isinstance(ts_ms, str) and ts_ms.isdigit():
-            latency_ms = max(0, now_ms - int(ts_ms))
+        ok_event, event_errors = validate_risk_event(event)
+        if not ok_event:
+            output = {
+                "schema_version": SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
+                "system_issue": True,
+                "reason": "invalid_event_contract",
+                "latency_ms": None,
+                "evidence": {"event_errors": event_errors},
+            }
+            output = normalize_system_engineer_output(output)
+            return AgentResult(ok=False, output=output)
 
-        desk = event.get("desk")
-        exposure = event.get("exposure")
+        now_ms = int(time.time() * 1000)
+        occurred_at = event.get("occurred_at")
+        latency_ms = None
+        if isinstance(occurred_at, str):
+            try:
+                dt = datetime.fromisoformat(occurred_at.replace("Z", "+00:00"))
+                dt = dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+                latency_ms = max(0, now_ms - int(dt.timestamp() * 1000))
+            except ValueError:
+                latency_ms = None
+
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        desk = payload.get("desk")
+        exposure = payload.get("exposure")
 
         if not isinstance(desk, str) or not desk.strip():
-            return AgentResult(ok=False, output={"system_issue": True, "reason": "missing desk", "latency_ms": latency_ms})
+            output = {
+                "schema_version": SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
+                "system_issue": True,
+                "reason": "missing_desk",
+                "latency_ms": latency_ms,
+                "evidence": {"payload_keys": list(payload.keys())},
+            }
+            output = normalize_system_engineer_output(output)
+            return AgentResult(ok=False, output=output)
 
         if exposure is None or not isinstance(exposure, (int, float)):
-            return AgentResult(ok=False, output={"system_issue": True, "reason": "bad exposure", "latency_ms": latency_ms})
+            output = {
+                "schema_version": SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
+                "system_issue": True,
+                "reason": "bad_exposure",
+                "latency_ms": latency_ms,
+                "evidence": {"exposure_type": str(type(exposure))},
+            }
+            output = normalize_system_engineer_output(output)
+            return AgentResult(ok=False, output=output)
 
         if latency_ms is not None and latency_ms > self._max_event_latency_ms:
-            return AgentResult(
-                ok=False,
-                output={
-                    "system_issue": True,
-                    "reason": f"event latency too high: {latency_ms}ms",
-                    "latency_ms": latency_ms,
-                },
-            )
+            output = {
+                "schema_version": SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
+                "system_issue": True,
+                "reason": f"event_latency_too_high_ms={latency_ms}",
+                "latency_ms": latency_ms,
+                "evidence": {"max_event_latency_ms": self._max_event_latency_ms},
+            }
+            output = normalize_system_engineer_output(output)
+            return AgentResult(ok=False, output=output)
 
-        return AgentResult(ok=True, output={"system_issue": False, "reason": "ok", "latency_ms": latency_ms})
+        output = {
+            "schema_version": SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
+            "system_issue": False,
+            "reason": "ok",
+            "latency_ms": latency_ms,
+            "evidence": {"event_id": event.get("event_id")},
+        }
+        output = normalize_system_engineer_output(output)
+        ok_out, _ = validate_system_engineer_output(output)
+        return AgentResult(ok=ok_out, output=output)
 
 
-class JuniorAnalystAgent:
+class RiskAnalystAgent:
     def __init__(self) -> None:
         self._agent = BaseAgent(
-            name="junior_analyst",
+            name="risk_analyst",
             system_prompt=(
-                "You are a junior risk analyst.\n"
+                "You are a risk analyst.\n"
                 "Return only valid JSON.\n"
-                "Keys: report, key_facts.\n"
+                "Keys: schema_version, report, key_facts, confidence, evidence.\n"
                 "report must be a short Chinese paragraph using only English punctuation.\n"
                 "key_facts must be an object.\n"
+                "schema_version must be risk_analyst_output.v1.\n"
+                "confidence must be a number between 0 and 1.\n"
+                "evidence must be an object with references to input fields.\n"
             ),
         )
 
-    async def analyze(self, *, event: dict[str, Any]) -> AgentResult:
-        desk = event.get("desk")
-        exposure = event.get("exposure")
+    async def analyze(self, *, event: dict[str, Any], extra_instruction: str | None = None) -> AgentResult:
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        desk = payload.get("desk")
+        exposure = payload.get("exposure")
         fallback = {
+            "schema_version": RISK_ANALYST_OUTPUT_SCHEMA_VERSION,
             "report": f"检测到 desk={desk} 的敞口变化值为 {exposure} 已触发阈值 需要进一步确认来源与影响范围",
             "key_facts": {"desk": desk, "exposure": exposure},
+            "confidence": 0.7,
+            "evidence": {"event_id": event.get("event_id"), "fields": ["payload.desk", "payload.exposure"]},
         }
-        return await self._agent.ask_json(
+        extra = extra_instruction.strip() if isinstance(extra_instruction, str) and extra_instruction.strip() else ""
+        result = await self._agent.ask_json(
             user_prompt=(
                 "Input event:\n"
                 f"{event}\n\n"
-                "Summarize key facts and write a short report."
+                "Summarize key facts and write a short report.\n"
+                f"{extra}"
             ),
             fallback=fallback,
         )
+        out = normalize_risk_analyst_output(result.output if isinstance(result.output, dict) else {})
+        ok_out, _ = validate_risk_analyst_output(out)
+        return AgentResult(ok=ok_out, output=out)
 
 
-class RiskManagerAgent:
+class ManagerAgent:
     def __init__(self) -> None:
         self._agent = BaseAgent(
-            name="risk_manager",
+            name="manager",
             system_prompt=(
-                "You are a senior risk manager.\n"
+                "You are a manager agent.\n"
                 "Return only valid JSON.\n"
-                "Keys: decision, action, rationale.\n"
+                "Keys: schema_version, decision, action, rationale, plan_steps, commands, evidence.\n"
+                "schema_version must be manager_output.v1.\n"
                 "decision must be one of WATCH or CRITICAL.\n"
                 "action and rationale must be Chinese text using only English punctuation.\n"
+                "plan_steps must be a list or null.\n"
+                "commands must be a list or null.\n"
+                "If commands is a list, each item must be an AgentCommand with schema_version=agent_command.v1.\n"
+                "AgentCommand keys: schema_version, run_id, command_id, target_agent, action, params, timeout_ms, expected_output_schema.\n"
+                "evidence must be an object and must cite receipt command_id when available.\n"
             ),
         )
 
     async def decide(self, *, event: dict[str, Any], analyst_report: dict[str, Any]) -> AgentResult:
-        exposure = event.get("exposure")
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        exposure = payload.get("exposure")
         level = "CRITICAL" if isinstance(exposure, (int, float)) and abs(exposure) >= 100000 else "WATCH"
+        run_id = payload.get("_run_id") if isinstance(payload.get("_run_id"), str) else "run_unknown"
         fallback = {
+            "schema_version": MANAGER_OUTPUT_SCHEMA_VERSION,
             "decision": level,
             "action": "建议立刻通知值班人员 并要求 desk 提供敞口变化原因",
             "rationale": "基于当前敞口变化幅度触发预警 需要人工确认是否为真实交易导致",
+            "plan_steps": [
+                {"kind": "agent_instruction", "target_agent": "system_engineer", "action": "collect_metrics"},
+                {"kind": "agent_instruction", "target_agent": "risk_analyst", "action": "search_similar_alerts"},
+                {"kind": "decision", "action": "notify_oncall"},
+            ],
+            "commands": [
+                {
+                    "schema_version": "agent_command.v1",
+                    "run_id": run_id,
+                    "command_id": "cmd_fallback_collect_metrics",
+                    "target_agent": "system_engineer",
+                    "action": "collect_metrics",
+                    "params": {},
+                    "timeout_ms": 3000,
+                    "expected_output_schema": "tool_result.v1",
+                }
+            ],
+            "evidence": {
+                "event_id": event.get("event_id"),
+                "analyst_keys": list(analyst_report.keys()) if isinstance(analyst_report, dict) else [],
+                "receipt_command_ids": ["cmd_fallback_collect_metrics"],
+            },
         }
-        return await self._agent.ask_json(
+        result = await self._agent.ask_json(
             user_prompt=(
                 "Input event:\n"
                 f"{event}\n\n"
                 "Analyst report:\n"
                 f"{analyst_report}\n\n"
-                "Make a decision and propose an action."
+                "Make a decision and propose an action.\n"
+                "If you need more evidence, propose commands for other agents to collect it."
             ),
             fallback=fallback,
         )
-
+        out = normalize_manager_output(result.output if isinstance(result.output, dict) else {})
+        ok_out, _ = validate_manager_output(out)
+        return AgentResult(ok=ok_out, output=out)

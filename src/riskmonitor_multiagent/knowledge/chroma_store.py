@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import math
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import chromadb
 
 from riskmonitor_multiagent import config
+from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 
@@ -64,6 +66,7 @@ class ChromaVectorStore:
         )
 
     def upsert_alert(self, *, alert_id: str, document: str, metadata: dict[str, Any]) -> None:
+        started = time.monotonic()
         col = self._collection()
         embedding = embed_text_dense(document, dims=self._dims)
         col.upsert(
@@ -72,12 +75,15 @@ class ChromaVectorStore:
             metadatas=[metadata],
             embeddings=[embedding],
         )
+        observe_ms("rm_chroma_upsert", (time.monotonic() - started) * 1000.0, labels={"collection": self._collection_name})
+        inc_counter("rm_chroma_upserts_total", labels={"collection": self._collection_name})
 
     def query_alerts(self, *, query_text: str, top_k: int = 5) -> list[SimilarDoc]:
         q = (query_text or "").strip()
         if not q:
             return []
         k = max(1, int(top_k))
+        started = time.monotonic()
         qemb = embed_text_dense(q, dims=self._dims)
         col = self._collection()
         out = col.query(
@@ -98,5 +104,7 @@ class ChromaVectorStore:
             dist = float(dists[i]) if dists[i] is not None else 1.0
             similarity = max(0.0, min(1.0, 1.0 - dist))
             results.append(SimilarDoc(doc_id=doc_id, similarity=similarity, document=doc, metadata=meta))
+        observe_ms("rm_chroma_query", (time.monotonic() - started) * 1000.0, labels={"collection": self._collection_name})
+        inc_counter("rm_chroma_queries_total", labels={"collection": self._collection_name})
+        inc_counter("rm_chroma_hits_total", labels={"collection": self._collection_name}, value=len(results))
         return results
-

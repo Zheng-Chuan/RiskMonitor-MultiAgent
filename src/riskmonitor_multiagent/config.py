@@ -186,6 +186,14 @@ def get_chroma_collection() -> str:
     return (value or "riskmonitor-alerts").strip() or "riskmonitor-alerts"
 
 
+def get_chroma_memory_collection() -> str:
+    value = os.getenv("CHROMA_MEMORY_COLLECTION")
+    if value is None:
+        _try_load_repo_dotenv()
+        value = os.getenv("CHROMA_MEMORY_COLLECTION")
+    return (value or "riskmonitor-memory").strip() or "riskmonitor-memory"
+
+
 def get_chroma_persist_dir() -> str:
     value = os.getenv("CHROMA_PERSIST_DIR")
     if value is None:
