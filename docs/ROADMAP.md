@@ -332,13 +332,25 @@
 ### Week 11: Enterprise Event-Driven & Ops UI (Backlog)
 **目标**: 将模块二升级为主流企业风格的事件驱动架构，并为多智能体提供可视化运维界面。
 
+- **技术亮点(对标业界最佳实践)**
+  - [ ] CloudEvents 风格事件标准化: 统一 envelope 字段并贯穿 traceparent, dataschema, id/source/type
+  - [ ] Schema Registry 与兼容性门禁: schema 注册, 兼容策略(BACKWARD/FULL), CI 兼容性检查与变更记录
+  - [ ] Transactional Outbox/CDC 一致性投递: 业务写库与事件写入同事务, relay/connector 可靠发布到 Kafka
+  - [ ] 分区键与顺序性治理: 以 aggregate_id(如 desk) 作为 key 保序, 明确跨聚合不保证全局顺序
+  - [ ] 幂等与去重: 以 event_id 为幂等键落库去重, 副作用操作(写库/推送)可重复执行且只生效一次
+  - [ ] Retry Topics + DLQ 闭环: 可恢复错误分层重试, 不可恢复错误入 DLQ, 支持回灌与审计
+  - [ ] Observability 三件套: metrics/logs/traces 统一字段(event_id, topic, partition, offset, schema_version, trace_id)
+  - [ ] 回放与演进: 支持按 event_id/时间窗口重放, 多版本解析或 upcaster, 保证历史事件可消费
+
 - **交付**
   - [ ] **Event-Driven Hardening (主流企业方案对齐)**
-    - [ ] 标准化事件 envelope（schema_version, event_id, correlation_id, causation_id, producer, occurred_at）。
-    - [ ] Topic 规划与命名规范（raw/normalized/alerts/agent_runs 等），并记录到 docs/DATA.md。
-    - [ ] 幂等与去重（基于 event_id 或 partition+offset 的持久化去重表），避免重复告警与重复执行。
-    - [ ] 重试与死信（DLQ）策略：可配置重试次数与退避，对不可恢复错误落盘/落库。
-    - [ ] Schema 演进策略：兼容旧版本 consumer，明确 breaking change 流程。
+    - [ ] CloudEvents 风格事件 envelope 与 schema_version 治理（event_id, correlation_id, causation_id, producer, occurred_at, traceparent, dataschema）。
+    - [ ] Topic 规划与命名规范（raw/normalized/alerts/agent_runs/retry/dlq），并记录到 docs/DATA.md 与事件目录。
+    - [ ] Schema Registry 接入与兼容性策略（BACKWARD/FULL），PR/CI 强制校验 schema 兼容性。
+    - [ ] Transactional Outbox 表与 relay/connector: 写库与写 outbox 同事务, 且发布保证至少一次。
+    - [ ] 幂等与去重表（基于 event_id 为主, partition+offset 为兜底），副作用动作必须幂等。
+    - [ ] 分层重试与 DLQ（retry_count, first_seen_at, last_error_code），并提供回灌工具链。
+    - [ ] 回放机制与 upcaster: 支持重放历史事件, 并处理 schema 演进的多版本解析。
   - [ ] **Multi-Agent 可视化界面 (Operations Console)**
     - [ ] 展示事件流与处理状态（最新事件、延迟、成功/失败/被拦截原因）。
     - [ ] 展示每次 Agent run 的完整轨迹（输入、检索命中、输出、质量门禁、HITL 状态）。
@@ -347,6 +359,10 @@
 - **验收**
   - [ ] 事件驱动一致性
     - [ ] 端到端链路全部基于事件驱动执行，核心状态可在事件与数据库中回溯。
+    - [ ] 事件契约可治理: schema 变更必须通过兼容性门禁, 可追溯 owner 与变更记录。
+    - [ ] 投递一致性可证明: outbox 堆积量可观测, 且无“写库成功但无事件”的不一致窗口。
+    - [ ] 去重与幂等可证明: 重放同 event_id 不产生重复告警/重复执行副作用。
+    - [ ] 重试与 DLQ 闭环可用: 可恢复错误自动重试, 不可恢复错误进入 DLQ 并可回灌。
   - [ ] 控制台可用
     - [ ] 本地启动后可看见近 1 小时的事件与 Agent runs，并可执行一次审批与一次重放。
 
