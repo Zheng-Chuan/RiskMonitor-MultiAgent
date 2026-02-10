@@ -10,24 +10,30 @@
 - 这些是必须落地的技术点, 用 checklist 方式确保可衡量 可测试 可验证
 - Week 内容只是实现路径, 但无论如何这些能力最终都要落地
 
-### A. 事件驱动架构 (必须实现)
+### A. 事件驱动架构 (现状冻结 不再深化)
+
+说明
+
+- 事件驱动链路已经完成从数据库变更到 Agent 触发的最小闭环
+- 后续不再把 CDC Kafka Sentinel 作为作品集主线
+- 余下的 Schema Registry 兼容 幂等 DLQ Replay 等工程化增强暂缓 不作为当前阶段验收目标
 
 - [x] CDC 数据动脉: MySQL -> Debezium -> Kafka topic
 - [x] 标准事件 Envelope (企业对齐)
   - [x] schema_version + event_id + correlation_id + causation_id + occurred_at + producer
-  - [ ] Schema Registry 与兼容策略 (breaking change 流程)
+  - [ ] 暂缓 Schema Registry 与兼容策略 (breaking change 流程)
 - [x] 事件分级与性质分类
   - [x] severity (INFO/WARNING/CRITICAL) 与 category (system/business)
   - [x] actionability (是否可执行) 与 confidence (置信度)
   - [x] 每类事件的默认处理策略 (拦截/降级/升级/人工审批)
-- [ ] 幂等与去重
-  - [ ] 基于 event_id 或 partition+offset 的去重表
-  - [ ] 同一事件重放不重复写库/不重复推送
-- [ ] 重试与 DLQ
-  - [ ] 可配置重试次数与退避
-  - [ ] 不可恢复错误进入 DLQ 并可追溯
-- [ ] 可回放 Replay
-  - [ ] 选定 event_id 可重放并产出一致的结构化输出 (允许文本不同)
+- [ ] 暂缓 幂等与去重
+  - [ ] 暂缓 基于 event_id 或 partition+offset 的去重表
+  - [ ] 暂缓 同一事件重放不重复写库/不重复推送
+- [ ] 暂缓 重试与 DLQ
+  - [ ] 暂缓 可配置重试次数与退避
+  - [ ] 暂缓 不可恢复错误进入 DLQ 并可追溯
+- [ ] 暂缓 可回放 Replay
+  - [ ] 暂缓 选定 event_id 可重放并产出一致的结构化输出 (允许文本不同)
 
 ### B. Multi-Agent 协作 (必须实现)
 
@@ -329,7 +335,75 @@
      - [x] LLM 不可用时自动降级仍能产出结构化决策
      - [x] Chroma 不可用时仍可运行但明确标注 memory 不可用
 
-### Week 11: Enterprise Event-Driven & Ops UI (Backlog)
+---
+
+## LLM First 演进计划 (Week 11 - Week 14)
+
+目标 把项目重心从事件驱动切到 LLM 工具与多智能体治理 重点是可控 可测 可审计 可上线
+
+### Week 11: Tool Contract 与权限治理 v1
+
+- 交付
+  - [ ] 工具分层与命名规范
+    - [ ] read only tools 与 write tools 强制分离
+    - [ ] 每个 tool 定义 input_schema output_schema error_schema
+  - [ ] 工具权限与审批
+    - [ ] role-based allowlist
+    - [ ] CRITICAL 写入动作强制 human approval
+  - [ ] 工具输出校验
+    - [ ] 仅允许结构化结果进入生成
+    - [ ] 非法字段与越权参数 fail fast
+- 验收
+  - [ ] 合并请求必须包含对应 contract tests
+  - [ ] 越权调用必须失败并可追踪
+
+### Week 12: Trace Contract 与可回放
+
+- 交付
+  - [ ] 统一 run 记录
+    - [ ] run_id correlation_id causation_id 贯穿全链路
+    - [ ] prompt_version model_id tool_versions 可追溯
+  - [ ] 可回放 artifacts
+    - [ ] 固化输入 snapshot
+    - [ ] 固化 tools results 与 rag hits
+    - [ ] 固化 decisions approvals 与最终输出
+- 验收
+  - [ ] 选定一个 run_id 可离线回放并得到结构一致输出
+
+### Week 13: 质量门禁与评测闭环
+
+- 交付
+  - [ ] 固定回归集
+    - [ ] 输入样本覆盖 system failure 与 business risk 两类
+    - [ ] 输出必须包含 evidence
+  - [ ] 自动化评测
+    - [ ] JSON 可解析率 字段齐全率 类型正确率
+    - [ ] evidence 非空率与引用正确率
+    - [ ] 关键结论一致性与拒答质量
+  - [ ] 阈值门禁
+    - [ ] 退化检测与报告落盘
+- 验收
+  - [ ] 一条命令跑完评测并产出对比报告
+  - [ ] 关键指标退化会阻止合并
+
+### Week 14: 成本控制与模型策略
+
+- 交付
+  - [ ] token 预算与截断策略
+  - [ ] caching
+    - [ ] tool results cache
+    - [ ] rag retrieval cache
+  - [ ] model tiering
+    - [ ] cheap model 做草稿与路由
+    - [ ] strong model 做最终汇总与关键决策
+- 验收
+  - [ ] 在固定回归集上成本下降且质量不显著退化
+
+---
+
+## Appendix: Event-Driven Backlog (Frozen)
+
+### Enterprise Event-Driven & Ops UI (Backlog)
 **目标**: 将模块二升级为主流企业风格的事件驱动架构，并为多智能体提供可视化运维界面。
 
 - **技术亮点(对标业界最佳实践)**
