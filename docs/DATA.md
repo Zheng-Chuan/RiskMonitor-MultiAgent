@@ -5,8 +5,8 @@
 
 说明
 
-- “已落地”部分以当前仓库 `scripts/init_db.sql` 与 tools/data_access 实现为准
-- “增量设计 / Kafka topics / 增量表”属于 Week 6+ 规划内容, 当前尚未在代码与 docker-compose 中实现
+- "已落地"部分以当前仓库 `scripts/init_db.sql` 与 tools/data_access 实现为准
+- "增量设计"用于记录后续演进方向 例如更多 topics DLQ retry audit tables
 
 ## MySQL schema
 
@@ -68,10 +68,10 @@
 建议新增字段
 
 - status: VARCHAR(32) not null
-  - pending_analysis
-  - pending_delivery
-  - delivered
-  - consumed
+ - pending_analysis
+ - pending_delivery
+ - delivered
+ - consumed
 - analysis_json: JSON nullable, 结构化分析结论
 - analysis_text: TEXT nullable, 面向 risk manager 的自然语言总结
 - delivery_id: VARCHAR(64) nullable, webhook 幂等键
@@ -141,14 +141,14 @@
 - op: string, c u d
 - ts_ms: number
 - key:
-  - position_id: string
+ - position_id: string
 - before: object or null
 - after: object or null
 - source:
-  - db: string
-  - table: string
-  - binlog_file: string
-  - binlog_pos: number
+ - db: string
+ - table: string
+ - binlog_file: string
+ - binlog_pos: number
 
 字段映射说明
 
@@ -229,9 +229,10 @@
 
 - run_id: 串联一次完整状态机运行
 - command_id: 串联一次指令与回执
-- target_agent: system_engineer 或 risk_analyst
-- action: 约定动作名, 例如 collect_metrics, query_positions, search_similar_alerts
+- target_agent: system_engineer risk_analyst manager
+- action: 约定动作名 例如 collect_metrics query_positions_by_desk search_similar_alerts write_alert
 - params: 动作参数对象
+  - side_effect action 需要包含 approval 字段 由状态机注入
 - timeout_ms: 超时时间
 - expected_output_schema: 期望的 output 结构标识, 用于质量门禁与兼容治理
 
@@ -290,9 +291,9 @@
 - severity: string, INFO WARNING CRITICAL
 - alert_type: string, desk_delta_breach
 - metric:
-  - name: string, abs_delta
-  - value: number
-  - threshold: number
+ - name: string, abs_delta
+ - value: number
+ - threshold: number
 - as_of: string, ISO8601
 - status: string, open
 - message: string

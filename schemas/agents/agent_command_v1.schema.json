@@ -27,7 +27,7 @@
     },
     "target_agent": {
       "type": "string",
-      "enum": ["system_engineer", "risk_analyst"]
+      "enum": ["system_engineer", "risk_analyst", "manager"]
     },
     "action": {
       "type": "string",
@@ -48,4 +48,3 @@
   },
   "additionalProperties": true
 }
-

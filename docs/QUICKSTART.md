@@ -124,6 +124,9 @@ make run-sentinel
 - Kafka 对宿主机暴露的端口是 29092
 - Sentinel 默认连接 localhost:29092 并订阅 risk.positions.cdc
 - 如果 OpenRouter 模型不可用或返回 404 系统会自动走 fallback 保证链路可跑通 你可以在 .env 里覆盖 OPENROUTER_MODEL
+- 如果你希望启用状态机编排 设置 ENABLE_LANGGRAPH=1
+- 如果你希望本地默认自动审批 设置 HITL_AUTO_APPROVE=1
+- Week11 增加工具治理 side_effect 写库动作必须审批 Manager 才能执行
 
 如果你希望让 Agent 具备知识库检索能力(Week 8)
 
@@ -224,38 +227,6 @@ docker compose --profile tools up -d
 ```bash
 python main.py
 ```
-
-## Web 前端选型 python only
-
-目标
-
-- 只写 python
-- 布局灵活 风格多样 页面要漂亮
-- 需要支持登录与权限认证
-
-选型建议
-
-- 服务端: FastAPI
-- 模板: Jinja2
-- 交互: HTMX
-- 样式: Tailwind CSS CDN 或 Bootstrap CDN
-
-推荐的美观策略
-
-- Tailwind 适合做布局灵活的页面
-- Bootstrap 适合快速做出稳定统一的页面
-- 你可以按页面模块选择不同风格 但保持组件边界清晰
-
-理由
-
-- 无需引入前端构建链 跟 python 项目集成成本低
-- HTMX 可以实现丰富交互 但你不用写 JavaScript
-- Tailwind 可以快速做出不同风格的页面布局
-
-落地位置
-
-- Web 门户会在 ROADMAP 的 Week 7 plus 交付
-- 该 Web 服务也将承接 webhook 接收 与 MCP tools 调用编排
 
 ## 更多文档
 

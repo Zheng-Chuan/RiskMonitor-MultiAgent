@@ -14,7 +14,7 @@ def utc_now_iso() -> str:
 
 def default_snapshot() -> dict[str, Any]:
     # 行情快照演示数据.
-    # 目标: 让第 1 周垂直切片可复现, 且覆盖多 desk、多资产的 security_id.
+    # 目标: 让第 1 周垂直切片可复现, 且覆盖多 desk,多资产的 security_id.
     return {
         "as_of": utc_now_iso(),
         "prices": {
@@ -67,7 +67,7 @@ class Handler(BaseHTTPRequestHandler):
 
         self._write_json(404, {"error": {"code": "NOT_FOUND", "message": "not found"}})
 
-    def log_message(self, format: str, *args: Any) -> None:  
+    def log_message(self, format: str, *args: Any) -> None:
         # 演示场景下减少标准输出噪音.
         return
 

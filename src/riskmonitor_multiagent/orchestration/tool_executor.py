@@ -9,6 +9,7 @@ from riskmonitor_multiagent.contracts.agent_messages import (
     AGENT_RECEIPT_SCHEMA_VERSION,
     validate_agent_command,
 )
+from riskmonitor_multiagent.data_access import alerts_repository
 from riskmonitor_multiagent.data_access import positions_repository
 from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
@@ -18,6 +19,7 @@ from riskmonitor_multiagent.orchestration.observation_tools import (
     observe_mysql_health,
     observe_service_metrics,
 )
+from riskmonitor_multiagent.orchestration.tool_registry import ToolMeta, get_tool_meta
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,7 @@ class ToolResult:
 
 _ENGINEER_ALLOWLIST: dict[str, Callable[[dict[str, Any]], ToolResult]] = {}
 _ANALYST_ALLOWLIST: dict[str, Callable[[dict[str, Any]], ToolResult]] = {}
+_MANAGER_ALLOWLIST: dict[str, Callable[[dict[str, Any]], ToolResult]] = {}
 
 
 def _wrap(action: str, fn: Callable[[dict[str, Any]], dict[str, Any]]) -> Callable[[dict[str, Any]], ToolResult]:
@@ -114,6 +117,17 @@ def _search_similar_alerts(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _write_alert(params: dict[str, Any]) -> dict[str, Any]:
+    alert = params.get("alert")
+    if not isinstance(alert, dict):
+        raise ValueError("alert required")
+    alert_id = alert.get("alert_id")
+    if not isinstance(alert_id, str) or not alert_id.strip():
+        raise ValueError("alert_id required")
+    alerts_repository.save_alert(alert)
+    return {"saved": True, "alert_id": alert_id}
+
+
 _ENGINEER_ALLOWLIST.update(
     {
         "collect_metrics": _wrap("collect_metrics", _collect_metrics),
@@ -129,6 +143,31 @@ _ANALYST_ALLOWLIST.update(
         "query_positions_by_desk": _wrap("query_positions_by_desk", _query_positions_by_desk),
     }
 )
+
+_MANAGER_ALLOWLIST.update(
+    {
+        "write_alert": _wrap("write_alert", _write_alert),
+    }
+)
+
+
+def _rbac_policy_version() -> str:
+    return "rbac_policy.v1"
+
+
+def _is_approved(params: dict[str, Any]) -> bool:
+    approval = params.get("approval")
+    if not isinstance(approval, dict):
+        return False
+    return approval.get("approved") is True
+
+
+def _is_allowed_by_role(*, meta: ToolMeta, target_agent: str) -> bool:
+    if target_agent in ("system_engineer", "risk_analyst"):
+        return meta.capability == "read_only"
+    if target_agent == "manager":
+        return meta.capability in ("read_only", "side_effect")
+    return False
 
 
 def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
@@ -154,7 +193,73 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
     target = cmd.get("target_agent")
     timeout_ms = cmd.get("timeout_ms")
 
-    allowlist = _ENGINEER_ALLOWLIST if target == "system_engineer" else _ANALYST_ALLOWLIST
+    meta = get_tool_meta(str(action))
+    if meta is None:
+        inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+        return {
+            "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
+            "run_id": cmd["run_id"],
+            "command_id": cmd["command_id"],
+            "target_agent": target,
+            "ok": False,
+            "latency_ms": 0.0,
+            "evidence": {"action": action, "timeout_ms": timeout_ms, "reason": "unknown_action", "policy_version": _rbac_policy_version()},
+            "artifacts": [],
+            "error": "unknown_action",
+            "output": None,
+        }
+
+    if not _is_allowed_by_role(meta=meta, target_agent=str(target)):
+        inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+        return {
+            "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
+            "run_id": cmd["run_id"],
+            "command_id": cmd["command_id"],
+            "target_agent": target,
+            "ok": False,
+            "latency_ms": 0.0,
+            "evidence": {
+                "action": action,
+                "timeout_ms": timeout_ms,
+                "reason": "rbac_denied",
+                "capability": meta.capability,
+                "policy_version": _rbac_policy_version(),
+            },
+            "artifacts": [],
+            "error": "rbac_denied",
+            "output": None,
+        }
+
+    if meta.capability == "side_effect" and not _is_approved(params):
+        inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+        return {
+            "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
+            "run_id": cmd["run_id"],
+            "command_id": cmd["command_id"],
+            "target_agent": target,
+            "ok": False,
+            "latency_ms": 0.0,
+            "evidence": {
+                "action": action,
+                "timeout_ms": timeout_ms,
+                "reason": "approval_required",
+                "capability": meta.capability,
+                "policy_version": _rbac_policy_version(),
+            },
+            "artifacts": [],
+            "error": "approval_required",
+            "output": None,
+        }
+
+    allowlist = (
+        _ENGINEER_ALLOWLIST
+        if target == "system_engineer"
+        else _ANALYST_ALLOWLIST
+        if target == "risk_analyst"
+        else _MANAGER_ALLOWLIST
+        if target == "manager"
+        else {}
+    )
     handler = allowlist.get(action)
     if handler is None:
         inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
@@ -165,9 +270,15 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
             "target_agent": target,
             "ok": False,
             "latency_ms": 0.0,
-            "evidence": {"action": action, "timeout_ms": timeout_ms},
+            "evidence": {
+                "action": action,
+                "timeout_ms": timeout_ms,
+                "reason": "handler_missing",
+                "capability": meta.capability,
+                "policy_version": _rbac_policy_version(),
+            },
             "artifacts": [],
-            "error": "action_not_allowed",
+            "error": "handler_missing",
             "output": None,
         }
 

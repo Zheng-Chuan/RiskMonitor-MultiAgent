@@ -40,7 +40,7 @@ def validate_desk_name(desk: str) -> str:
     if len(desk) > 100:
         raise ValidationError("desk", "desk name too long (max 100 characters)")
 
-    # 只允许字母、数字、空格、连字符和下划线
+    # 只允许字母,数字,空格,连字符和下划线
     if not re.match(r'^[a-zA-Z0-9\s\-_]+$', desk):
         raise ValidationError(
             "desk",
@@ -70,7 +70,7 @@ def validate_trader_id(trader_id: str) -> str:
     if len(trader_id) > 50:
         raise ValidationError("trader_id", "trader_id too long (max 50 characters)")
 
-    # 只允许字母、数字、连字符和下划线
+    # 只允许字母,数字,连字符和下划线
     if not re.match(r'^[a-zA-Z0-9\-_]+$', trader_id):
         raise ValidationError(
             "trader_id",

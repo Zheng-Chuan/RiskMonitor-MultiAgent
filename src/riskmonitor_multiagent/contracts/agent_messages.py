@@ -16,7 +16,7 @@ def validate_agent_command(cmd: dict[str, Any]) -> tuple[bool, list[str]]:
         errors.append("bad_run_id")
     if not isinstance(cmd.get("command_id"), str) or not cmd["command_id"].strip():
         errors.append("bad_command_id")
-    if cmd.get("target_agent") not in {"system_engineer", "risk_analyst"}:
+    if cmd.get("target_agent") not in {"system_engineer", "risk_analyst", "manager"}:
         errors.append("bad_target_agent")
     if not isinstance(cmd.get("action"), str) or not cmd["action"].strip():
         errors.append("bad_action")
@@ -44,7 +44,7 @@ def validate_agent_receipt(rcp: dict[str, Any]) -> tuple[bool, list[str]]:
         errors.append("bad_command_id")
     if not isinstance(rcp.get("ok"), bool):
         errors.append("bad_ok")
-    if rcp.get("target_agent") not in {"system_engineer", "risk_analyst"}:
+    if rcp.get("target_agent") not in {"system_engineer", "risk_analyst", "manager"}:
         errors.append("bad_target_agent")
     if not isinstance(rcp.get("latency_ms"), (int, float)):
         errors.append("bad_latency_ms")
@@ -61,4 +61,3 @@ def validate_agent_receipt(rcp: dict[str, Any]) -> tuple[bool, list[str]]:
     if output is not None and not isinstance(output, dict):
         errors.append("bad_output")
     return len(errors) == 0, errors
-

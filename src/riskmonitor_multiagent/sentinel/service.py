@@ -1,7 +1,7 @@
-"""Sentinel Service.
+"""Sentinel Service
 
-负责监听 Kafka 事件流, 进行实时简单的阈值检测, 并触发后续告警流程.
-目前作为 "Level 2: The Reflexes" 的轻量级实现.
+负责监听 Kafka 事件流 做实时阈值检测 并触发后续告警流程
+目前作为 Level 2 The Reflexes 的轻量级实现
 """
 
 import asyncio
@@ -17,34 +17,33 @@ from aiokafka.structs import TopicPartition
 from riskmonitor_multiagent import config
 from riskmonitor_multiagent.agents import run_agent_pipeline
 from riskmonitor_multiagent.contracts.risk_event import build_breach_event, normalize_cdc_event
-from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
+from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms, set_gauge
 from riskmonitor_multiagent.orchestration import run_state_machine
 
 logger = logging.getLogger(__name__)
 
-# 临时硬编码的阈值, 后续应该从 config 或 Resource 获取
+# 临时硬编码阈值 后续应从 config 或 resource 获取
 MAX_EXPOSURE_THRESHOLD = 50000.0
 
 
 class SentinelService:
-    """Sentinel 哨兵服务."""
+    """Sentinel 哨兵服务"""
 
     def __init__(self):
         self._running = False
-        self._consumer = None
-        self._last_end_offsets_ms: dict[tuple[str, int], int] = {}
+        self._consumer: AIOKafkaConsumer | None = None
         self._last_lag_update_ms: int = 0
         self._cached_end_offsets: dict[tuple[str, int], int] = {}
 
     async def start(self):
-        """启动服务."""
+        """启动服务"""
         self._running = True
         bootstrap_servers = config.get_kafka_bootstrap_servers()
         topic = config.get_kafka_topic_cdc_positions()
 
         logger.info(f"Starting Sentinel Service, connecting to {bootstrap_servers}, topic={topic}")
 
-        # 重试连接逻辑
+        # 重试连接
         while self._running:
             try:
                 self._consumer = AIOKafkaConsumer(
@@ -74,7 +73,7 @@ class SentinelService:
             await self.stop()
 
     async def stop(self):
-        """停止服务."""
+        """停止服务"""
         logger.info("Stopping Sentinel Service...")
         self._running = False
         if self._consumer:
@@ -82,7 +81,7 @@ class SentinelService:
         logger.info("Sentinel Service stopped.")
 
     async def _process_message(self, msg):
-        """处理单条消息."""
+        """处理单条消息"""
         started = time.monotonic()
         try:
             value = msg.value
@@ -119,9 +118,7 @@ class SentinelService:
             await self._update_consumer_lag_metrics(topic=str(topic), partition=int(partition), offset=int(offset))
 
             desk = record.get("desk")
-            # 注意: Debezium 传过来的可能是 string 或 number, 视 schema 而定, 这里强转 float
-            # 兼容 MySQL Decimal 类型传过来可能是 string
-            # 在我们的表中, delta 对应敞口, exposure 可能是旧字段或别名
+            # Debezium payload value 可能是 string 或 number 这里统一转 float 并兼容 connect decimal
             exposure_val = record.get("delta") or record.get("exposure", 0.0)
             if exposure_val is None:
                 exposure = 0.0
@@ -141,7 +138,7 @@ class SentinelService:
                 message_ts_ms=message_ts_ms,
             )
 
-            # 简单的阈值检测 (Breach Detection)
+            # 简单阈值检测 Breach Detection
             if abs(exposure) > MAX_EXPOSURE_THRESHOLD:
                 inc_counter("rm_sentinel_breaches_total")
                 breach_event = build_breach_event(
@@ -160,7 +157,7 @@ class SentinelService:
             observe_ms("rm_sentinel_process_message", (time.monotonic() - started) * 1000.0)
 
     async def _trigger_alert(self, *, event: dict):
-        """触发告警."""
+        """触发告警"""
         started = time.monotonic()
         desk = event.get("payload", {}).get("desk") if isinstance(event.get("payload"), dict) else None
         exposure = event.get("payload", {}).get("exposure") if isinstance(event.get("payload"), dict) else None
@@ -195,8 +192,6 @@ class SentinelService:
             end = self._cached_end_offsets.get((topic, partition))
             if isinstance(end, int):
                 lag = max(0, int(end) - int(offset) - 1)
-                from riskmonitor_multiagent.observability.metrics import set_gauge
-
                 set_gauge("rm_kafka_consumer_lag", float(lag), labels={"topic": topic, "partition": str(partition)})
             return
 
@@ -208,8 +203,6 @@ class SentinelService:
             if isinstance(end, int):
                 self._cached_end_offsets[(topic, partition)] = int(end)
                 lag = max(0, int(end) - int(offset) - 1)
-                from riskmonitor_multiagent.observability.metrics import set_gauge
-
                 set_gauge("rm_kafka_consumer_lag", float(lag), labels={"topic": topic, "partition": str(partition)})
         except Exception:
             inc_counter("rm_sentinel_kafka_lag_errors_total")
@@ -228,7 +221,7 @@ class SentinelService:
 
 
 async def run_sentinel():
-    """入口函数."""
+    """入口函数"""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -241,7 +234,7 @@ async def run_sentinel():
     def handle_signal():
         stop_event.set()
 
-    # 注册信号处理 (兼容 Windows 非交互式环境需注意, 但这里是 macos)
+    # 注册信号处理
     try:
         loop.add_signal_handler(signal.SIGINT, handle_signal)
         loop.add_signal_handler(signal.SIGTERM, handle_signal)

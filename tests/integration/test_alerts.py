@@ -2,7 +2,7 @@
 告警闭环端到端测试
 
 Week4: 可观测与告警闭环
-测试告警规则评估、持久化和查询功能
+测试告警规则评估,持久化和查询功能
 """
 
 
@@ -31,7 +31,7 @@ async def test_alert_rules_evaluation():
         threshold=1000000.0,
         request_id="test-request-001"
     )
-    
+
     assert len(alerts) == 1
     alert = alerts[0]
     assert alert["alert_type"] == "DESK_DELTA_BREACH"
@@ -40,7 +40,7 @@ async def test_alert_rules_evaluation():
     assert alert["threshold_value"] == 1000000.0
     assert alert["breach_amount"] == 500000.0
     assert alert["severity"] in ["INFO", "WARNING", "CRITICAL"]
-    
+
     # 测试未超限场景
     alerts_no_breach = alert_rules_service.evaluate_desk_delta_breach(
         desk="Fixed Income",
@@ -48,7 +48,7 @@ async def test_alert_rules_evaluation():
         threshold=1000000.0,
         request_id="test-request-002"
     )
-    
+
     assert len(alerts_no_breach) == 0
 
 
@@ -65,7 +65,7 @@ async def test_alert_severity_determination():
         request_id="test-critical"
     )
     assert alerts_critical[0]["severity"] == "CRITICAL"
-    
+
     # 严重级别 WARNING: 超限 20%-50%
     alerts_warning = alert_rules_service.evaluate_desk_delta_breach(
         desk="Test Desk",
@@ -74,7 +74,7 @@ async def test_alert_severity_determination():
         request_id="test-warning"
     )
     assert alerts_warning[0]["severity"] == "WARNING"
-    
+
     # 严重级别 INFO: 超限 20% 以下
     alerts_info = alert_rules_service.evaluate_desk_delta_breach(
         desk="Test Desk",
@@ -99,23 +99,23 @@ async def test_alert_persistence_and_retrieval():
         threshold=1000000.0,
         request_id=test_request_id
     )
-    
+
     assert len(alerts) == 1
-    
+
     # 保存到数据库
     alerts_repository.save_alerts_batch(alerts)
-    
+
     # 根据请求 request_id 查询
     retrieved_alerts = alerts_repository.get_alerts_by_request_id(test_request_id)
     assert len(retrieved_alerts) >= 1
-    
+
     retrieved_alert = retrieved_alerts[0]
     assert retrieved_alert["request_id"] == test_request_id
     assert retrieved_alert["desk"] == "Test Persistence Desk"
     assert retrieved_alert["alert_type"] == "DESK_DELTA_BREACH"
     assert float(retrieved_alert["metric_value"]) == 1200000.0
     assert float(retrieved_alert["threshold_value"]) == 1000000.0
-    
+
     # 根据告警 alert_id 查询
     alert_id = retrieved_alert["alert_id"]
     single_alert = alerts_repository.get_alert_by_id(alert_id)
@@ -131,13 +131,13 @@ async def test_get_recent_alerts():
     # 查询所有最近告警
     recent_alerts = alerts_repository.get_recent_alerts(limit=10)
     assert isinstance(recent_alerts, list)
-    
+
     # 按严重级别 severity 过滤
     critical_alerts = alerts_repository.get_recent_alerts(limit=10, severity="CRITICAL")
     assert isinstance(critical_alerts, list)
     for alert in critical_alerts:
         assert alert["severity"] == "CRITICAL"
-    
+
     # 按交易台 desk 过滤
     desk_alerts = alerts_repository.get_recent_alerts(limit=10, desk="Equity Derivatives")
     assert isinstance(desk_alerts, list)
@@ -156,12 +156,12 @@ async def test_alert_format_for_response():
         threshold=1000000.0,
         request_id="test-format"
     )
-    
+
     formatted = alert_rules_service.format_alerts_for_response(alerts)
-    
+
     assert len(formatted) == 1
     formatted_alert = formatted[0]
-    
+
     # 验证格式化后的字段
     assert "alert_id" in formatted_alert
     assert "alert_type" in formatted_alert
@@ -172,7 +172,7 @@ async def test_alert_format_for_response():
     assert "threshold_value" in formatted_alert
     assert "breach_amount" in formatted_alert
     assert "message" in formatted_alert
-    
+
     # 验证不包含内部字段
     assert "acknowledged" not in formatted_alert
     assert "acknowledged_at" not in formatted_alert

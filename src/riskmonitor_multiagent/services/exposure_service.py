@@ -33,7 +33,7 @@ def compute_exposure(
         - total_pv_usd: 组合总 PV(USD)
         - by_currency_map: 按币种聚合的 Delta 和 PV
     """
-    # 聚合计算总 Delta、总 PV, 并按币种汇总
+    # 聚合计算总 Delta,总 PV, 并按币种汇总
     total_delta = 0.0
     total_pv_usd = 0.0
     by_currency: dict[str, dict[str, float]] = {}

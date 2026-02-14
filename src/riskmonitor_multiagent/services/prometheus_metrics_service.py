@@ -13,7 +13,7 @@ from riskmonitor_multiagent.observability.metrics import reset_observability_met
 
 
 class MetricsStore:  # pylint: disable=too-few-public-methods
-    """内部指标存储类，用于避免使用 global 语句."""
+    """内部指标存储类,用于避免使用 global 语句."""
 
     def __init__(self) -> None:
         self.request_count: Dict[str, int] = {}
@@ -38,7 +38,7 @@ _store = MetricsStore()
 def record_request(tool_name: str, latency_ms: float, is_error: bool = False) -> None:
     """
     记录请求指标
-    
+
     参数:
         tool_name: 工具名称
         latency_ms: 延迟(毫秒)
@@ -63,7 +63,7 @@ def record_request(tool_name: str, latency_ms: float, is_error: bool = False) ->
 def generate_prometheus_metrics() -> str:
     """
     生成 Prometheus 格式的指标
-    
+
     返回:
         Prometheus 文本格式的指标
     """
@@ -123,7 +123,7 @@ def generate_prometheus_metrics() -> str:
 def get_metrics_summary() -> Dict[str, Any]:
     """
     获取指标摘要(用于内部监控)
-    
+
     返回:
         指标摘要字典
     """

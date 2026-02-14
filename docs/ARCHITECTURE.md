@@ -71,6 +71,24 @@ Manager Agent
 状态机编排入口在 [state_machine.py](../src/riskmonitor_multiagent/orchestration/state_machine.py)  
 状态机说明文档在 [STATE_MACHINE.md](STATE_MACHINE.md)  
 
+### Tool governance Week11
+
+本项目把 Agent 的工具调用当作受控执行  
+核心目标是可控 可审计 可测试  
+
+- Tool registry 统一维护 action 元数据与 capability 标签  
+  - read_only side_effect pii admin  
+  - 入口在 [tool_registry.py](../src/riskmonitor_multiagent/orchestration/tool_registry.py)  
+- RBAC 强制执行在执行层  
+  - system_engineer risk_analyst 只能执行 read_only  
+  - manager 可以执行 side_effect 但必须审批  
+  - 执行器入口在 [tool_executor.py](../src/riskmonitor_multiagent/orchestration/tool_executor.py)  
+- 审批门禁在状态机与执行层双保险  
+  - 状态机 HumanApproval 节点会对 side_effect commands 强制要求审批  
+  - Execute 节点会把 approval 注入到 command params 供执行层校验  
+- side effect 写库动作示例  
+  - action write_alert 会调用 alerts_repository 写入 alerts 表  
+
 ### Knowledge Base
 
 知识库使用向量数据库 Chroma  
@@ -137,6 +155,7 @@ sequenceDiagram
 - Sentinel 消费并优先触发状态机编排  
 - Context Store 写入 run 轨迹 支持 replay  
 - 状态机失败时自动 fallback 到线性流水线  
+- Tool governance 基础版 capability RBAC approval gate  
 
 下一步建议  
 - Manager 输出必须引用 receipts evidence 并做契约门禁  

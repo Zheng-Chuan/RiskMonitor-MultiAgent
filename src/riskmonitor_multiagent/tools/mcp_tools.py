@@ -496,7 +496,7 @@ async def monitor_desk_exposure(  # pylint: disable=too-many-locals, too-many-ar
         ctx: MCP 上下文 (用于进度报告)
 
     返回:
-        包含风险指标、违规记录和告警信息的字典
+        包含风险指标,违规记录和告警信息的字典
     """
     request_id = new_request_id()
     start = time.monotonic()
@@ -687,7 +687,7 @@ def submit_alerts(
 async def get_service_metrics() -> dict:
     """
     获取服务运行指标摘要.
-    包括 API 延迟统计、请求计数等.
+    包括 API 延迟统计,请求计数等.
 
     返回:
         指标摘要字典

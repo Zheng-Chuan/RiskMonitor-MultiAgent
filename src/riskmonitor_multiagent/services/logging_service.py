@@ -46,7 +46,7 @@ _state: dict[str, bool] = {"is_configured": False}
 def configure_logging() -> None:
     """
     配置全局日志系统.
-    设置日志级别、格式和过滤器.
+    设置日志级别,格式和过滤器.
     """
     if _state["is_configured"]:
         return

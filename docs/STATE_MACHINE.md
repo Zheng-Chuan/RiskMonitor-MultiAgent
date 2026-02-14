@@ -76,10 +76,13 @@ flowchart TD
 
 ### HumanApproval
 - 当 severity=CRITICAL 且 actionability=true 且 manager decision=CRITICAL 时触发审批
+- 当 Manager commands 包含 side_effect action 时也会触发审批
 - 当前支持自动审批开关 便于本地回归
 
 ### Execute
 - 执行 Manager 产出的 commands 并把新增 receipts 追加到 Context Store
+- Execute 会把 approval 注入到 command params 供执行层做校验
+- 执行层会基于 Tool registry capability 做 RBAC 与审批门禁
 - 产出 final_output 并持久化 用于 replay
 
 ## Context Store 黑板模型

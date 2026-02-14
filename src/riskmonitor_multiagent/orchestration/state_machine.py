@@ -17,6 +17,7 @@ from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms, set_gauge
 from riskmonitor_multiagent.orchestration.context_store import FileContextStore, new_run_id
 from riskmonitor_multiagent.orchestration.tool_executor import execute_agent_command, new_agent_command
+from riskmonitor_multiagent.orchestration.tool_registry import is_side_effect_action
 
 try:
     from langgraph.graph import END, START, StateGraph
@@ -388,9 +389,22 @@ def _node_human_approval(state: _State) -> dict[str, Any]:
     decision = (state.get("manager") or {}).get("decision")
     require_action = bool(severity == "CRITICAL" and actionability is True and decision == "CRITICAL")
     require_observation = bool(state.get("observation_failed") is True)
-    require = bool(require_action or require_observation)
+    commands = state.get("commands") or []
+    require_side_effect = any(
+        isinstance(c, dict) and is_side_effect_action(str(c.get("action") or "")) for c in commands
+    )
+    require = bool(require_action or require_observation or require_side_effect)
     approved = True if not require else _is_auto_approved()
-    approval = {"required": require, "approved": approved, "reason": "observation_failed" if require_observation else "critical_action" if require_action else None}
+    reason = (
+        "side_effect_required"
+        if require_side_effect
+        else "observation_failed"
+        if require_observation
+        else "critical_action"
+        if require_action
+        else None
+    )
+    approval = {"required": require, "approved": approved, "reason": reason}
 
     store = _ctx_store()
     store.upsert(
@@ -418,10 +432,17 @@ def _node_execute(state: _State) -> dict[str, Any]:
     event_id = str(event.get("event_id") or "unknown")
     commands = state.get("commands") or []
     receipts: list[dict[str, Any]] = list(state.get("receipts") or [])
+    approval = state.get("approval") if isinstance(state.get("approval"), dict) else {}
 
     for cmd in commands:
         if not isinstance(cmd, dict):
             continue
+        params = cmd.get("params") if isinstance(cmd.get("params"), dict) else {}
+        if "approval" not in params:
+            params = dict(params)
+            params["approval"] = approval
+            cmd = dict(cmd)
+            cmd["params"] = params
         receipt = execute_agent_command(cmd)
         receipts.append(receipt)
 
