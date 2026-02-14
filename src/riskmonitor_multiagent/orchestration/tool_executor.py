@@ -12,14 +12,14 @@ from riskmonitor_multiagent.contracts.agent_messages import (
 from riskmonitor_multiagent.data_access import alerts_repository
 from riskmonitor_multiagent.data_access import positions_repository
 from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore
-from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
+from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms, set_gauge
 from riskmonitor_multiagent.orchestration.observation_tools import (
     observe_chroma_health,
     observe_kafka_lag_estimate,
     observe_mysql_health,
     observe_service_metrics,
 )
-from riskmonitor_multiagent.orchestration.tool_registry import ToolMeta, get_tool_meta
+from riskmonitor_multiagent.orchestration.tool_registry import SideEffectPolicy, ToolMeta, get_tool_meta
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,25 @@ class ToolResult:
 _ENGINEER_ALLOWLIST: dict[str, Callable[[dict[str, Any]], ToolResult]] = {}
 _ANALYST_ALLOWLIST: dict[str, Callable[[dict[str, Any]], ToolResult]] = {}
 _MANAGER_ALLOWLIST: dict[str, Callable[[dict[str, Any]], ToolResult]] = {}
+
+RBAC_POLICY_VERSION = "rbac_policy.v1"
+
+_SEVERITY_RANK = {"INFO": 1, "WARNING": 2, "CRITICAL": 3}
+
+
+def _severity_at_least(actual: Any, minimum: Any) -> bool:
+    if not isinstance(actual, str) or not isinstance(minimum, str):
+        return False
+    a = _SEVERITY_RANK.get(actual.strip().upper())
+    m = _SEVERITY_RANK.get(minimum.strip().upper())
+    if a is None or m is None:
+        return False
+    return int(a) >= int(m)
+
+
+def _get_side_effect_policy(meta: ToolMeta) -> SideEffectPolicy:
+    pol = meta.side_effect_policy
+    return pol if isinstance(pol, SideEffectPolicy) else SideEffectPolicy()
 
 
 def _wrap(action: str, fn: Callable[[dict[str, Any]], dict[str, Any]]) -> Callable[[dict[str, Any]], ToolResult]:
@@ -79,7 +98,11 @@ def _chroma_health(_: dict[str, Any]) -> dict[str, Any]:
 
 def _kafka_lag(params: dict[str, Any]) -> dict[str, Any]:
     ts = params.get("message_ts_ms")
-    return observe_kafka_lag_estimate(message_ts_ms=int(ts) if isinstance(ts, (int, str)) and str(ts).isdigit() else None)
+    out = observe_kafka_lag_estimate(message_ts_ms=int(ts) if isinstance(ts, (int, str)) and str(ts).isdigit() else None)
+    lag_ms = out.get("lag_ms")
+    if isinstance(lag_ms, int):
+        set_gauge("rm_kafka_message_lag_ms", float(lag_ms))
+    return out
 
 
 def _query_positions_by_desk(params: dict[str, Any]) -> dict[str, Any]:
@@ -151,10 +174,6 @@ _MANAGER_ALLOWLIST.update(
 )
 
 
-def _rbac_policy_version() -> str:
-    return "rbac_policy.v1"
-
-
 def _is_approved(params: dict[str, Any]) -> bool:
     approval = params.get("approval")
     if not isinstance(approval, dict):
@@ -203,7 +222,7 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
             "target_agent": target,
             "ok": False,
             "latency_ms": 0.0,
-            "evidence": {"action": action, "timeout_ms": timeout_ms, "reason": "unknown_action", "policy_version": _rbac_policy_version()},
+            "evidence": {"action": action, "timeout_ms": timeout_ms, "reason": "unknown_action", "policy_version": RBAC_POLICY_VERSION},
             "artifacts": [],
             "error": "unknown_action",
             "output": None,
@@ -211,6 +230,7 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
 
     if not _is_allowed_by_role(meta=meta, target_agent=str(target)):
         inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+        inc_counter("rm_rbac_denied_total", labels={"target_agent": str(target), "action": str(action), "capability": meta.capability})
         return {
             "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
             "run_id": cmd["run_id"],
@@ -223,15 +243,67 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
                 "timeout_ms": timeout_ms,
                 "reason": "rbac_denied",
                 "capability": meta.capability,
-                "policy_version": _rbac_policy_version(),
+                "policy_version": RBAC_POLICY_VERSION,
             },
             "artifacts": [],
             "error": "rbac_denied",
             "output": None,
         }
 
-    if meta.capability == "side_effect" and not _is_approved(params):
+    if meta.capability == "side_effect":
+        pol = _get_side_effect_policy(meta)
+        ev = params.get("_event") if isinstance(params.get("_event"), dict) else {}
+        severity = ev.get("severity") if isinstance(ev, dict) else None
+        if pol.min_severity is not None and isinstance(severity, str) and not _severity_at_least(severity, pol.min_severity):
+            inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+            return {
+                "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
+                "run_id": cmd["run_id"],
+                "command_id": cmd["command_id"],
+                "target_agent": target,
+                "ok": False,
+                "latency_ms": 0.0,
+                "evidence": {
+                    "action": action,
+                    "timeout_ms": timeout_ms,
+                    "reason": "min_severity_not_met",
+                    "capability": meta.capability,
+                    "min_severity": pol.min_severity,
+                    "severity": severity,
+                    "policy_version": RBAC_POLICY_VERSION,
+                },
+                "artifacts": [],
+                "error": "policy_denied",
+                "output": None,
+            }
+        if pol.require_reason and _is_approved(params):
+            approval = params.get("approval") if isinstance(params.get("approval"), dict) else {}
+            note = approval.get("note") if isinstance(approval, dict) else None
+            if not isinstance(note, str) or not note.strip():
+                inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+                inc_counter("rm_approval_required_total", labels={"target_agent": str(target), "action": str(action)})
+                return {
+                    "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
+                    "run_id": cmd["run_id"],
+                    "command_id": cmd["command_id"],
+                    "target_agent": target,
+                    "ok": False,
+                    "latency_ms": 0.0,
+                    "evidence": {
+                        "action": action,
+                        "timeout_ms": timeout_ms,
+                        "reason": "approval_reason_required",
+                        "capability": meta.capability,
+                        "policy_version": RBAC_POLICY_VERSION,
+                    },
+                    "artifacts": [],
+                    "error": "approval_reason_required",
+                    "output": None,
+                }
+
+    if meta.capability == "side_effect" and _get_side_effect_policy(meta).require_approval and not _is_approved(params):
         inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+        inc_counter("rm_approval_required_total", labels={"target_agent": str(target), "action": str(action)})
         return {
             "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
             "run_id": cmd["run_id"],
@@ -244,7 +316,7 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
                 "timeout_ms": timeout_ms,
                 "reason": "approval_required",
                 "capability": meta.capability,
-                "policy_version": _rbac_policy_version(),
+                "policy_version": RBAC_POLICY_VERSION,
             },
             "artifacts": [],
             "error": "approval_required",
@@ -275,7 +347,7 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
                 "timeout_ms": timeout_ms,
                 "reason": "handler_missing",
                 "capability": meta.capability,
-                "policy_version": _rbac_policy_version(),
+                "policy_version": RBAC_POLICY_VERSION,
             },
             "artifacts": [],
             "error": "handler_missing",
@@ -283,6 +355,11 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
         }
 
     result = handler(params)
+    if meta.capability == "side_effect":
+        inc_counter(
+            "rm_side_effect_executed_total",
+            labels={"target_agent": str(target), "action": str(action), "ok": str(bool(result.ok)).lower()},
+        )
     observe_ms("rm_agent_command", (time.monotonic() - started) * 1000.0, labels={"target_agent": str(target), "action": str(action)})
     inc_counter("rm_agent_command_total", labels={"target_agent": str(target), "action": str(action), "ok": str(bool(result.ok)).lower()})
     return {

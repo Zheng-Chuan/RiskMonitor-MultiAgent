@@ -88,6 +88,9 @@ Manager Agent
   - Execute 节点会把 approval 注入到 command params 供执行层校验  
 - side effect 写库动作示例  
   - action write_alert 会调用 alerts_repository 写入 alerts 表  
+- 审计记录  
+  - 每次 side_effect command 会生成 audit_records 并写入 Context Store 与 final_output  
+  - 字段包含 event_id correlation_id run_id command_id action target_agent actor approved approved_by approval_reason ok error ts_ms  
 
 ### Knowledge Base
 

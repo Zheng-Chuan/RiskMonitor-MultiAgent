@@ -287,3 +287,84 @@ async def test_state_machine_requires_human_approval_for_side_effect_commands(tm
     assert approval.get("required") is True
     assert approval.get("approved") is False
     assert approval.get("reason") == "side_effect_required"
+
+
+@pytest.mark.asyncio
+async def test_state_machine_records_audit_for_side_effect_commands(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONTEXT_STORE_DIR", str(tmp_path))
+    monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
+    monkeypatch.setenv("HITL_AUTO_APPROVE", "1")
+    monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
+
+    import riskmonitor_multiagent.orchestration.state_machine as sm
+
+    def _ok_receipt(cmd):
+        return {
+            "schema_version": "agent_receipt.v1",
+            "run_id": cmd.get("run_id"),
+            "command_id": cmd.get("command_id"),
+            "target_agent": cmd.get("target_agent"),
+            "ok": True,
+            "latency_ms": 1.0,
+            "evidence": {"action": cmd.get("action")},
+            "artifacts": [],
+            "error": None,
+            "output": {"action": cmd.get("action"), "result": {"ok": True}},
+        }
+
+    monkeypatch.setattr(sm, "execute_agent_command", _ok_receipt, raising=True)
+
+    async def _manager_decide(self, *, event, analyst_report):
+        return AgentResult(
+            ok=True,
+            output={
+                "schema_version": MANAGER_OUTPUT_SCHEMA_VERSION,
+                "decision": "WATCH",
+                "action": "write",
+                "rationale": "why",
+                "plan_steps": None,
+                "commands": [
+                    {
+                        "schema_version": "agent_command.v1",
+                        "run_id": "run-1",
+                        "command_id": "cmd_side_effect_write_alert",
+                        "target_agent": "manager",
+                        "action": "write_alert",
+                        "params": {"alert": {"alert_id": "a-side-effect"}},
+                        "timeout_ms": 1000,
+                        "expected_output_schema": "tool_result.v1",
+                    }
+                ],
+                "evidence": {"event_id": event.get("event_id")},
+            },
+        )
+
+    monkeypatch.setattr(sm.ManagerAgent, "decide", _manager_decide, raising=True)
+
+    now_ms = int(time.time() * 1000)
+    source = normalize_cdc_event(
+        raw_record={"desk": "Commodities", "delta": 60000.0},
+        topic="risk.positions.cdc",
+        partition=0,
+        offset=100,
+        message_ts_ms=now_ms,
+    )
+    event = build_breach_event(source_event=source, desk="Commodities", exposure=60000.0, threshold=50000.0, now_ms=now_ms)
+    out = await run_state_machine(event=event.to_dict())
+    assert out["ok"] is True
+    result = out["result"]
+    assert isinstance(result, dict)
+    assert result.get("blocked") is not True
+    approval = result.get("approval")
+    assert isinstance(approval, dict)
+    assert approval.get("required") is True
+    assert approval.get("approved") is True
+    assert approval.get("reason") == "side_effect_required"
+    audit_records = result.get("audit_records")
+    assert isinstance(audit_records, list)
+    assert len(audit_records) == 1
+    ar = audit_records[0]
+    assert ar.get("action") == "write_alert"
+    assert ar.get("target_agent") == "manager"
+    assert ar.get("approved") is True
+    assert ar.get("ok") is True

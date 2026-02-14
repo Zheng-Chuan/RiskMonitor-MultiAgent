@@ -83,6 +83,7 @@ flowchart TD
 - 执行 Manager 产出的 commands 并把新增 receipts 追加到 Context Store
 - Execute 会把 approval 注入到 command params 供执行层做校验
 - 执行层会基于 Tool registry capability 做 RBAC 与审批门禁
+- 对 side_effect commands 生成审计记录 audit_records 并写入 Context Store
 - 产出 final_output 并持久化 用于 replay
 
 ## Context Store 黑板模型
@@ -97,6 +98,7 @@ Context Store 是共享上下文与同步记忆的最小实现
 - engineer analyst manager outputs
 - observations rag receipts
 - approval
+- audit_records
 - final_output
 
 ## 同步记忆写入

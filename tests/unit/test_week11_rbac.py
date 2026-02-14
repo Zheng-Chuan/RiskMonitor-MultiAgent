@@ -85,11 +85,10 @@ def test_week11_manager_can_execute_side_effect_tool_after_approval(monkeypatch)
         command_id="cmd-3",
         target_agent="manager",
         action="write_alert",
-        params={"alert": _dummy_alert("a-3"), "approval": {"required": True, "approved": True}},
+        params={"alert": _dummy_alert("a-3"), "approval": {"required": True, "approved": True, "note": "approved"}},
         timeout_ms=1000,
         expected_output_schema="tool_result.v1",
     )
     receipt = execute_agent_command(cmd)
     assert receipt["ok"] is True
     assert calls["n"] == 1
-

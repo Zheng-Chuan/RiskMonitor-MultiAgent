@@ -16,8 +16,15 @@ from riskmonitor_multiagent.contracts.risk_event import validate_risk_event
 from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms, set_gauge
 from riskmonitor_multiagent.orchestration.context_store import FileContextStore, new_run_id
-from riskmonitor_multiagent.orchestration.tool_executor import execute_agent_command, new_agent_command
-from riskmonitor_multiagent.orchestration.tool_registry import is_side_effect_action
+from riskmonitor_multiagent.orchestration.tool_executor import RBAC_POLICY_VERSION, execute_agent_command, new_agent_command
+from riskmonitor_multiagent.orchestration.tool_registry import TOOL_REGISTRY_VERSION, is_side_effect_action
+from riskmonitor_multiagent.data_access import audit_repository
+from riskmonitor_multiagent.governance.versions import (
+    PROMPT_VERSION_MANAGER,
+    PROMPT_VERSION_RISK_ANALYST,
+    PROMPT_VERSION_SYSTEM_ENGINEER,
+    get_policy_version,
+)
 
 try:
     from langgraph.graph import END, START, StateGraph
@@ -48,6 +55,8 @@ class _State(TypedDict):
     errors: list[str]
     rewrite_count: int
     need_rewrite: bool
+    budget: dict[str, Any]
+    run_meta: dict[str, Any]
 
 
 def _ctx_store() -> FileContextStore:
@@ -62,14 +71,99 @@ def _is_auto_approved() -> bool:
     return os.getenv("HITL_AUTO_APPROVE", "1").strip() not in {"0", "false", "False"}
 
 
+def _get_token_budget() -> int:
+    return int(os.getenv("TOKEN_BUDGET", "2000"))
+
+
+def _get_tool_budget() -> int:
+    return int(os.getenv("TOOL_BUDGET", "10"))
+
+
+def _get_time_budget_ms() -> int:
+    return int(os.getenv("TIME_BUDGET_MS", "15000"))
+
+
+def _budget_remaining(budget: dict[str, Any], *, kind: str) -> int:
+    if kind == "token":
+        return int(budget.get("token_budget") or 0) - int(budget.get("token_used") or 0)
+    if kind == "tool":
+        return int(budget.get("tool_budget") or 0) - int(budget.get("tool_used") or 0)
+    if kind == "time_ms":
+        return int(budget.get("time_budget_ms") or 0) - int(budget.get("elapsed_ms") or 0)
+    return 0
+
+
+def _mark_budget(budget: dict[str, Any], *, exceeded_type: str, node: str, reason: str) -> dict[str, Any]:
+    budget = dict(budget)
+    budget["exceeded"] = True
+    budget["exceeded_type"] = exceeded_type
+    budget["exceeded_node"] = node
+    budget["exceeded_reason"] = reason
+    inc_counter("rm_budget_exceeded_total", labels={"type": exceeded_type, "node": node})
+    return budget
+
+
+def _refresh_budget_elapsed(budget: dict[str, Any]) -> dict[str, Any]:
+    started_mono = budget.get("started_monotonic")
+    if not isinstance(started_mono, (int, float)):
+        return budget
+    elapsed_ms = int(max(0.0, (time.monotonic() - float(started_mono)) * 1000.0))
+    budget = dict(budget)
+    budget["elapsed_ms"] = elapsed_ms
+    return budget
+
+
+def _budget_snapshot_for_ctx(budget: dict[str, Any]) -> dict[str, Any]:
+    budget = _refresh_budget_elapsed(budget)
+    return {
+        "token_budget": int(budget.get("token_budget") or 0),
+        "token_used": int(budget.get("token_used") or 0),
+        "tool_budget": int(budget.get("tool_budget") or 0),
+        "tool_used": int(budget.get("tool_used") or 0),
+        "time_budget_ms": int(budget.get("time_budget_ms") or 0),
+        "elapsed_ms": int(budget.get("elapsed_ms") or 0),
+        "exceeded": bool(budget.get("exceeded") is True),
+        "exceeded_type": budget.get("exceeded_type"),
+        "exceeded_node": budget.get("exceeded_node"),
+        "exceeded_reason": budget.get("exceeded_reason"),
+    }
+
+
+
 def _node_normalize(state: _State) -> dict[str, Any]:
     started = time.monotonic()
     event = state["event"]
     ok, errors = validate_risk_event(event)
+    budget = {
+        "token_budget": _get_token_budget(),
+        "token_used": 0,
+        "tool_budget": _get_tool_budget(),
+        "tool_used": 0,
+        "time_budget_ms": _get_time_budget_ms(),
+        "elapsed_ms": 0,
+        "started_ms": int(time.time() * 1000),
+        "started_monotonic": float(time.monotonic()),
+    }
+    run_meta = {
+        "policy_version": get_policy_version(),
+        "tool_registry_version": TOOL_REGISTRY_VERSION,
+        "rbac_policy_version": RBAC_POLICY_VERSION,
+        "prompt_versions": {
+            "system_engineer": PROMPT_VERSION_SYSTEM_ENGINEER,
+            "risk_analyst": PROMPT_VERSION_RISK_ANALYST,
+            "manager": PROMPT_VERSION_MANAGER,
+        },
+        "enable_langgraph": _should_use_langgraph(),
+        "hitl_auto_approve": _is_auto_approved(),
+    }
     run_id = state.get("run_id") or new_run_id(event_id=str(event.get("event_id") or "unknown"))
 
     store = _ctx_store()
-    store.upsert(run_id=run_id, event_id=str(event.get("event_id") or "unknown"), patch={"event_snapshot": event})
+    store.upsert(
+        run_id=run_id,
+        event_id=str(event.get("event_id") or "unknown"),
+        patch={"event_snapshot": event, "budget": _budget_snapshot_for_ctx(budget), "run_meta": run_meta},
+    )
 
     replayed_final = store.get_final_by_event_id(event_id=str(event.get("event_id") or ""))
     if replayed_final is not None:
@@ -81,6 +175,8 @@ def _node_normalize(state: _State) -> dict[str, Any]:
             "replayed": True,
             "final_output": replayed_final,
             "errors": ["replayed"],
+            "budget": budget,
+            "run_meta": run_meta,
         }
 
     if not ok:
@@ -90,7 +186,7 @@ def _node_normalize(state: _State) -> dict[str, Any]:
         return {"run_id": run_id, "errors": errors, "replayed": False}
 
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "normalize"})
-    return {"run_id": run_id, "errors": [], "replayed": False}
+    return {"run_id": run_id, "errors": [], "replayed": False, "budget": budget, "run_meta": run_meta}
 
 
 def _route_after_normalize(state: _State) -> Literal["end", "engineer_check"]:
@@ -138,6 +234,35 @@ def _node_retrieve_context(state: _State) -> dict[str, Any]:
 
     observations: list[dict[str, Any]] = []
     receipts: list[dict[str, Any]] = []
+    budget = state.get("budget") if isinstance(state.get("budget"), dict) else {}
+    budget = _refresh_budget_elapsed(budget)
+
+    if _budget_remaining(budget, kind="time_ms") <= 0:
+        budget = _mark_budget(budget, exceeded_type="time", node="retrieve_context", reason="time_budget_exceeded")
+        facts = {"desk": desk, "event_id": event_id, "required_observations_ok": False, "budget": _budget_snapshot_for_ctx(budget)}
+        store = _ctx_store()
+        store.upsert(run_id=run_id, event_id=event_id, patch={"facts": facts, "budget": _budget_snapshot_for_ctx(budget), "observation_failed": True})
+        return {"observations": [], "receipts": [], "rag": {"query": "", "hits": None, "memory_hits": []}, "facts": facts, "observation_failed": True, "budget": budget}
+    if _budget_remaining(budget, kind="tool") <= 0:
+        budget = _mark_budget(budget, exceeded_type="tool", node="retrieve_context", reason="tool_budget_exceeded")
+        facts = {"desk": desk, "event_id": event_id, "required_observations_ok": False, "budget": _budget_snapshot_for_ctx(budget)}
+        store = _ctx_store()
+        store.upsert(run_id=run_id, event_id=event_id, patch={"facts": facts, "budget": _budget_snapshot_for_ctx(budget), "observation_failed": True})
+        return {"observations": [], "receipts": [], "rag": {"query": "", "hits": None, "memory_hits": []}, "facts": facts, "observation_failed": True, "budget": budget}
+
+    def _exec_tool(cmd: dict[str, Any]) -> dict[str, Any]:
+        nonlocal budget
+        budget = _refresh_budget_elapsed(budget)
+        if _budget_remaining(budget, kind="time_ms") <= 0:
+            budget = _mark_budget(budget, exceeded_type="time", node="retrieve_context", reason="time_budget_exceeded")
+            return {"schema_version": "agent_receipt.v1", "run_id": run_id, "command_id": cmd.get("command_id"), "target_agent": cmd.get("target_agent"), "ok": False, "latency_ms": 0.0, "evidence": {"reason": "time_budget_exceeded"}, "artifacts": [], "error": "time_budget_exceeded", "output": None}
+        if _budget_remaining(budget, kind="tool") <= 0:
+            budget = _mark_budget(budget, exceeded_type="tool", node="retrieve_context", reason="tool_budget_exceeded")
+            return {"schema_version": "agent_receipt.v1", "run_id": run_id, "command_id": cmd.get("command_id"), "target_agent": cmd.get("target_agent"), "ok": False, "latency_ms": 0.0, "evidence": {"reason": "tool_budget_exceeded"}, "artifacts": [], "error": "tool_budget_exceeded", "output": None}
+        budget["tool_used"] = int(budget.get("tool_used") or 0) + 1
+        set_gauge("rm_budget_remaining", float(_budget_remaining(budget, kind="tool")), labels={"type": "tool"})
+        set_gauge("rm_budget_remaining", float(_budget_remaining(budget, kind="time_ms")), labels={"type": "time_ms"})
+        return execute_agent_command(cmd)
 
     cmd1 = new_agent_command(
         run_id=run_id,
@@ -148,7 +273,7 @@ def _node_retrieve_context(state: _State) -> dict[str, Any]:
         timeout_ms=3000,
         expected_output_schema="tool_result.v1",
     )
-    receipts.append(execute_agent_command(cmd1))
+    receipts.append(_exec_tool(cmd1))
     observations.append({"tool": "collect_metrics"})
 
     cmd_kafka = new_agent_command(
@@ -160,7 +285,7 @@ def _node_retrieve_context(state: _State) -> dict[str, Any]:
         timeout_ms=1000,
         expected_output_schema="tool_result.v1",
     )
-    receipts.append(execute_agent_command(cmd_kafka))
+    receipts.append(_exec_tool(cmd_kafka))
     observations.append({"tool": "kafka_lag"})
 
     cmd2 = new_agent_command(
@@ -172,7 +297,7 @@ def _node_retrieve_context(state: _State) -> dict[str, Any]:
         timeout_ms=3000,
         expected_output_schema="tool_result.v1",
     )
-    receipts.append(execute_agent_command(cmd2))
+    receipts.append(_exec_tool(cmd2))
     observations.append({"tool": "mysql_health"})
 
     query_text = f"desk={desk} signal=desk_exposure_breach"
@@ -185,7 +310,7 @@ def _node_retrieve_context(state: _State) -> dict[str, Any]:
         timeout_ms=5000,
         expected_output_schema="tool_result.v1",
     )
-    receipts.append(execute_agent_command(cmd3))
+    receipts.append(_exec_tool(cmd3))
 
     rag_hits = receipts[-1].get("output")
     memory_available = True
@@ -228,22 +353,25 @@ def _node_retrieve_context(state: _State) -> dict[str, Any]:
         "memory_available": bool(memory_available),
         "memory_query_error": memory_query_error,
         "receipt_command_ids": [r.get("command_id") for r in receipts if isinstance(r, dict) and isinstance(r.get("command_id"), str)],
+        "budget": _budget_snapshot_for_ctx(budget),
     }
 
     store = _ctx_store()
     store.upsert(
         run_id=run_id,
         event_id=event_id,
-        patch={"observations": observations, "receipts": receipts, "rag": rag, "facts": facts, "observation_failed": observation_failed},
+        patch={"observations": observations, "receipts": receipts, "rag": rag, "facts": facts, "observation_failed": observation_failed, "budget": _budget_snapshot_for_ctx(budget)},
     )
     set_gauge("rm_kafka_lag_ms", float((receipts[1].get("output", {}).get("result", {}).get("lag_ms") or 0) if isinstance(receipts[1], dict) else 0.0))
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "retrieve_context"})
-    return {"observations": observations, "receipts": receipts, "rag": rag, "facts": facts, "observation_failed": observation_failed}
+    return {"observations": observations, "receipts": receipts, "rag": rag, "facts": facts, "observation_failed": observation_failed, "budget": budget}
 
 
 async def _node_risk_analyst(state: _State) -> dict[str, Any]:
     started = time.monotonic()
     agent = RiskAnalystAgent()
+    budget = state.get("budget") if isinstance(state.get("budget"), dict) else {}
+    budget = _refresh_budget_elapsed(budget)
     event = dict(state["event"])
     payload = dict(event.get("payload") or {}) if isinstance(event.get("payload"), dict) else {}
     payload["_context"] = {
@@ -251,11 +379,51 @@ async def _node_risk_analyst(state: _State) -> dict[str, Any]:
         "observations": state.get("observations"),
         "rag": state.get("rag"),
         "receipts": state.get("receipts"),
+        "budget": _budget_snapshot_for_ctx(budget),
     }
     event["payload"] = payload
 
-    result = await agent.analyze(event=event)
-    out = result.output if isinstance(result.output, dict) else {}
+    if budget.get("exceeded") is True:
+        out = {
+            "schema_version": "risk_analyst_output.v1",
+            "report": "budget exceeded, skip llm call",
+            "key_facts": {"event_id": event.get("event_id")},
+            "confidence": 0.0,
+            "evidence": {"budget_exceeded": True, "reason": budget.get("exceeded_reason"), "type": budget.get("exceeded_type")},
+        }
+    elif _budget_remaining(budget, kind="time_ms") <= 0:
+        budget = _mark_budget(budget, exceeded_type="time", node="risk_analyst", reason="time_budget_exceeded")
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        out = {
+            "schema_version": "risk_analyst_output.v1",
+            "report": "budget exceeded, skip llm call",
+            "key_facts": {"event_id": event.get("event_id")},
+            "confidence": 0.0,
+            "evidence": {"budget_exceeded": True, "reason": "time_budget_exceeded"},
+        }
+    elif _budget_remaining(budget, kind="token") <= 0:
+        budget = _mark_budget(budget, exceeded_type="token", node="risk_analyst", reason="token_budget_exceeded")
+        out = {
+            "schema_version": "risk_analyst_output.v1",
+            "report": "budget exceeded, skip llm call",
+            "key_facts": {"event_id": event.get("event_id")},
+            "confidence": 0.0,
+            "evidence": {"budget_exceeded": True, "reason": "token_budget_exceeded"},
+        }
+    else:
+        remaining = _budget_remaining(budget, kind="token")
+        max_tokens = int(min(512, max(16, remaining)))
+        result = await agent.analyze(event=event) if max_tokens == 512 else await agent.analyze(event=event, max_tokens=max_tokens)
+        if isinstance(result.usage, dict):
+            used = result.usage.get("total_tokens")
+            if isinstance(used, int) and used > 0:
+                budget["token_used"] = int(budget.get("token_used") or 0) + int(used)
+        if _budget_remaining(budget, kind="token") <= 0:
+            budget = _mark_budget(budget, exceeded_type="token", node="risk_analyst", reason="token_budget_exceeded")
+        set_gauge("rm_budget_remaining", float(_budget_remaining(budget, kind="token")), labels={"type": "token"})
+        out = result.output if isinstance(result.output, dict) else {}
+        store = _ctx_store()
+        store.upsert(run_id=state["run_id"], event_id=str(state["event"].get("event_id") or "unknown"), patch={"llm_meta_risk_analyst": result.meta or {}, "budget": _budget_snapshot_for_ctx(budget)})
     ok_out, errors = validate_risk_analyst_output(out)
     if not ok_out:
         out["schema_errors"] = errors
@@ -265,9 +433,9 @@ async def _node_risk_analyst(state: _State) -> dict[str, Any]:
     out["evidence"] = evidence
 
     store = _ctx_store()
-    store.upsert(run_id=state["run_id"], event_id=str(state["event"].get("event_id") or "unknown"), patch={"analyst": out})
+    store.upsert(run_id=state["run_id"], event_id=str(state["event"].get("event_id") or "unknown"), patch={"analyst": out, "budget": _budget_snapshot_for_ctx(budget)})
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "risk_analyst"})
-    return {"analyst": out}
+    return {"analyst": out, "budget": budget}
 
 
 def _node_quality_gate(state: _State) -> dict[str, Any]:
@@ -309,6 +477,8 @@ async def _node_rewrite(state: _State) -> dict[str, Any]:
     started = time.monotonic()
     rewrite_count = int(state.get("rewrite_count") or 0) + 1
     agent = RiskAnalystAgent()
+    budget = state.get("budget") if isinstance(state.get("budget"), dict) else {}
+    budget = _refresh_budget_elapsed(budget)
     event = dict(state["event"])
     payload = dict(event.get("payload") or {}) if isinstance(event.get("payload"), dict) else {}
     payload["_context"] = {
@@ -316,26 +486,66 @@ async def _node_rewrite(state: _State) -> dict[str, Any]:
         "observations": state.get("observations"),
         "rag": state.get("rag"),
         "receipts": state.get("receipts"),
+        "budget": _budget_snapshot_for_ctx(budget),
     }
     event["payload"] = payload
 
     instruction = f"Fix output contract errors: {state.get('errors')}. Return valid JSON."
-    result = await agent.analyze(event=event, extra_instruction=instruction)
-    out = result.output if isinstance(result.output, dict) else {}
+    if budget.get("exceeded") is True:
+        out = {
+            "schema_version": "risk_analyst_output.v1",
+            "report": "budget exceeded, skip llm rewrite",
+            "key_facts": {"event_id": event.get("event_id")},
+            "confidence": 0.0,
+            "evidence": {"budget_exceeded": True, "reason": budget.get("exceeded_reason"), "type": budget.get("exceeded_type")},
+        }
+    elif _budget_remaining(budget, kind="time_ms") <= 0 or _budget_remaining(budget, kind="token") <= 0:
+        if _budget_remaining(budget, kind="time_ms") <= 0:
+            budget = _mark_budget(budget, exceeded_type="time", node="rewrite", reason="time_budget_exceeded")
+            reason = "time_budget_exceeded"
+        else:
+            budget = _mark_budget(budget, exceeded_type="token", node="rewrite", reason="token_budget_exceeded")
+            reason = "token_budget_exceeded"
+        out = {
+            "schema_version": "risk_analyst_output.v1",
+            "report": "budget exceeded, skip llm rewrite",
+            "key_facts": {"event_id": event.get("event_id")},
+            "confidence": 0.0,
+            "evidence": {"budget_exceeded": True, "reason": reason},
+        }
+    else:
+        remaining = _budget_remaining(budget, kind="token")
+        max_tokens = int(min(512, max(16, remaining)))
+        if max_tokens == 512:
+            result = await agent.analyze(event=event, extra_instruction=instruction)
+        else:
+            result = await agent.analyze(event=event, extra_instruction=instruction, max_tokens=max_tokens)
+        if isinstance(result.usage, dict):
+            used = result.usage.get("total_tokens")
+            if isinstance(used, int) and used > 0:
+                budget["token_used"] = int(budget.get("token_used") or 0) + int(used)
+        if _budget_remaining(budget, kind="token") <= 0:
+            budget = _mark_budget(budget, exceeded_type="token", node="rewrite", reason="token_budget_exceeded")
+        set_gauge("rm_budget_remaining", float(_budget_remaining(budget, kind="token")), labels={"type": "token"})
+        out = result.output if isinstance(result.output, dict) else {}
+        store = _ctx_store()
+        store.upsert(run_id=state["run_id"], event_id=str(state["event"].get("event_id") or "unknown"), patch={"llm_meta_rewrite": result.meta or {}, "budget": _budget_snapshot_for_ctx(budget)})
 
     store = _ctx_store()
     store.upsert(
         run_id=state["run_id"],
         event_id=str(state["event"].get("event_id") or "unknown"),
-        patch={"analyst": out, "rewrite_count": rewrite_count},
+        patch={"analyst": out, "rewrite_count": rewrite_count, "budget": _budget_snapshot_for_ctx(budget)},
     )
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "rewrite"})
-    return {"analyst": out, "rewrite_count": rewrite_count}
+    return {"analyst": out, "rewrite_count": rewrite_count, "budget": budget}
 
 
 async def _node_manager(state: _State) -> dict[str, Any]:
     started = time.monotonic()
     agent = ManagerAgent()
+    budget = state.get("budget") if isinstance(state.get("budget"), dict) else {}
+    budget = _refresh_budget_elapsed(budget)
     event = dict(state["event"])
     payload = dict(event.get("payload") or {}) if isinstance(event.get("payload"), dict) else {}
     payload["_run_id"] = state["run_id"]
@@ -344,11 +554,56 @@ async def _node_manager(state: _State) -> dict[str, Any]:
         "observations": state.get("observations"),
         "rag": state.get("rag"),
         "receipts": state.get("receipts"),
+        "budget": _budget_snapshot_for_ctx(budget),
     }
     event["payload"] = payload
     analyst_report = state.get("analyst") or {}
-    result = await agent.decide(event=event, analyst_report=analyst_report)
-    out = result.output if isinstance(result.output, dict) else {}
+    if budget.get("exceeded") is True:
+        out = {
+            "schema_version": "manager_output.v1",
+            "decision": "WATCH",
+            "action": "budget exceeded, skip llm call",
+            "rationale": "budget exceeded",
+            "plan_steps": None,
+            "commands": None,
+            "evidence": {"budget_exceeded": True, "reason": budget.get("exceeded_reason"), "type": budget.get("exceeded_type")},
+        }
+    elif _budget_remaining(budget, kind="time_ms") <= 0:
+        budget = _mark_budget(budget, exceeded_type="time", node="manager", reason="time_budget_exceeded")
+        out = {
+            "schema_version": "manager_output.v1",
+            "decision": "WATCH",
+            "action": "budget exceeded, skip llm call",
+            "rationale": "time budget exceeded",
+            "plan_steps": None,
+            "commands": None,
+            "evidence": {"budget_exceeded": True, "reason": "time_budget_exceeded"},
+        }
+    elif _budget_remaining(budget, kind="token") <= 0:
+        budget = _mark_budget(budget, exceeded_type="token", node="manager", reason="token_budget_exceeded")
+        out = {
+            "schema_version": "manager_output.v1",
+            "decision": "WATCH",
+            "action": "budget exceeded, skip llm call",
+            "rationale": "token budget exceeded",
+            "plan_steps": None,
+            "commands": None,
+            "evidence": {"budget_exceeded": True, "reason": "token_budget_exceeded"},
+        }
+    else:
+        remaining = _budget_remaining(budget, kind="token")
+        max_tokens = int(min(512, max(16, remaining)))
+        result = await agent.decide(event=event, analyst_report=analyst_report) if max_tokens == 512 else await agent.decide(event=event, analyst_report=analyst_report, max_tokens=max_tokens)
+        if isinstance(result.usage, dict):
+            used = result.usage.get("total_tokens")
+            if isinstance(used, int) and used > 0:
+                budget["token_used"] = int(budget.get("token_used") or 0) + int(used)
+        if _budget_remaining(budget, kind="token") <= 0:
+            budget = _mark_budget(budget, exceeded_type="token", node="manager", reason="token_budget_exceeded")
+        set_gauge("rm_budget_remaining", float(_budget_remaining(budget, kind="token")), labels={"type": "token"})
+        out = result.output if isinstance(result.output, dict) else {}
+        store = _ctx_store()
+        store.upsert(run_id=state["run_id"], event_id=str(state["event"].get("event_id") or "unknown"), patch={"llm_meta_manager": result.meta or {}, "budget": _budget_snapshot_for_ctx(budget)})
     ok_out, errors = validate_manager_output(out)
     if not ok_out:
         out["schema_errors"] = errors
@@ -375,10 +630,10 @@ async def _node_manager(state: _State) -> dict[str, Any]:
     store.upsert(
         run_id=state["run_id"],
         event_id=str(event.get("event_id") or "unknown"),
-        patch={"manager": out, "commands": commands},
+        patch={"manager": out, "commands": commands, "budget": _budget_snapshot_for_ctx(budget)},
     )
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "manager"})
-    return {"manager": out, "commands": commands}
+    return {"manager": out, "commands": commands, "budget": budget}
 
 
 def _node_human_approval(state: _State) -> dict[str, Any]:
@@ -404,7 +659,8 @@ def _node_human_approval(state: _State) -> dict[str, Any]:
         if require_action
         else None
     )
-    approval = {"required": require, "approved": approved, "reason": reason}
+    note = "auto_approved" if require and approved else None
+    approval = {"required": require, "approved": approved, "reason": reason, "note": note}
 
     store = _ctx_store()
     store.upsert(
@@ -430,14 +686,48 @@ def _node_execute(state: _State) -> dict[str, Any]:
     run_id = state["run_id"]
     event = state["event"]
     event_id = str(event.get("event_id") or "unknown")
+    correlation_id = event.get("correlation_id") if isinstance(event.get("correlation_id"), str) else None
     commands = state.get("commands") or []
     receipts: list[dict[str, Any]] = list(state.get("receipts") or [])
     approval = state.get("approval") if isinstance(state.get("approval"), dict) else {}
+    audit_records: list[dict[str, Any]] = []
+    budget = state.get("budget") if isinstance(state.get("budget"), dict) else {}
+    budget = _refresh_budget_elapsed(budget)
 
     for cmd in commands:
         if not isinstance(cmd, dict):
             continue
+        budget = _refresh_budget_elapsed(budget)
+        if _budget_remaining(budget, kind="time_ms") <= 0:
+            budget = _mark_budget(budget, exceeded_type="time", node="execute", reason="time_budget_exceeded")
+        if _budget_remaining(budget, kind="tool") <= 0:
+            budget = _mark_budget(budget, exceeded_type="tool", node="execute", reason="tool_budget_exceeded")
+        if budget.get("exceeded") is True:
+            receipts.append(
+                {
+                    "schema_version": "agent_receipt.v1",
+                    "run_id": run_id,
+                    "command_id": cmd.get("command_id"),
+                    "target_agent": cmd.get("target_agent"),
+                    "ok": False,
+                    "latency_ms": 0.0,
+                    "evidence": {"reason": budget.get("exceeded_reason"), "exceeded_type": budget.get("exceeded_type")},
+                    "artifacts": [],
+                    "error": budget.get("exceeded_reason"),
+                    "output": None,
+                }
+            )
+            continue
+        budget["tool_used"] = int(budget.get("tool_used") or 0) + 1
+        set_gauge("rm_budget_remaining", float(_budget_remaining(budget, kind="tool")), labels={"type": "tool"})
+        set_gauge("rm_budget_remaining", float(_budget_remaining(budget, kind="time_ms")), labels={"type": "time_ms"})
+        if "event_id" not in cmd:
+            cmd = dict(cmd)
+            cmd["event_id"] = event_id
         params = cmd.get("params") if isinstance(cmd.get("params"), dict) else {}
+        if "_event" not in params:
+            params = dict(params)
+            params["_event"] = {"event_id": event_id, "correlation_id": correlation_id, "severity": event.get("severity"), "actionability": event.get("actionability")}
         if "approval" not in params:
             params = dict(params)
             params["approval"] = approval
@@ -445,6 +735,36 @@ def _node_execute(state: _State) -> dict[str, Any]:
             cmd["params"] = params
         receipt = execute_agent_command(cmd)
         receipts.append(receipt)
+        action = str(cmd.get("action") or "")
+        if is_side_effect_action(action):
+            approved_by = "auto" if approval.get("required") and approval.get("approved") else None
+            audit_records.append(
+                {
+                    "audit_id": str(uuid.uuid4()),
+                    "ts_ms": int(time.time() * 1000),
+                    "event_id": event_id,
+                    "correlation_id": correlation_id,
+                    "run_id": run_id,
+                    "command_id": cmd.get("command_id"),
+                    "target_agent": cmd.get("target_agent"),
+                    "action": action,
+                    "actor": "state_machine",
+                    "approved": bool(approval.get("approved")),
+                    "approved_by": approved_by,
+                    "approval_reason": approval.get("reason"),
+                    "ok": bool(receipt.get("ok")) if isinstance(receipt, dict) else False,
+                    "error": receipt.get("error") if isinstance(receipt, dict) else None,
+                }
+            )
+
+    audit_db_status: dict[str, Any] = {"enabled": os.getenv("ENABLE_AUDIT_DB_WRITE", "0").strip() not in {"0", "false", "False"}, "write_ok": None, "write_error": None}
+    if audit_db_status["enabled"] and audit_records:
+        try:
+            audit_repository.save_audit_records_batch(audit_records)
+            audit_db_status["write_ok"] = True
+        except Exception as e:  # pylint: disable=broad-except
+            audit_db_status["write_ok"] = False
+            audit_db_status["write_error"] = str(e)
 
     memory_status: dict[str, Any] = {
         "available": bool((state.get("facts") or {}).get("memory_available", True)),
@@ -481,20 +801,24 @@ def _node_execute(state: _State) -> dict[str, Any]:
     final_output = {
         "run_id": run_id,
         "event_id": event_id,
+        "blocked": bool(budget.get("exceeded") is True),
         "engineer": state.get("engineer"),
         "analyst": state.get("analyst"),
         "manager": state.get("manager"),
         "facts": state.get("facts"),
         "rag": state.get("rag"),
+        "budget": _budget_snapshot_for_ctx(budget),
         "memory": memory_status,
         "receipts": receipts,
         "approval": state.get("approval"),
+        "audit_records": audit_records,
+        "audit_db": audit_db_status,
     }
 
     store = _ctx_store()
-    store.upsert(run_id=run_id, event_id=event_id, patch={"final_output": final_output, "receipts": receipts})
+    store.upsert(run_id=run_id, event_id=event_id, patch={"final_output": final_output, "receipts": receipts, "audit_records": audit_records, "audit_db": audit_db_status, "budget": _budget_snapshot_for_ctx(budget)})
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "execute"})
-    return {"final_output": final_output, "receipts": receipts}
+    return {"final_output": final_output, "receipts": receipts, "budget": budget}
 
 
 def _node_end(state: _State) -> dict[str, Any]:

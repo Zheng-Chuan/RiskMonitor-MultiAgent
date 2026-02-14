@@ -256,7 +256,78 @@
 
 - 文件落盘形式, 每个 run_id 一个 json 文件
 - 路径由 CONTEXT_STORE_DIR 控制 默认 data/context_store
-- 写入内容包含 event_snapshot receipts rag hits agent outputs approval final_output
+- 写入内容包含 event_snapshot run_meta budget receipts rag hits agent outputs approval audit_records audit_db llm_meta_* final_output
+
+### Audit records
+
+用途
+
+- 对 side_effect commands 生成审计记录
+- 用于追责与回放
+
+当前落地
+
+- 状态机 Execute 节点生成 audit_records
+- 同时写入 Context Store 顶层字段与 final_output.audit_records
+
+字段
+
+- audit_id: string
+- ts_ms: number
+- event_id: string
+- correlation_id: string or null
+- run_id: string
+- command_id: string
+- target_agent: string
+- action: string
+- actor: string
+- approved: boolean
+- approved_by: string or null
+- approval_reason: string or null
+- ok: boolean
+- error: string or null
+
+### Governance metrics
+
+用途
+
+- 观测 RBAC 审批 side_effect 的运行状态
+
+指标
+
+- rm_rbac_denied_total{target_agent,action,capability}
+- rm_approval_required_total{target_agent,action}
+- rm_side_effect_executed_total{target_agent,action,ok}
+- rm_budget_exceeded_total{type,node}
+- rm_budget_remaining{type}
+
+### Run meta
+
+用途
+
+- 记录一次 run 的 policy prompt tool versions
+- 支持回放对比
+
+字段
+
+- policy_version
+- tool_registry_version
+- rbac_policy_version
+- prompt_versions
+
+### Budget
+
+用途
+
+- token tool time 预算与熔断
+- 预算超限时写入 exceeded_type exceeded_reason 并触发降级输出
+
+字段
+
+- token_budget token_used
+- tool_budget tool_used
+- time_budget_ms elapsed_ms
+- exceeded exceeded_type exceeded_node exceeded_reason
 
 同步记忆落地
 

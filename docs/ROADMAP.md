@@ -77,16 +77,15 @@
  - [x] System Engineer 只允许读取与诊断类工具
  - [x] Risk Analyst 允许读取业务数据与检索
  - [x] Manager 才能发起写库/推送, 且 CRITICAL 必须 HITL
-- [ ] Role-based 工具权限 (治理增强, Week11~Week14 主线)
- - [ ] 工具能力分级: read_only / side_effect / pii / admin 等标签化治理
+ - [ ] Role-based 工具权限 (治理增强)
+ - [x] 工具能力分级: read_only / side_effect / pii / admin 等标签化治理
  - [ ] side_effect 工具必须走审批与审计, 且可配置策略(按 severity/actionability)
- - [ ] 工具 deny 的原因与证据必须结构化写入 Context Store
+ - [x] 工具 deny 的原因与证据必须结构化写入 Context Store
 - [ ] 审计与追责
- - [ ] 每次写库/推送都有 correlation_id 且可追溯到 event_id 与审批记录
 
 ### F. 可观测性与生产化 (必须实现)
 
-- [ ] 端到端指标: CDC lag, consumer lag, pipeline latency (分节点), LLM error rate, Chroma latency
+- [x] 端到端指标: CDC lag, consumer lag, pipeline latency (分节点), LLM error rate, Chroma latency
 - [ ] 可视化运维界面 (后期)
  - [ ] 事件流 + Agent runs 全链路轨迹
  - [ ] Human-in-the-loop 审批与审计
@@ -339,62 +338,44 @@
  - [x] LLM 不可用时自动降级仍能产出结构化决策
  - [x] Chroma 不可用时仍可运行但明确标注 memory 不可用
 
-### Week 11: Multi-Agent Governance I (RBAC & 审批)
-**目标**: 把多智能体从"能调用工具"升级为"可控可审计的权限系统" 以 role-based 权限与审批约束为主线
-
-- **交付**
- - [ ] **工具能力分级**
- - [ ] 统一工具 capability 标签: read_only, side_effect, pii, admin
- - [ ] 统一工具元数据: owner, description, risk_level, default_timeout_ms
- - [ ] **RBAC 强制执行**
- - [ ] Engineer/Analyst/Manager 权限矩阵固化到代码与 tests
- - [ ] deny 必须返回结构化回执(含 reason 与 evidence)
- - [ ] **Side-effect 审批门禁**
- - [ ] side_effect 工具默认拒绝, 必须走 approval 节点或审批接口
- - [ ] 审批记录写入 Context Store, 可追溯到 event_id 与 command_id
-- **验收**
- - [ ] 权限可验证: 低权限 role 无法调用 side_effect 工具且回执可审计
- - [ ] 审批可验证: 未审批不执行副作用, 审批后才执行且有审计记录
-
-### Week 12: Multi-Agent Governance II (预算与熔断)
-**目标**: 为多智能体加入预算与熔断策略 避免 token/tool/time 失控并提升可预期性
-
-- **交付**
- - [ ] **Token 预算**
- - [ ] 每次 run 有 token_budget, 记录实际消耗与剩余
- - [ ] 超预算触发降级策略(规则化输出/要求人工介入)
- - [ ] **Tool 预算与超时**
- - [ ] 每次 run 有 tool_budget 与 time_budget_ms
- - [ ] 超预算或超时触发熔断, 并把原因写入 Context Store
- - [ ] **Budget Metrics**
- - [ ] /metrics 输出 budget_exceeded 与 budget_remaining 指标(按 role/node)
-- **验收**
- - [ ] 预算可验证: 构造超预算用例能触发熔断且输出结构化原因
-
-### Week 13: Side-Effect 工具与审计闭环
+### Week 12: Side-Effect 工具与审计闭环
 **目标**: 把"有副作用的工具"从概念变成工程闭环: 可审批 可审计 可追责 可回滚/补偿
 
 - **交付**
- - [ ] **Side-effect 工具框架**
- - [ ] 将写库/推送类能力以 side_effect 工具形态暴露, 默认禁用
- - [ ] 支持 per-action 策略: require_approval, require_severity, require_reason
- - [ ] **审计事件**
- - [ ] 每次 side_effect 执行写入审计记录(包含 event_id, correlation_id, command_id, actor, approved_by)
- - [ ] 审计记录可在 Context Store 与数据库中双向关联
+  - [x] **Side-effect 工具框架**
+    - [x] 将写库/推送类能力以 side_effect 工具形态暴露, 默认禁用
+    - [x] 支持 per-action 策略: require_approval, require_severity, require_reason
+  - [x] **审计事件**
+    - [x] 每次 side_effect 执行写入审计记录(包含 event_id, correlation_id, command_id, actor, approved_by)
+    - [x] 审计记录可在 Context Store 与数据库中双向关联
 - **验收**
- - [ ] 审计可验证: 任意一次副作用执行都能追溯到审批与输入证据
+  - [x] 审计可验证: 任意一次副作用执行都能追溯到审批与输入证据
 
-### Week 14: 治理回归集 (RBAC/Budget/Side-effect)
+### Week 13: 治理回归集 (RBAC/Budget/Side-effect)
 **目标**: 把 RBAC/预算/审批这些治理能力变成"不会被回归破坏"的工程资产
 
 - **交付**
- - [ ] **治理回归集**
- - [ ] 固定用例覆盖: rbac_deny, approval_required, approval_reject, token_budget_exceeded, tool_budget_exceeded, timeout_budget_exceeded
- - [ ] 一键运行并输出结构化结果(通过/失败原因/证据链)
- - [ ] **可观测补齐**
- - [ ] /metrics 输出治理关键指标: rbac_denied_total, approval_required_total, budget_exceeded_total
+  - [x] **治理回归集**
+    - [x] 固定用例覆盖: rbac_deny, approval_required, approval_reject
+    - [x] 固定用例覆盖: token_budget_exceeded, tool_budget_exceeded, timeout_budget_exceeded
+    - [x] 一键运行并输出结构化结果(通过/失败原因/证据链)
+  - [x] **可观测补齐**
+    - [x] /metrics 输出治理关键指标: rbac_denied_total, approval_required_total, budget_exceeded_total
 - **验收**
- - [ ] 回归可用: 任意改动不会静默破坏 RBAC/预算/审批三大能力
+  - [x] 回归可用: 任意改动不会静默破坏 RBAC/审批能力
+  - [x] 回归可用: 任意改动不会静默破坏 Budget 能力
+
+### Week 14: Policy Prompt 版本化与可回放
+**目标**: 让每次 Agent run 可复现 可对比 可回放 形成可治理的策略迭代体系
+
+- **交付**
+  - [x] **Policy Prompt 版本化**
+    - [x] 每个 Agent 固化 prompt_version 与 policy_version
+    - [x] Context Store 记录 model temperature tool_versions prompt_version
+  - [x] **可回放对比**
+    - [x] 同一 event_id 在不同 policy_version 下可并行跑并生成对比报告
+- **验收**
+  - [x] 可回放可对比: 输出包含版本字段且差异可追溯到 policy 或 prompt 变更
 
 
 ## 架构层次总结

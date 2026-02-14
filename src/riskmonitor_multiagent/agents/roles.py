@@ -18,6 +18,11 @@ from riskmonitor_multiagent.contracts.agent_outputs import (
     validate_system_engineer_output,
 )
 from riskmonitor_multiagent.contracts.risk_event import validate_risk_event
+from riskmonitor_multiagent.governance.versions import (
+    PROMPT_VERSION_MANAGER,
+    PROMPT_VERSION_RISK_ANALYST,
+    get_policy_version,
+)
 
 
 class SystemEngineerAgent:
@@ -111,9 +116,11 @@ class RiskAnalystAgent:
                 "confidence must be a number between 0 and 1.\n"
                 "evidence must be an object with references to input fields.\n"
             ),
+            prompt_version=PROMPT_VERSION_RISK_ANALYST,
+            policy_version=get_policy_version(),
         )
 
-    async def analyze(self, *, event: dict[str, Any], extra_instruction: str | None = None) -> AgentResult:
+    async def analyze(self, *, event: dict[str, Any], extra_instruction: str | None = None, max_tokens: int | None = 512) -> AgentResult:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         desk = payload.get("desk")
         exposure = payload.get("exposure")
@@ -133,10 +140,11 @@ class RiskAnalystAgent:
                 f"{extra}"
             ),
             fallback=fallback,
+            max_tokens=max_tokens,
         )
         out = normalize_risk_analyst_output(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_risk_analyst_output(out)
-        return AgentResult(ok=ok_out, output=out)
+        return AgentResult(ok=ok_out, output=out, usage=result.usage, meta=result.meta)
 
 
 class ManagerAgent:
@@ -156,9 +164,11 @@ class ManagerAgent:
                 "AgentCommand keys: schema_version, run_id, command_id, target_agent, action, params, timeout_ms, expected_output_schema.\n"
                 "evidence must be an object and must cite receipt command_id when available.\n"
             ),
+            prompt_version=PROMPT_VERSION_MANAGER,
+            policy_version=get_policy_version(),
         )
 
-    async def decide(self, *, event: dict[str, Any], analyst_report: dict[str, Any]) -> AgentResult:
+    async def decide(self, *, event: dict[str, Any], analyst_report: dict[str, Any], max_tokens: int | None = 512) -> AgentResult:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         exposure = payload.get("exposure")
         level = "CRITICAL" if isinstance(exposure, (int, float)) and abs(exposure) >= 100000 else "WATCH"
@@ -201,7 +211,8 @@ class ManagerAgent:
                 "If you need more evidence, propose commands for other agents to collect it."
             ),
             fallback=fallback,
+            max_tokens=max_tokens,
         )
         out = normalize_manager_output(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_manager_output(out)
-        return AgentResult(ok=ok_out, output=out)
+        return AgentResult(ok=ok_out, output=out, usage=result.usage, meta=result.meta)

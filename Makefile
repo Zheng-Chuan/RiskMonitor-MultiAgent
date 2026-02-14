@@ -1,4 +1,5 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-infra register-cdc register-cdc-schema run-sentinel up-kb ingest-knowledge kb-query
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-infra register-cdc register-cdc-schema run-sentinel up-kb ingest-knowledge kb-query governance-regression
+.PHONY: governance-replay-compare
 
 help:
 	@echo "RiskMonitor-MultiAgent Development Commands"
@@ -43,6 +44,8 @@ help:
 	@echo "make up-kb            - Start vector database (Chroma)"
 	@echo "make ingest-knowledge - Ingest recent alerts into vector database"
 	@echo "make kb-query         - Query vector database, usage: make kb-query QUERY='...' TOP_K=5"
+	@echo "make governance-regression - Run governance regression suite"
+	@echo "make governance-replay-compare - Compare two policy versions for one event json"
 
 install:
 	pip install -r requirements.txt
@@ -86,6 +89,12 @@ up-kb:
 
 kb-query:
 	python ./scripts/knowledge/kb.py query --query "$(QUERY)" --top-k "$(if $(TOP_K),$(TOP_K),5)"
+
+governance-regression:
+	python ./scripts/governance/run_regression.py
+
+governance-replay-compare:
+	python ./scripts/governance/replay_compare.py --event-file "$(EVENT_FILE)" --policy-a "$(POLICY_A)" --policy-b "$(POLICY_B)"
 
 setup-mcp:
 	@echo "=================================="
