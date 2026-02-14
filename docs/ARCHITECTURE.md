@@ -71,7 +71,7 @@ Manager Agent
 状态机编排入口在 [state_machine.py](../src/riskmonitor_multiagent/orchestration/state_machine.py)  
 状态机说明文档在 [STATE_MACHINE.md](STATE_MACHINE.md)  
 
-### Tool governance Week11
+### Tool governance Week12
 
 本项目把 Agent 的工具调用当作受控执行  
 核心目标是可控 可审计 可测试  
@@ -86,11 +86,19 @@ Manager Agent
 - 审批门禁在状态机与执行层双保险  
   - 状态机 HumanApproval 节点会对 side_effect commands 强制要求审批  
   - Execute 节点会把 approval 注入到 command params 供执行层校验  
+- side_effect per-action 策略  
+  - require_approval require_reason min_severity  
+  - require_reason 使用 approval.note 作为审批备注或原因  
 - side effect 写库动作示例  
   - action write_alert 会调用 alerts_repository 写入 alerts 表  
 - 审计记录  
   - 每次 side_effect command 会生成 audit_records 并写入 Context Store 与 final_output  
   - 字段包含 event_id correlation_id run_id command_id action target_agent actor approved approved_by approval_reason ok error ts_ms  
+  - 可选写入 MySQL audit_events 表 由 ENABLE_AUDIT_DB_WRITE 控制  
+  - schema 在 scripts/init_db.sql 与 db/migrations/004_create_audit_events_table.sql  
+ - 版本化与回放  
+  - Context Store run_meta 记录 policy_version tool_versions prompt_versions  
+  - replay compare 支持同一事件对比两个 policy_version 输出差异  
 
 ### Knowledge Base
 
@@ -105,6 +113,7 @@ MCP tool search_similar_alerts 会读取 Chroma 并返回相似告警列表
 
 OpenRouter 客户端封装在 [openrouter_client.py](../src/riskmonitor_multiagent/llm/openrouter_client.py)  
 当 LLM 不可用时 仍然会使用 fallback 结果保证链路可跑通  
+测试或本地回归可以设置 DISABLE_LLM=1 强制跳过上游调用  
 
 ## 数据流 1 交互式问答链路
 

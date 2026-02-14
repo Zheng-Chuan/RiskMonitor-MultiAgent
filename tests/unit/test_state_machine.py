@@ -25,6 +25,7 @@ async def test_state_machine_runs_and_persists_context(tmp_path, monkeypatch):
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
     monkeypatch.setenv("HITL_AUTO_APPROVE", "1")
     monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
+    monkeypatch.setenv("DISABLE_LLM", "1")
 
     now_ms = int(time.time() * 1000)
     source = normalize_cdc_event(
@@ -47,6 +48,14 @@ async def test_state_machine_runs_and_persists_context(tmp_path, monkeypatch):
     receipts = result.get("receipts")
     assert isinstance(receipts, list)
     assert len(receipts) >= 1
+    run_meta = result.get("run_meta")
+    assert isinstance(run_meta, dict)
+    assert isinstance(run_meta.get("policy_version"), str)
+    assert isinstance(run_meta.get("tool_registry_version"), str)
+    assert isinstance(run_meta.get("rbac_policy_version"), str)
+    prompt_versions = run_meta.get("prompt_versions")
+    assert isinstance(prompt_versions, dict)
+    assert set(prompt_versions.keys()) >= {"system_engineer", "risk_analyst", "manager"}
 
     manager = result.get("manager")
     assert isinstance(manager, dict)
@@ -86,6 +95,7 @@ async def test_state_machine_replay_returns_same_final_output(tmp_path, monkeypa
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
     monkeypatch.setenv("HITL_AUTO_APPROVE", "1")
     monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
+    monkeypatch.setenv("DISABLE_LLM", "1")
 
     now_ms = int(time.time() * 1000)
     source = normalize_cdc_event(
@@ -110,6 +120,7 @@ async def test_state_machine_rewrite_loop_runs(tmp_path, monkeypatch):
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
     monkeypatch.setenv("HITL_AUTO_APPROVE", "1")
     monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
+    monkeypatch.setenv("DISABLE_LLM", "1")
 
     import riskmonitor_multiagent.orchestration.state_machine as sm
 
@@ -161,6 +172,7 @@ async def test_state_machine_requires_human_approval_when_auto_off(tmp_path, mon
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
     monkeypatch.setenv("HITL_AUTO_APPROVE", "0")
     monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
+    monkeypatch.setenv("DISABLE_LLM", "1")
 
     import riskmonitor_multiagent.orchestration.state_machine as sm
 
@@ -222,6 +234,7 @@ async def test_state_machine_requires_human_approval_for_side_effect_commands(tm
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
     monkeypatch.setenv("HITL_AUTO_APPROVE", "0")
     monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
+    monkeypatch.setenv("DISABLE_LLM", "1")
 
     import riskmonitor_multiagent.orchestration.state_machine as sm
 
@@ -295,6 +308,7 @@ async def test_state_machine_records_audit_for_side_effect_commands(tmp_path, mo
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
     monkeypatch.setenv("HITL_AUTO_APPROVE", "1")
     monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
+    monkeypatch.setenv("DISABLE_LLM", "1")
 
     import riskmonitor_multiagent.orchestration.state_machine as sm
 

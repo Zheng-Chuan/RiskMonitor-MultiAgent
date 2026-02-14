@@ -43,6 +43,7 @@ flowchart TD
 ### NormalizeEvent
 - 校验输入是否满足 RiskEvent 契约
 - 生成 run_id 并写入 event_snapshot
+- 初始化 run_meta 与 budget 并写入 Context Store
 - 如果同 event_id 已经有 final_output 则直接走 replay 返回历史结果
 
 ### EngineerCheck
@@ -60,10 +61,12 @@ flowchart TD
   - search_similar_alerts
 - 同时会从 Chroma memory collection 检索历史 summary 作为 memory_hits
 - receipts 与 rag hits 会写入 Context Store 供后续 Agent 引用
+- 如果 time_budget_ms 或 tool_budget 超限 会提前熔断并写入 budget.exceeded 字段
 
 ### RiskAnalyst
 - Risk Analyst 读取 event 与共享上下文生成结构化事实报告
 - 会把 receipts rag observations 注入到 payload._context 让 LLM 基于证据写报告
+- 当 DISABLE_LLM=1 或 LLM 不可用时 会走 fallback 输出并把 llm_meta 写入 Context Store
 
 ### QualityGate 与 RewriteLoop
 - 校验 RiskAnalyst 输出 schema
@@ -73,17 +76,20 @@ flowchart TD
 ### Manager
 - Manager 汇总 engineer analyst receipts 输出结构化决策
 - Manager 可以产出 commands 列表 让执行器去反向调度其他 Agent
+- Context Store 会记录 Manager 的 llm_meta 以及本次 run_meta
 
 ### HumanApproval
 - 当 severity=CRITICAL 且 actionability=true 且 manager decision=CRITICAL 时触发审批
 - 当 Manager commands 包含 side_effect action 时也会触发审批
 - 当前支持自动审批开关 便于本地回归
+- approval.note 用于记录审批备注或原因 供 side_effect policy require_reason 校验
 
 ### Execute
 - 执行 Manager 产出的 commands 并把新增 receipts 追加到 Context Store
 - Execute 会把 approval 注入到 command params 供执行层做校验
 - 执行层会基于 Tool registry capability 做 RBAC 与审批门禁
 - 对 side_effect commands 生成审计记录 audit_records 并写入 Context Store
+- 可选写入 MySQL audit_events 表 由 ENABLE_AUDIT_DB_WRITE 控制
 - 产出 final_output 并持久化 用于 replay
 
 ## Context Store 黑板模型
@@ -95,10 +101,14 @@ Context Store 是共享上下文与同步记忆的最小实现
 
 写入内容包含
 - event_snapshot
+- run_meta
+- budget
 - engineer analyst manager outputs
 - observations rag receipts
 - approval
 - audit_records
+- audit_db
+- llm_meta_*
 - final_output
 
 ## 同步记忆写入

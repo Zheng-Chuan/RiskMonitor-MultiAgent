@@ -233,8 +233,16 @@
 - action: 约定动作名 例如 collect_metrics query_positions_by_desk search_similar_alerts write_alert
 - params: 动作参数对象
   - side_effect action 需要包含 approval 字段 由状态机注入
+  - side_effect action 会包含 _event 字段 由状态机注入 用于 per-action policy 判断
 - timeout_ms: 超时时间
 - expected_output_schema: 期望的 output 结构标识, 用于质量门禁与兼容治理
+
+approval 字段
+
+- required: boolean
+- approved: boolean
+- reason: string or null
+- note: string or null
 
 回执约定
 

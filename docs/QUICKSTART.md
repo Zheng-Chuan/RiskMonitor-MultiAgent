@@ -126,7 +126,11 @@ make run-sentinel
 - 如果 OpenRouter 模型不可用或返回 404 系统会自动走 fallback 保证链路可跑通 你可以在 .env 里覆盖 OPENROUTER_MODEL
 - 如果你希望启用状态机编排 设置 ENABLE_LANGGRAPH=1
 - 如果你希望本地默认自动审批 设置 HITL_AUTO_APPROVE=1
-- Week11 增加工具治理 side_effect 写库动作必须审批 Manager 才能执行
+- Week12 增加工具治理 side_effect 写库动作必须审批 Manager 才能执行
+- Week12 增加预算与熔断 TOKEN_BUDGET TOOL_BUDGET TIME_BUDGET_MS
+- Week12 增加审计落库 ENABLE_AUDIT_DB_WRITE=1 可写入 audit_events
+- Week14 增加策略版本 POLICY_VERSION 用于回放对比
+- 如果你希望测试不访问上游 LLM 设置 DISABLE_LLM=1
 
 如果你希望让 Agent 具备知识库检索能力(Week 8)
 
@@ -151,6 +155,13 @@ make kb-query QUERY="desk Equity Derivatives breach" TOP_K=5
 再在 MCP 客户端里调用 tool
 
 - search_similar_alerts query="desk Equity Derivatives breach" top_k=5
+
+治理回归与回放对比
+
+```bash
+make governance-regression
+make governance-replay-compare EVENT_FILE=/path/to/event.json POLICY_A=policy.a POLICY_B=policy.b
+```
 
 如果你希望跑覆盖率
 
