@@ -218,7 +218,7 @@
  - [x] 编写 `riskmonitor_multiagent.sentinel.service` 使用 `aiokafka` 监听 `risk.positions.cdc`
  - [x] 实现基础过滤逻辑 解析 CDC 事件 发现 Exposure > Limit 即触发后续流程
  - [x] **Agent Roles Implementation (三大角色)**
- - [x] **System Engineer Agent (IT 运维)**: 专门分析 IT 系统报错与抖动 检查数据延迟 字段完整性与依赖可用性 过滤技术故障
+ - [x] **System Engineer Agent (IT 运维)**: 基于实时观测(Kafka/MySQL/Chroma/服务指标)走 LLM 诊断 过滤技术故障
  - [x] **Risk Analyst Agent (风险分析师)**: 专门分析业务风险 基于事件与上下文生成客观事实报告与风险点列表
  - [x] **Manager Agent (管理者/指挥官)**: 汇总前两者信息进行分析与处理 向人类汇报 并向其他两个 Agent 下发可执行指令并等待执行结果
  - [x] **Sequential Pipeline (线性编排)**
@@ -257,7 +257,7 @@
  - [x] 定义事件分级与性质分类(severity, category/system_or_business, actionability, confidence), 并明确每类事件的默认处理策略.
  - [x] 定义并固化三个 Agent 的结构化输出 schema, 并提供校验与兼容策略.
  - [x] **State Machine (LangGraph)**
- - [x] 节点建议: NormalizeEvent -> EngineerCheck -> RetrieveContext(tools + Chroma) -> RiskAnalyst -> QualityGate -> RewriteLoop -> Manager -> HumanApproval -> Execute.
+ - [x] 节点建议: NormalizeEvent -> RetrieveContext(tools + Chroma) -> EngineerCheck -> RiskAnalyst -> QualityGate -> RewriteLoop -> Manager -> HumanApproval -> Execute.
  - [x] Manager 节点支持向 System Engineer 与 Risk Analyst 下发可执行指令并等待执行结果.
  - [x] **Collaboration Loop (协作闭环, 必须可验证)**
  - [x] Manager 产出可执行计划 plan_steps, 每一步要么是 tool call 要么是 agent instruction

@@ -192,18 +192,28 @@ def _node_normalize(state: _State) -> dict[str, Any]:
     return {"run_id": run_id, "errors": [], "replayed": False, "budget": budget, "run_meta": run_meta}
 
 
-def _route_after_normalize(state: _State) -> Literal["end", "engineer_check"]:
+def _route_after_normalize(state: _State) -> Literal["end", "retrieve_context"]:
     if state.get("replayed"):
         return "end"
     if state.get("errors"):
         return "end"
-    return "engineer_check"
+    return "retrieve_context"
 
 
-def _node_engineer_check(state: _State) -> dict[str, Any]:
+async def _node_engineer_check(state: _State) -> dict[str, Any]:
     started = time.monotonic()
     agent = SystemEngineerAgent()
-    result = agent.analyze(event=state["event"])
+    budget = state.get("budget") if isinstance(state.get("budget"), dict) else {}
+    budget = _refresh_budget_elapsed(budget)
+    result = await agent.analyze(
+        event=state["event"],
+        context={
+            "facts": state.get("facts"),
+            "observations": state.get("observations"),
+            "receipts": state.get("receipts"),
+            "budget": _budget_snapshot_for_ctx(budget),
+        },
+    )
     out = result.output if isinstance(result.output, dict) else {}
     ok_out, errors = validate_system_engineer_output(out)
     if not ok_out:
@@ -218,11 +228,11 @@ def _node_engineer_check(state: _State) -> dict[str, Any]:
     return {"engineer": out}
 
 
-def _route_after_engineer(state: _State) -> Literal["end", "retrieve_context"]:
+def _route_after_engineer(state: _State) -> Literal["end", "risk_analyst"]:
     engineer = state.get("engineer") or {}
     if engineer.get("system_issue") is True:
         return "end"
-    return "retrieve_context"
+    return "risk_analyst"
 
 
 def _node_retrieve_context(state: _State) -> dict[str, Any]:
@@ -303,6 +313,18 @@ def _node_retrieve_context(state: _State) -> dict[str, Any]:
     receipts.append(_exec_tool(cmd2))
     observations.append({"tool": "mysql_health"})
 
+    cmd_chroma = new_agent_command(
+        run_id=run_id,
+        command_id=f"cmd_{uuid.uuid4().hex}",
+        target_agent="system_engineer",
+        action="chroma_health",
+        params={},
+        timeout_ms=3000,
+        expected_output_schema="tool_result.v1",
+    )
+    receipts.append(_exec_tool(cmd_chroma))
+    observations.append({"tool": "chroma_health"})
+
     query_text = f"desk={desk} signal=desk_exposure_breach"
     cmd3 = new_agent_command(
         run_id=run_id,
@@ -337,7 +359,7 @@ def _node_retrieve_context(state: _State) -> dict[str, Any]:
 
     rag = {"query": query_text, "hits": rag_hits, "memory_hits": memory_hits}
 
-    required_actions = {"collect_metrics", "kafka_lag", "mysql_health"}
+    required_actions = {"collect_metrics", "kafka_lag", "mysql_health", "chroma_health"}
     required_receipts = [
         r
         for r in receipts
@@ -365,7 +387,16 @@ def _node_retrieve_context(state: _State) -> dict[str, Any]:
         event_id=event_id,
         patch={"observations": observations, "receipts": receipts, "rag": rag, "facts": facts, "observation_failed": observation_failed, "budget": _budget_snapshot_for_ctx(budget)},
     )
-    set_gauge("rm_kafka_lag_ms", float((receipts[1].get("output", {}).get("result", {}).get("lag_ms") or 0) if isinstance(receipts[1], dict) else 0.0))
+    for r in receipts:
+        if not isinstance(r, dict):
+            continue
+        out = r.get("output")
+        if not isinstance(out, dict) or out.get("action") != "kafka_lag":
+            continue
+        res = out.get("result")
+        if isinstance(res, dict) and isinstance(res.get("lag_ms"), int):
+            set_gauge("rm_kafka_lag_ms", float(res.get("lag_ms")))
+        break
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "retrieve_context"})
     return {"observations": observations, "receipts": receipts, "rag": rag, "facts": facts, "observation_failed": observation_failed, "budget": budget}
 
@@ -925,9 +956,9 @@ def _build_graph():
     graph.add_node("end", _node_end)
 
     graph.add_edge(START, "normalize")
-    graph.add_conditional_edges("normalize", _route_after_normalize, {"engineer_check": "engineer_check", "end": "end"})
-    graph.add_conditional_edges("engineer_check", _route_after_engineer, {"retrieve_context": "retrieve_context", "end": "end"})
-    graph.add_edge("retrieve_context", "risk_analyst")
+    graph.add_conditional_edges("normalize", _route_after_normalize, {"retrieve_context": "retrieve_context", "end": "end"})
+    graph.add_edge("retrieve_context", "engineer_check")
+    graph.add_conditional_edges("engineer_check", _route_after_engineer, {"risk_analyst": "risk_analyst", "end": "end"})
     graph.add_edge("risk_analyst", "quality_gate")
     graph.add_conditional_edges("quality_gate", _route_after_quality_gate, {"rewrite": "rewrite", "manager": "manager"})
     graph.add_edge("rewrite", "quality_gate")

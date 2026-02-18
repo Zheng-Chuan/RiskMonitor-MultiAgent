@@ -19,6 +19,7 @@ from riskmonitor_multiagent.contracts.agent_outputs import (
 )
 from riskmonitor_multiagent.contracts.risk_event import validate_risk_event
 from riskmonitor_multiagent.governance.versions import (
+    PROMPT_VERSION_SYSTEM_ENGINEER,
     PROMPT_VERSION_MANAGER,
     PROMPT_VERSION_RISK_ANALYST,
     get_policy_version,
@@ -28,8 +29,25 @@ from riskmonitor_multiagent.governance.versions import (
 class SystemEngineerAgent:
     def __init__(self, *, max_event_latency_ms: int = 60000) -> None:
         self._max_event_latency_ms = int(max_event_latency_ms)
+        self._agent = BaseAgent(
+            name="system_engineer",
+            system_prompt=(
+                "You are a system engineer agent focusing on real time infrastructure health.\n"
+                "Use only the provided receipts/observations to judge system health.\n"
+                "Return only valid JSON.\n"
+                "Keys: schema_version, system_issue, reason, latency_ms, evidence, summary, findings, recommendations.\n"
+                "schema_version must be system_engineer_output.v1.\n"
+                "system_issue must be boolean.\n"
+                "reason must be a short snake_case string.\n"
+                "summary must be a short Chinese paragraph using only English punctuation.\n"
+                "evidence must be an object and must cite receipt command_id when available.\n"
+                "Never invent metrics.\n"
+            ),
+            prompt_version=PROMPT_VERSION_SYSTEM_ENGINEER,
+            policy_version=get_policy_version(),
+        )
 
-    def analyze(self, *, event: dict[str, Any]) -> AgentResult:
+    async def analyze(self, *, event: dict[str, Any], context: dict[str, Any] | None = None, max_tokens: int | None = 512) -> AgentResult:
         ok_event, event_errors = validate_risk_event(event)
         if not ok_event:
             output = {
@@ -66,7 +84,8 @@ class SystemEngineerAgent:
                 "evidence": {"payload_keys": list(payload.keys())},
             }
             output = normalize_system_engineer_output(output)
-            return AgentResult(ok=False, output=output)
+            ok_out, _ = validate_system_engineer_output(output)
+            return AgentResult(ok=ok_out, output=output)
 
         if exposure is None or not isinstance(exposure, (int, float)):
             output = {
@@ -77,7 +96,8 @@ class SystemEngineerAgent:
                 "evidence": {"exposure_type": str(type(exposure))},
             }
             output = normalize_system_engineer_output(output)
-            return AgentResult(ok=False, output=output)
+            ok_out, _ = validate_system_engineer_output(output)
+            return AgentResult(ok=ok_out, output=output)
 
         if latency_ms is not None and latency_ms > self._max_event_latency_ms:
             output = {
@@ -88,18 +108,90 @@ class SystemEngineerAgent:
                 "evidence": {"max_event_latency_ms": self._max_event_latency_ms},
             }
             output = normalize_system_engineer_output(output)
-            return AgentResult(ok=False, output=output)
+            ok_out, _ = validate_system_engineer_output(output)
+            return AgentResult(ok=ok_out, output=output)
 
-        output = {
+        receipts = (context or {}).get("receipts") if isinstance(context, dict) else None
+        facts = (context or {}).get("facts") if isinstance(context, dict) else None
+        observations = (context or {}).get("observations") if isinstance(context, dict) else None
+
+        def _find_tool_result(action: str) -> dict[str, Any] | None:
+            if not isinstance(receipts, list):
+                return None
+            for r in receipts:
+                if not isinstance(r, dict) or r.get("schema_version") != "agent_receipt.v1":
+                    continue
+                out = r.get("output")
+                if not isinstance(out, dict):
+                    continue
+                if out.get("action") != action:
+                    continue
+                res = out.get("result")
+                return res if isinstance(res, dict) else None
+            return None
+
+        mysql = _find_tool_result("mysql_health") or {}
+        chroma = _find_tool_result("chroma_health") or {}
+        kafka = _find_tool_result("kafka_lag") or {}
+        service = _find_tool_result("collect_metrics") or {}
+
+        system_issue = False
+        reason = "ok"
+        if isinstance(mysql.get("ok"), bool) and mysql.get("ok") is False:
+            system_issue = True
+            reason = "mysql_unhealthy"
+        elif isinstance(chroma.get("ok"), bool) and chroma.get("ok") is False:
+            system_issue = True
+            reason = "chroma_unhealthy"
+        else:
+            lag_ms = kafka.get("lag_ms")
+            if isinstance(lag_ms, int) and lag_ms >= 120000:
+                system_issue = True
+                reason = "kafka_lag_high"
+
+        fallback = {
             "schema_version": SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
-            "system_issue": False,
-            "reason": "ok",
+            "system_issue": bool(system_issue),
+            "reason": reason,
             "latency_ms": latency_ms,
-            "evidence": {"event_id": event.get("event_id")},
+            "summary": "已完成基础设施观测结果的快速检查 并给出是否存在系统性问题的判断",
+            "evidence": {
+                "event_id": event.get("event_id"),
+                "fields": ["payload.desk", "payload.exposure"],
+                "facts": facts if isinstance(facts, dict) else None,
+                "observations": observations if isinstance(observations, list) else None,
+            },
+            "findings": {
+                "mysql_health": mysql if isinstance(mysql, dict) else None,
+                "chroma_health": chroma if isinstance(chroma, dict) else None,
+                "kafka_lag": kafka if isinstance(kafka, dict) else None,
+                "service_metrics": service if isinstance(service, dict) else None,
+            },
+            "recommendations": [
+                "如存在系统性问题 请先恢复依赖服务再进行后续自动化处置",
+                "必要时将事件升级给值班人员并附上观测证据",
+            ],
         }
-        output = normalize_system_engineer_output(output)
-        ok_out, _ = validate_system_engineer_output(output)
-        return AgentResult(ok=ok_out, output=output)
+
+        result = await self._agent.ask_json(
+            user_prompt=(
+                "Input event:\n"
+                f"{event}\n\n"
+                "Context facts:\n"
+                f"{facts}\n\n"
+                "Observations:\n"
+                f"{observations}\n\n"
+                "Receipts:\n"
+                f"{receipts}\n\n"
+                "Decide if there is a system issue that should block downstream actions.\n"
+                "Focus on kafka/mysql/chroma load, throughput, lag, errors and readiness.\n"
+            ),
+            fallback=fallback,
+            max_tokens=max_tokens,
+        )
+        out = normalize_system_engineer_output(result.output if isinstance(result.output, dict) else {})
+        ok_out, _ = validate_system_engineer_output(out)
+        return AgentResult(ok=ok_out, output=out, usage=result.usage, meta=result.meta)
 
 
 class RiskAnalystAgent:
