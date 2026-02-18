@@ -24,22 +24,38 @@ def _try_load_repo_dotenv() -> None:
 
 def get_mysql_host() -> str:
     """获取 MySQL 主机地址, 默认为 localhost."""
-    return os.getenv("MYSQL_HOST", "localhost").strip() or "localhost"
+    value = os.getenv("MYSQL_HOST")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("MYSQL_HOST")
+    return (value or "localhost").strip() or "localhost"
 
 
 def get_mysql_port() -> int:
     """获取 MySQL 端口, 默认为 3306."""
-    return int(os.getenv("MYSQL_PORT", "3306"))
+    value = os.getenv("MYSQL_PORT")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("MYSQL_PORT")
+    return int((value or "3306").strip() or "3306")
 
 
 def get_mysql_database() -> str:
     """获取 MySQL 数据库名, 默认为 riskmonitor."""
-    return os.getenv("MYSQL_DATABASE", "riskmonitor").strip() or "riskmonitor"
+    value = os.getenv("MYSQL_DATABASE")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("MYSQL_DATABASE")
+    return (value or "riskmonitor").strip() or "riskmonitor"
 
 
 def get_mysql_user() -> str:
     """获取 MySQL 用户名, 默认为 admin."""
-    return os.getenv("MYSQL_USER", "admin").strip() or "admin"
+    value = os.getenv("MYSQL_USER")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("MYSQL_USER")
+    return (value or "admin").strip() or "admin"
 
 
 def get_mysql_password() -> str:
@@ -51,6 +67,9 @@ def get_mysql_password() -> str:
         ValueError: 如果未设置 MYSQL_PASSWORD.
     """
     password = os.getenv("MYSQL_PASSWORD")
+    if password is None or not password.strip():
+        _try_load_repo_dotenv()
+        password = os.getenv("MYSQL_PASSWORD")
     if password is None or not password.strip():
         raise ValueError("MYSQL_PASSWORD is not set")
     return password.strip()
@@ -148,6 +167,38 @@ def get_kafka_bootstrap_servers() -> str:
 def get_kafka_topic_cdc_positions() -> str:
     """获取 CDC Positions Topic, 默认为 risk.positions.cdc."""
     return os.getenv("KAFKA_TOPIC_CDC_POSITIONS", "risk.positions.cdc").strip() or "risk.positions.cdc"
+
+
+def get_kafka_topic_dlq() -> str:
+    value = os.getenv("KAFKA_TOPIC_DLQ")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("KAFKA_TOPIC_DLQ")
+    return (value or "risk.dlq").strip() or "risk.dlq"
+
+
+def get_sentinel_retry_max() -> int:
+    value = os.getenv("SENTINEL_RETRY_MAX")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("SENTINEL_RETRY_MAX")
+    return int((value or "3").strip() or "3")
+
+
+def get_sentinel_retry_backoff_s() -> float:
+    value = os.getenv("SENTINEL_RETRY_BACKOFF_S")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("SENTINEL_RETRY_BACKOFF_S")
+    return float((value or "0.5").strip() or "0.5")
+
+
+def get_sentinel_dlq_enabled() -> bool:
+    value = os.getenv("SENTINEL_DLQ_ENABLED")
+    if value is None:
+        _try_load_repo_dotenv()
+        value = os.getenv("SENTINEL_DLQ_ENABLED")
+    return (value or "1").strip() not in {"0", "false", "False"}
 
 
 def get_knowledge_db_path() -> str:

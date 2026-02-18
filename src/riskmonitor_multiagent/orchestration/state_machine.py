@@ -8,6 +8,9 @@ from typing import Any, Literal, Optional
 from riskmonitor_multiagent import config
 from riskmonitor_multiagent.agents.roles import ManagerAgent, RiskAnalystAgent, SystemEngineerAgent
 from riskmonitor_multiagent.contracts.agent_outputs import (
+    normalize_manager_output,
+    normalize_risk_analyst_output,
+    normalize_system_engineer_output,
     validate_manager_output,
     validate_risk_analyst_output,
     validate_system_engineer_output,
@@ -564,9 +567,12 @@ async def _node_manager(state: _State) -> dict[str, Any]:
             "decision": "WATCH",
             "action": "budget exceeded, skip llm call",
             "rationale": "budget exceeded",
+            "degraded": True,
+            "degraded_reason": "budget_exceeded",
+            "degraded_scope": ["manager_decision"],
             "plan_steps": None,
             "commands": None,
-            "evidence": {"budget_exceeded": True, "reason": budget.get("exceeded_reason"), "type": budget.get("exceeded_type")},
+            "evidence": {"budget_exceeded": True, "reason": budget.get("exceeded_reason"), "type": budget.get("exceeded_type"), "fields": ["budget.exceeded"]},
         }
     elif _budget_remaining(budget, kind="time_ms") <= 0:
         budget = _mark_budget(budget, exceeded_type="time", node="manager", reason="time_budget_exceeded")
@@ -575,9 +581,12 @@ async def _node_manager(state: _State) -> dict[str, Any]:
             "decision": "WATCH",
             "action": "budget exceeded, skip llm call",
             "rationale": "time budget exceeded",
+            "degraded": True,
+            "degraded_reason": "time_budget_exceeded",
+            "degraded_scope": ["manager_decision"],
             "plan_steps": None,
             "commands": None,
-            "evidence": {"budget_exceeded": True, "reason": "time_budget_exceeded"},
+            "evidence": {"budget_exceeded": True, "reason": "time_budget_exceeded", "fields": ["budget.time_ms"]},
         }
     elif _budget_remaining(budget, kind="token") <= 0:
         budget = _mark_budget(budget, exceeded_type="token", node="manager", reason="token_budget_exceeded")
@@ -586,9 +595,12 @@ async def _node_manager(state: _State) -> dict[str, Any]:
             "decision": "WATCH",
             "action": "budget exceeded, skip llm call",
             "rationale": "token budget exceeded",
+            "degraded": True,
+            "degraded_reason": "token_budget_exceeded",
+            "degraded_scope": ["manager_decision"],
             "plan_steps": None,
             "commands": None,
-            "evidence": {"budget_exceeded": True, "reason": "token_budget_exceeded"},
+            "evidence": {"budget_exceeded": True, "reason": "token_budget_exceeded", "fields": ["budget.token"]},
         }
     else:
         remaining = _budget_remaining(budget, kind="token")
@@ -607,6 +619,10 @@ async def _node_manager(state: _State) -> dict[str, Any]:
     ok_out, errors = validate_manager_output(out)
     if not ok_out:
         out["schema_errors"] = errors
+        if isinstance(out, dict):
+            out["degraded"] = True
+            out["degraded_reason"] = "schema_invalid"
+            out["degraded_scope"] = ["manager_decision"]
 
     commands = out.get("commands")
     if not isinstance(commands, list):
@@ -831,14 +847,61 @@ def _node_end(state: _State) -> dict[str, Any]:
     if state.get("final_output"):
         return {"final_output": state["final_output"]}
 
+    manager = state.get("manager") if isinstance(state.get("manager"), dict) else {}
+    if not manager:
+        manager = normalize_manager_output(
+            {
+                "schema_version": "manager_output.v1",
+                "decision": "WATCH",
+                "action": "blocked, skip decision",
+                "rationale": "workflow ended early",
+                "degraded": True,
+                "degraded_reason": "blocked",
+                "degraded_scope": ["manager_decision"],
+                "plan_steps": None,
+                "commands": None,
+                "evidence": {"event_id": event_id, "fields": ["event.event_id"]},
+            }
+        )
+    analyst = state.get("analyst") if isinstance(state.get("analyst"), dict) else {}
+    if not analyst:
+        analyst = normalize_risk_analyst_output(
+            {
+                "schema_version": "risk_analyst_output.v1",
+                "report": "流程提前结束 已降级输出",
+                "key_facts": {},
+                "confidence": None,
+                "evidence": {"fields": ["workflow.blocked"]},
+            }
+        )
+    engineer = state.get("engineer") if isinstance(state.get("engineer"), dict) else {}
+    if not engineer:
+        engineer = normalize_system_engineer_output(
+            {
+                "schema_version": "system_engineer_output.v1",
+                "system_issue": True,
+                "reason": "workflow_ended",
+                "latency_ms": None,
+                "evidence": {"fields": ["workflow.blocked"]},
+            }
+        )
     final_output = {
         "run_id": run_id,
         "event_id": event_id,
         "blocked": True,
         "run_meta": state.get("run_meta"),
-        "engineer": state.get("engineer"),
-        "errors": state.get("errors"),
+        "engineer": engineer,
+        "analyst": analyst,
+        "manager": manager,
+        "facts": state.get("facts"),
+        "rag": state.get("rag"),
+        "budget": state.get("budget"),
+        "memory": None,
+        "receipts": state.get("receipts"),
         "approval": state.get("approval"),
+        "audit_records": None,
+        "audit_db": None,
+        "errors": state.get("errors"),
     }
     store = _ctx_store()
     store.upsert(run_id=run_id, event_id=event_id, patch={"final_output": final_output})

@@ -34,10 +34,34 @@
         "additionalProperties": true
       }
     },
+    "degraded": {
+      "type": ["boolean", "null"]
+    },
+    "degraded_reason": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "degraded_scope": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "evidence": {
       "type": "object",
       "additionalProperties": true
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"degraded": {"const": true}}
+      },
+      "then": {
+        "required": ["degraded_reason", "degraded_scope"]
+      }
+    }
+  ],
   "additionalProperties": true
 }

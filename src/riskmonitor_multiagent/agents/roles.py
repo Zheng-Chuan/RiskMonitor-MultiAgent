@@ -154,7 +154,7 @@ class ManagerAgent:
             system_prompt=(
                 "You are a manager agent.\n"
                 "Return only valid JSON.\n"
-                "Keys: schema_version, decision, action, rationale, plan_steps, commands, evidence.\n"
+                "Keys: schema_version, decision, action, rationale, plan_steps, commands, evidence, degraded, degraded_reason, degraded_scope.\n"
                 "schema_version must be manager_output.v1.\n"
                 "decision must be one of WATCH or CRITICAL.\n"
                 "action and rationale must be Chinese text using only English punctuation.\n"
@@ -163,6 +163,9 @@ class ManagerAgent:
                 "If commands is a list, each item must be an AgentCommand with schema_version=agent_command.v1.\n"
                 "AgentCommand keys: schema_version, run_id, command_id, target_agent, action, params, timeout_ms, expected_output_schema.\n"
                 "evidence must be an object and must cite receipt command_id when available.\n"
+                "evidence must include at least one of: fields, receipt_command_ids, rag_hit_ids.\n"
+                "degraded must be a boolean.\n"
+                "If degraded is true, degraded_reason must be a short string and degraded_scope must be a non empty list.\n"
             ),
             prompt_version=PROMPT_VERSION_MANAGER,
             policy_version=get_policy_version(),
@@ -178,6 +181,9 @@ class ManagerAgent:
             "decision": level,
             "action": "建议立刻通知值班人员 并要求 desk 提供敞口变化原因",
             "rationale": "基于当前敞口变化幅度触发预警 需要人工确认是否为真实交易导致",
+            "degraded": True,
+            "degraded_reason": "llm_skipped",
+            "degraded_scope": ["manager_decision"],
             "plan_steps": [
                 {"kind": "agent_instruction", "target_agent": "system_engineer", "action": "collect_metrics"},
                 {"kind": "agent_instruction", "target_agent": "risk_analyst", "action": "search_similar_alerts"},
@@ -198,6 +204,7 @@ class ManagerAgent:
             "evidence": {
                 "event_id": event.get("event_id"),
                 "analyst_keys": list(analyst_report.keys()) if isinstance(analyst_report, dict) else [],
+                "fields": ["payload.exposure"],
                 "receipt_command_ids": ["cmd_fallback_collect_metrics"],
             },
         }

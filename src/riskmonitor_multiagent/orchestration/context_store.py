@@ -32,6 +32,9 @@ class ContextStore:
     def get_final_by_event_id(self, *, event_id: str) -> Optional[dict[str, Any]]:
         raise NotImplementedError
 
+    def get_event_snapshot_by_event_id(self, *, event_id: str) -> Optional[dict[str, Any]]:
+        raise NotImplementedError
+
 
 class FileContextStore(ContextStore):
     def __init__(self, *, base_dir: Optional[str] = None) -> None:
@@ -92,4 +95,21 @@ class FileContextStore(ContextStore):
             if isinstance(final, dict):
                 return final
             continue
+        return None
+
+    def get_event_snapshot_by_event_id(self, *, event_id: str) -> Optional[dict[str, Any]]:
+        if not isinstance(event_id, str) or not event_id:
+            return None
+        for path in sorted(self._base_dir.glob("run_*.json"), reverse=True):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            if data.get("event_id") != event_id:
+                continue
+            snapshot = data.get("event_snapshot")
+            if isinstance(snapshot, dict):
+                return snapshot
         return None

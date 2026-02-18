@@ -1,4 +1,5 @@
 import base64
+import time
 import sys
 from pathlib import Path
 
@@ -47,7 +48,9 @@ async def test_process_message_triggers_alert_for_schema_payload_decimal():
                 "__op": "u",
                 "__ts_ms": 123,
             },
-        }
+        },
+        topic="risk.positions.cdc.unit.1",
+        offset=int(time.time() * 1000),
     )
 
     await svc._process_message(msg)
@@ -73,7 +76,9 @@ async def test_process_message_handles_envelope_after_format():
                 "op": "u",
                 "after": {"desk": "Equity Derivatives", "delta": MAX_EXPOSURE_THRESHOLD + 10.0},
             }
-        }
+        },
+        topic="risk.positions.cdc.unit.2",
+        offset=int(time.time() * 1000) + 1,
     )
 
     await svc._process_message(msg)

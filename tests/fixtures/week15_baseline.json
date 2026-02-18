@@ -1,0 +1,114 @@
+{
+  "invalid_event_missing_desk": {
+    "analyst": {
+      "confidence": null,
+      "key_facts": {}
+    },
+    "approval": {
+      "approved": null,
+      "reason": null,
+      "required": null
+    },
+    "blocked": true,
+    "engineer": {
+      "reason": "missing_desk",
+      "system_issue": true
+    },
+    "event_id": "risk.positions.cdc:0:102:breach",
+    "manager": {
+      "command_actions": [],
+      "decision": "WATCH",
+      "degraded": true,
+      "degraded_reason": "blocked",
+      "degraded_scope": [
+        "manager_decision"
+      ],
+      "evidence_has_fields": true,
+      "evidence_has_rag": false,
+      "evidence_has_receipts": false
+    },
+    "receipts": {
+      "count": 0,
+      "ok_count": 0
+    },
+    "schema_version": "week15_snapshot.v1"
+  },
+  "realistic_breach_critical": {
+    "analyst": {
+      "confidence": 0.7,
+      "key_facts": {
+        "desk": "Equity Derivatives",
+        "exposure": 1500000.0
+      }
+    },
+    "approval": {
+      "approved": true,
+      "reason": null,
+      "required": false
+    },
+    "blocked": false,
+    "engineer": {
+      "reason": "ok",
+      "system_issue": false
+    },
+    "event_id": "risk.positions.cdc:0:100:breach",
+    "manager": {
+      "command_actions": [
+        "collect_metrics"
+      ],
+      "decision": "CRITICAL",
+      "degraded": true,
+      "degraded_reason": "llm_skipped",
+      "degraded_scope": [
+        "manager_decision"
+      ],
+      "evidence_has_fields": true,
+      "evidence_has_rag": false,
+      "evidence_has_receipts": true
+    },
+    "receipts": {
+      "count": 5,
+      "ok_count": 5
+    },
+    "schema_version": "week15_snapshot.v1"
+  },
+  "realistic_breach_watch": {
+    "analyst": {
+      "confidence": 0.7,
+      "key_facts": {
+        "desk": "Fixed Income",
+        "exposure": 50000.0
+      }
+    },
+    "approval": {
+      "approved": true,
+      "reason": null,
+      "required": false
+    },
+    "blocked": false,
+    "engineer": {
+      "reason": "ok",
+      "system_issue": false
+    },
+    "event_id": "risk.positions.cdc:0:101:breach",
+    "manager": {
+      "command_actions": [
+        "collect_metrics"
+      ],
+      "decision": "WATCH",
+      "degraded": true,
+      "degraded_reason": "llm_skipped",
+      "degraded_scope": [
+        "manager_decision"
+      ],
+      "evidence_has_fields": true,
+      "evidence_has_rag": false,
+      "evidence_has_receipts": true
+    },
+    "receipts": {
+      "count": 5,
+      "ok_count": 5
+    },
+    "schema_version": "week15_snapshot.v1"
+  }
+}

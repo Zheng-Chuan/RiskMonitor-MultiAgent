@@ -53,7 +53,9 @@ class BaseAgent:
         started = time.monotonic()
         model_label = (self._model or "").strip() or "default"
         try:
-            if os.getenv("DISABLE_LLM", "0").strip() not in {"0", "false", "False"} or config.get_openrouter_api_key().strip() == "":
+            llm_disabled = os.getenv("DISABLE_LLM", "0").strip() not in {"0", "false", "False"}
+            api_key_missing = config.get_openrouter_api_key().strip() == ""
+            if llm_disabled or api_key_missing:
                 inc_counter("rm_llm_skipped_total", labels={"agent": self._name, "model": model_label})
                 return AgentResult(
                     ok=False,

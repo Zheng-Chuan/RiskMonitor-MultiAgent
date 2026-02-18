@@ -10,30 +10,29 @@
 - 这些是必须落地的技术点, 用 checklist 方式确保可衡量 可测试 可验证
 - Week 内容只是实现路径, 但无论如何这些能力最终都要落地
 
-### A. 事件驱动架构 (现状冻结 不再深化)
+### A. 事件驱动架构 (工程完善 重新纳入主线)
 
 说明
 
 - 事件驱动链路已经完成从数据库变更到 Agent 触发的最小闭环
-- 后续不再把 CDC Kafka Sentinel 作为作品集主线
-- 余下的 Schema Registry 兼容 幂等 DLQ Replay 等工程化增强暂缓 不作为当前阶段验收目标
+- 后续把 Schema Registry 兼容 幂等 去重 重试 DLQ Replay 作为工程完善目标
 
 - [x] CDC 数据动脉: MySQL -> Debezium -> Kafka topic
 - [x] 标准事件 Envelope (企业对齐)
  - [x] schema_version + event_id + correlation_id + causation_id + occurred_at + producer
- - [ ] 暂缓 Schema Registry 与兼容策略 (breaking change 流程)
+ - [x] Schema Registry 与兼容策略 (breaking change 流程)
 - [x] 事件分级与性质分类
  - [x] severity (INFO/WARNING/CRITICAL) 与 category (system/business)
  - [x] actionability (是否可执行) 与 confidence (置信度)
  - [x] 每类事件的默认处理策略 (拦截/降级/升级/人工审批)
-- [ ] 暂缓 幂等与去重
- - [ ] 暂缓 基于 event_id 或 partition+offset 的去重表
- - [ ] 暂缓 同一事件重放不重复写库/不重复推送
-- [ ] 暂缓 重试与 DLQ
- - [ ] 暂缓 可配置重试次数与退避
- - [ ] 暂缓 不可恢复错误进入 DLQ 并可追溯
-- [ ] 暂缓 可回放 Replay
- - [ ] 暂缓 选定 event_id 可重放并产出一致的结构化输出 (允许文本不同)
+- [x] 幂等与去重
+ - [x] 基于 event_id 或 partition+offset 的去重表
+ - [x] 同一事件重放不重复写库 不重复推送
+- [x] 重试与 DLQ
+ - [x] 可配置重试次数与退避
+ - [x] 不可恢复错误进入 DLQ 并可追溯
+- [x] 可回放 Replay
+ - [x] 选定 event_id 可重放并产出一致的结构化输出 (允许文本不同)
 
 ### B. Multi-Agent 协作 (必须实现)
 
@@ -54,22 +53,19 @@
 - [x] Context Store (共享上下文)
  - [x] 黑板模型: event snapshot + tool results + rag hits + decisions + approvals
  - [x] 结构化引用 evidence (每条结论必须能追溯到 tool/rag/事件字段)
-- [ ] 预算与策略
- - [ ] token 预算与截断策略
- - [ ] 缓存策略 (相同事件/相同检索 query 的缓存与失效)
- - [ ] Prompt/Policy 版本化 (可回放)
- - [ ] 每次 Agent run 记录 prompt_version, model, temperature, tool_versions
+- [x] Prompt/Policy 版本化 (可回放)
+ - [x] 每次 Agent run 记录 prompt_version, model, temperature, tool_versions
 
 ### D. 工程化质量门禁 (必须实现)
 
-- [ ] Contract Tests (结构化输出质量)
- - [ ] JSON 可解析率, 字段齐全率, 类型正确率
- - [ ] evidence 非空率 (关键结论必须有来源)
-- [ ] 离线评测与回归集
- - [ ] 固定回归集 events + 期望结构化输出 (base vs new 版本一键对比)
+- [x] Contract Tests (结构化输出质量)
+ - [x] JSON 可解析率, 字段齐全率, 类型正确率
+ - [x] evidence 非空率 (关键结论必须有来源)
+- [x] 离线评测与回归集
+ - [x] 固定回归集 events + 期望结构化输出 (base vs new 版本一键对比)
  - [ ] LLM-as-judge 或规则评分作为质量闸门
- - [ ] 防幻觉与引用治理
- - [ ] 关键结论必须引用 tool 或 rag evidence, 否则降级或拒答
+ - [x] 防幻觉与引用治理
+ - [x] 关键结论必须引用 tool 或 rag evidence, 否则降级或拒答
 
 ### E. 安全与权限治理 (必须实现)
 
@@ -79,17 +75,13 @@
  - [x] Manager 才能发起写库/推送, 且 CRITICAL 必须 HITL
  - [ ] Role-based 工具权限 (治理增强)
  - [x] 工具能力分级: read_only / side_effect / pii / admin 等标签化治理
- - [ ] side_effect 工具必须走审批与审计, 且可配置策略(按 severity/actionability)
+ - [x] side_effect 工具必须走审批与审计, 且可配置策略(按 severity/actionability)
  - [x] 工具 deny 的原因与证据必须结构化写入 Context Store
-- [ ] 审计与追责
+- [x] 审计与追责
 
 ### F. 可观测性与生产化 (必须实现)
 
 - [x] 端到端指标: CDC lag, consumer lag, pipeline latency (分节点), LLM error rate, Chroma latency
-- [ ] 可视化运维界面 (后期)
- - [ ] 事件流 + Agent runs 全链路轨迹
- - [ ] Human-in-the-loop 审批与审计
- - [ ] Replay 重放入口
 
 ## 核心架构愿景 (The Advanced Stack)
 
@@ -242,7 +234,6 @@
  - [x] 在 docker compose 中增加 **Chroma** 服务并提供持久化 volume
  - [x] **Knowledge Ingestion**
  - [x] 提供 CLI 将最近 `alerts` 表数据向量化写入 Chroma
- - [ ] (可选) 导入一份 Mock 的 Risk Management Handbook 文档
  - [x] **Context Retrieval Tool**
  - [x] 新增 MCP Tool `search_similar_alerts` 读取 Chroma 并返回相似历史告警
  - [x] **CLI 工具**
@@ -351,19 +342,17 @@
 - **验收**
   - [x] 审计可验证: 任意一次副作用执行都能追溯到审批与输入证据
 
-### Week 13: 治理回归集 (RBAC/Budget/Side-effect)
-**目标**: 把 RBAC/预算/审批这些治理能力变成"不会被回归破坏"的工程资产
+### Week 13: 治理回归集 (RBAC/Side-effect)
+**目标**: 把 RBAC/审批这些治理能力变成"不会被回归破坏"的工程资产
 
 - **交付**
   - [x] **治理回归集**
     - [x] 固定用例覆盖: rbac_deny, approval_required, approval_reject
-    - [x] 固定用例覆盖: token_budget_exceeded, tool_budget_exceeded, timeout_budget_exceeded
     - [x] 一键运行并输出结构化结果(通过/失败原因/证据链)
   - [x] **可观测补齐**
-    - [x] /metrics 输出治理关键指标: rbac_denied_total, approval_required_total, budget_exceeded_total
+    - [x] /metrics 输出治理关键指标: rbac_denied_total, approval_required_total
 - **验收**
   - [x] 回归可用: 任意改动不会静默破坏 RBAC/审批能力
-  - [x] 回归可用: 任意改动不会静默破坏 Budget 能力
 
 ### Week 14: Policy Prompt 版本化与可回放
 **目标**: 让每次 Agent run 可复现 可对比 可回放 形成可治理的策略迭代体系
@@ -376,6 +365,41 @@
     - [x] 同一 event_id 在不同 policy_version 下可并行跑并生成对比报告
 - **验收**
   - [x] 可回放可对比: 输出包含版本字段且差异可追溯到 policy 或 prompt 变更
+
+### Week 15: 工程化质量门禁 (Quality Gate)
+**目标**: 用可量化的质量闸门保证结构化输出稳定可靠
+
+- **交付**
+  - [x] **Contract Tests**
+    - [x] JSON 可解析率, 字段齐全率, 类型正确率
+    - [x] evidence 非空率 (关键结论必须有来源)
+  - [x] **离线评测与回归集**
+    - [x] 固定回归集 events + 期望结构化输出, base vs new 一键对比
+  - [ ] **LLM as judge 或规则评分**
+    - [ ] 评分结果作为质量闸门的一部分, 不达标则失败
+  - [x] **防幻觉与引用治理**
+    - [x] 关键结论必须引用 tool 或 rag evidence, 否则降级或拒答
+- **验收**
+  - [x] 一键运行质量门禁并输出通过失败原因与证据链
+  - [x] 任意策略改动无法绕过门禁进入交付
+
+### Week 16: 事件驱动工程加固 (Schema, Idempotency, DLQ, Replay)
+**目标**: 补齐事件链路的可演进性与可恢复性, 支持稳定重放与故障隔离
+
+- **交付**
+  - [x] **Schema Registry 兼容策略**
+    - [x] 定义 breaking change 流程与兼容检查规则
+  - [x] **幂等与去重**
+    - [x] 去重表设计与落库, 以 event_id 或 partition+offset 去重
+    - [x] 重放不重复写库, 不重复推送
+  - [x] **重试与 DLQ**
+    - [x] 可配置重试次数与退避
+    - [x] 不可恢复错误进入 DLQ 并可追溯
+  - [x] **Replay**
+    - [x] 选定 event_id 可重放并产出一致的结构化输出 (允许文本不同)
+- **验收**
+  - [x] 重复事件与重放不会产生重复副作用
+  - [x] DLQ 可定位失败原因并支持恢复流程
 
 
 ## 架构层次总结

@@ -11,12 +11,14 @@ import logging
 import signal
 import time
 
-from aiokafka import AIOKafkaConsumer
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition
 
 from riskmonitor_multiagent import config
 from riskmonitor_multiagent.agents import run_agent_pipeline
 from riskmonitor_multiagent.contracts.risk_event import build_breach_event, normalize_cdc_event
+from riskmonitor_multiagent.data_access import idempotency_repository
+from riskmonitor_multiagent.data_access import dlq_repository
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms, set_gauge
 from riskmonitor_multiagent.orchestration import run_state_machine
 
@@ -32,6 +34,7 @@ class SentinelService:
     def __init__(self):
         self._running = False
         self._consumer: AIOKafkaConsumer | None = None
+        self._dlq_producer: AIOKafkaProducer | None = None
         self._last_lag_update_ms: int = 0
         self._cached_end_offsets: dict[tuple[str, int], int] = {}
 
@@ -78,7 +81,57 @@ class SentinelService:
         self._running = False
         if self._consumer:
             await self._consumer.stop()
+        if self._dlq_producer:
+            await self._dlq_producer.stop()
         logger.info("Sentinel Service stopped.")
+
+    async def _ensure_dlq_producer(self) -> AIOKafkaProducer:
+        if self._dlq_producer is not None:
+            return self._dlq_producer
+        producer = AIOKafkaProducer(
+            bootstrap_servers=config.get_kafka_bootstrap_servers(),
+            value_serializer=lambda v: json.dumps(v, ensure_ascii=False, sort_keys=True).encode("utf-8"),
+            key_serializer=lambda v: (v.encode("utf-8") if isinstance(v, str) else None),
+        )
+        await producer.start()
+        self._dlq_producer = producer
+        return producer
+
+    async def _send_to_dlq(self, *, topic: str, partition: int, offset: int, event_id: str, payload: dict, error: BaseException, attempts: int) -> None:
+        try:
+            dlq_repository.save_dlq_event(
+                topic=topic,
+                partition=partition,
+                offset=offset,
+                event_id=event_id,
+                error_code=type(error).__name__,
+                error_message=str(error),
+                payload=payload,
+                attempts=int(attempts),
+            )
+        except Exception:
+            inc_counter("rm_sentinel_dlq_db_errors_total")
+        if not config.get_sentinel_dlq_enabled():
+            return
+        try:
+            producer = await self._ensure_dlq_producer()
+            await producer.send_and_wait(
+                config.get_kafka_topic_dlq(),
+                key=str(event_id),
+                value={
+                    "schema_version": "dlq_event.v1",
+                    "topic": topic,
+                    "partition": int(partition),
+                    "offset": int(offset),
+                    "event_id": str(event_id),
+                    "attempts": int(attempts),
+                    "error": {"code": type(error).__name__, "message": str(error)},
+                    "payload": payload,
+                },
+            )
+            inc_counter("rm_sentinel_dlq_published_total")
+        except Exception:
+            inc_counter("rm_sentinel_dlq_publish_errors_total")
 
     async def _process_message(self, msg):
         """处理单条消息"""
@@ -138,16 +191,61 @@ class SentinelService:
                 message_ts_ms=message_ts_ms,
             )
 
-            # 简单阈值检测 Breach Detection
-            if abs(exposure) > MAX_EXPOSURE_THRESHOLD:
-                inc_counter("rm_sentinel_breaches_total")
-                breach_event = build_breach_event(
-                    source_event=source_event,
-                    desk=str(desk) if isinstance(desk, str) else "unknown",
-                    exposure=float(exposure),
-                    threshold=float(MAX_EXPOSURE_THRESHOLD),
+            try:
+                decision = idempotency_repository.try_begin_processing(
+                    topic=str(topic),
+                    partition=int(partition),
+                    offset=int(offset),
+                    event_id=source_event.event_id,
                 )
-                await self._trigger_alert(event=breach_event.to_dict())
+                if decision.decision != "process":
+                    inc_counter("rm_sentinel_dedup_skipped_total", labels={"decision": decision.decision})
+                    return
+            except Exception:
+                inc_counter("rm_sentinel_dedup_unavailable_total")
+
+            max_attempts = max(1, int(config.get_sentinel_retry_max()))
+            backoff_s = max(0.0, float(config.get_sentinel_retry_backoff_s()))
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    if abs(exposure) > MAX_EXPOSURE_THRESHOLD:
+                        inc_counter("rm_sentinel_breaches_total")
+                        breach_event = build_breach_event(
+                            source_event=source_event,
+                            desk=str(desk) if isinstance(desk, str) else "unknown",
+                            exposure=float(exposure),
+                            threshold=float(MAX_EXPOSURE_THRESHOLD),
+                        )
+                        await self._trigger_alert(event=breach_event.to_dict())
+                    try:
+                        idempotency_repository.mark_done(topic=str(topic), partition=int(partition), offset=int(offset))
+                    except Exception:
+                        inc_counter("rm_sentinel_dedup_mark_done_errors_total")
+                    return
+                except Exception as e:
+                    inc_counter("rm_sentinel_retries_total", labels={"attempt": str(attempt)})
+                    if attempt < max_attempts:
+                        await asyncio.sleep(backoff_s * (2 ** (attempt - 1)))
+                        continue
+                    try:
+                        idempotency_repository.mark_failed(
+                            topic=str(topic),
+                            partition=int(partition),
+                            offset=int(offset),
+                            error_message=str(e),
+                        )
+                    except Exception:
+                        inc_counter("rm_sentinel_dedup_mark_failed_errors_total")
+                    await self._send_to_dlq(
+                        topic=str(topic),
+                        partition=int(partition),
+                        offset=int(offset),
+                        event_id=source_event.event_id,
+                        payload=value if isinstance(value, dict) else {"value": value},
+                        error=e,
+                        attempts=attempt,
+                    )
+                    raise
 
         except Exception as e:
             inc_counter("rm_sentinel_errors_total")

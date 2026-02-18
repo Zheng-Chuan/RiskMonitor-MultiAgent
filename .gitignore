@@ -54,6 +54,9 @@ reports/
 *.xlsx
 *.pdf
 
+# Runtime data
+data/
+
 # Package manager lock files
 uv.lock
 poetry.lock

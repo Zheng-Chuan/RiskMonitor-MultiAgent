@@ -102,7 +102,7 @@ def test_agent_output_schemas_validate_minimal_outputs():
         "action": "do",
         "rationale": "why",
         "commands": None,
-        "evidence": {"event_id": "x"},
+        "evidence": {"event_id": "x", "fields": ["event.event_id"]},
     }
     ok, errors = validate_manager_output(manager)
     assert ok, errors

@@ -25,6 +25,10 @@ _IGNORE_PATH_PREFIXES = (
     "receipts",
     "audit_records",
     "audit_db",
+    "analyst.report",
+    "engineer.reason",
+    "manager.action",
+    "manager.rationale",
 )
 
 class _TempEnv:

@@ -16,10 +16,53 @@ CREATE TABLE IF NOT EXISTS positions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 为常用查询创建索引
-CREATE INDEX idx_positions_trader ON positions(trader_id);
-CREATE INDEX idx_positions_desk ON positions(desk);
-CREATE INDEX idx_positions_security ON positions(security_id);
-CREATE INDEX idx_positions_date ON positions(entry_date);
+SET @exists := (
+    SELECT COUNT(1)
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+      AND table_name = 'positions'
+      AND index_name = 'idx_positions_trader'
+);
+SET @sql := IF(@exists = 0, 'CREATE INDEX idx_positions_trader ON positions(trader_id)', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @exists := (
+    SELECT COUNT(1)
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+      AND table_name = 'positions'
+      AND index_name = 'idx_positions_desk'
+);
+SET @sql := IF(@exists = 0, 'CREATE INDEX idx_positions_desk ON positions(desk)', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @exists := (
+    SELECT COUNT(1)
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+      AND table_name = 'positions'
+      AND index_name = 'idx_positions_security'
+);
+SET @sql := IF(@exists = 0, 'CREATE INDEX idx_positions_security ON positions(security_id)', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @exists := (
+    SELECT COUNT(1)
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+      AND table_name = 'positions'
+      AND index_name = 'idx_positions_date'
+);
+SET @sql := IF(@exists = 0, 'CREATE INDEX idx_positions_date ON positions(entry_date)', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- 创建 alerts 表(Week 4: 告警闭环)
 CREATE TABLE IF NOT EXISTS alerts (
@@ -67,8 +110,40 @@ CREATE TABLE IF NOT EXISTS audit_events (
     INDEX idx_audit_ts_ms (ts_ms)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS processed_cdc_events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    topic VARCHAR(128) NOT NULL,
+    partition_id INT NOT NULL,
+    offset_id BIGINT NOT NULL,
+    event_id VARCHAR(256) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    last_error TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_processed_cdc (topic, partition_id, offset_id),
+    INDEX idx_processed_event_id (event_id),
+    INDEX idx_processed_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS dlq_events (
+    dlq_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    topic VARCHAR(128) NOT NULL,
+    partition_id INT NOT NULL,
+    offset_id BIGINT NOT NULL,
+    event_id VARCHAR(256) DEFAULT NULL,
+    error_code VARCHAR(64) DEFAULT NULL,
+    error_message TEXT DEFAULT NULL,
+    payload_json JSON DEFAULT NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_dlq (topic, partition_id, offset_id),
+    INDEX idx_dlq_event_id (event_id),
+    INDEX idx_dlq_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 插入测试用演示数据(符合金融领域常识的简化样例)
-INSERT INTO positions (position_id, trader_id, desk, security_id, quantity, delta, entry_date, currency) VALUES
+INSERT IGNORE INTO positions (position_id, trader_id, desk, security_id, quantity, delta, entry_date, currency) VALUES
 -- Equity Derivatives (股票衍生品)
 ('POS-2024-001', 'TRADER-001', 'Equity Derivatives', 'AAPL-CALL-175-20250331', 1000, 600.0, '2024-10-01', 'USD'),
 ('POS-2024-002', 'TRADER-001', 'Equity Derivatives', 'GOOGL-PUT-140-20250630', -500, -300.0, '2024-10-05', 'USD'),

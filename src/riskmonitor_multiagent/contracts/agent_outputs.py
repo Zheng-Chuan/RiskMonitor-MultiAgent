@@ -34,7 +34,7 @@ def validate_system_engineer_output(output: dict[str, Any]) -> tuple[bool, list[
         errors.append("bad_latency_ms")
 
     evidence = output.get("evidence")
-    if evidence is not None and not isinstance(evidence, dict):
+    if not isinstance(evidence, dict):
         errors.append("bad_evidence")
 
     return len(errors) == 0, errors
@@ -127,6 +127,23 @@ def validate_manager_output(output: dict[str, Any]) -> tuple[bool, list[str]]:
     if evidence is not None and not isinstance(evidence, dict):
         errors.append("bad_evidence")
 
+    degraded = output.get("degraded")
+    if degraded is not None and not isinstance(degraded, bool):
+        errors.append("bad_degraded")
+    if isinstance(degraded, bool) and degraded:
+        if not _is_non_empty_str(output.get("degraded_reason")):
+            errors.append("bad_degraded_reason")
+        degraded_scope = output.get("degraded_scope")
+        if not isinstance(degraded_scope, list) or not degraded_scope or not all(_is_non_empty_str(x) for x in degraded_scope):
+            errors.append("bad_degraded_scope")
+
+    if isinstance(evidence, dict):
+        has_receipts = isinstance(evidence.get("receipt_command_ids"), list) and any(_is_non_empty_str(x) for x in evidence.get("receipt_command_ids"))
+        has_fields = isinstance(evidence.get("fields"), list) and any(_is_non_empty_str(x) for x in evidence.get("fields"))
+        has_rag = isinstance(evidence.get("rag_hit_ids"), list) and any(_is_non_empty_str(x) for x in evidence.get("rag_hit_ids"))
+        if not (has_receipts or has_fields or has_rag):
+            errors.append("missing_key_decision_evidence_refs")
+
     return len(errors) == 0, errors
 
 
@@ -136,6 +153,20 @@ def normalize_manager_output(output: dict[str, Any]) -> dict[str, Any]:
     out.setdefault("decision", "WATCH")
     out.setdefault("action", "建议通知值班人员 并要求 desk 提供解释")
     out.setdefault("rationale", "输出不符合契约 已回退到最小决策")
+    out.setdefault("evidence", {"fields": ["unknown"]})
+    if not isinstance(out.get("evidence"), dict):
+        out["evidence"] = {"fields": ["unknown"]}
+    if isinstance(out["evidence"], dict) and "fields" not in out["evidence"]:
+        out["evidence"]["fields"] = ["unknown"]
+    out.setdefault("degraded", False)
+    if not isinstance(out.get("degraded"), bool):
+        out["degraded"] = False
+    if out.get("degraded") is True:
+        if not _is_non_empty_str(out.get("degraded_reason")):
+            out["degraded_reason"] = "unknown"
+        degraded_scope = out.get("degraded_scope")
+        if not isinstance(degraded_scope, list) or not degraded_scope:
+            out["degraded_scope"] = ["manager_decision"]
     if "plan_steps" in out and out["plan_steps"] is not None and not isinstance(out["plan_steps"], list):
         out["plan_steps"] = None
     if "commands" in out and out["commands"] is not None and not isinstance(out["commands"], list):
