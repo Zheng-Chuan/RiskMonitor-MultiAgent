@@ -167,6 +167,60 @@ async def test_state_machine_rewrite_loop_runs(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_state_machine_quality_gate_rule_judge_can_trigger_rewrite(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONTEXT_STORE_DIR", str(tmp_path))
+    monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
+    monkeypatch.setenv("HITL_AUTO_APPROVE", "1")
+    monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
+    monkeypatch.setenv("DISABLE_LLM", "1")
+    monkeypatch.setenv("QUALITY_GATE_JUDGE_MODE", "rule")
+    monkeypatch.setenv("QUALITY_GATE_JUDGE_MIN_SCORE", "0.8")
+
+    import riskmonitor_multiagent.orchestration.state_machine as sm
+
+    calls = {"n": 0}
+
+    async def _fake_analyze(self, *, event, extra_instruction=None, max_tokens=512):
+        calls["n"] += 1
+        if extra_instruction is None:
+            return AgentResult(
+                ok=True,
+                output={
+                    "schema_version": RISK_ANALYST_OUTPUT_SCHEMA_VERSION,
+                    "report": "ok",
+                    "key_facts": {},
+                    "confidence": 0.9,
+                    "evidence": {"fields": ["payload.desk"]},
+                },
+            )
+        return AgentResult(
+            ok=True,
+            output={
+                "schema_version": RISK_ANALYST_OUTPUT_SCHEMA_VERSION,
+                "report": "ok",
+                "key_facts": {"desk": "Commodities", "exposure": 60000.0},
+                "confidence": 0.9,
+                "evidence": {"fields": ["payload.desk", "payload.exposure"]},
+            },
+        )
+
+    monkeypatch.setattr(sm.RiskAnalystAgent, "analyze", _fake_analyze, raising=True)
+
+    now_ms = int(time.time() * 1000)
+    source = normalize_cdc_event(
+        raw_record={"desk": "Commodities", "delta": 60000.0},
+        topic="risk.positions.cdc",
+        partition=0,
+        offset=21,
+        message_ts_ms=now_ms,
+    )
+    event = build_breach_event(source_event=source, desk="Commodities", exposure=60000.0, threshold=50000.0, now_ms=now_ms)
+    out = await run_state_machine(event=event.to_dict())
+    assert out["ok"] is True
+    assert calls["n"] >= 2
+
+
+@pytest.mark.asyncio
 async def test_state_machine_requires_human_approval_when_auto_off(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTEXT_STORE_DIR", str(tmp_path))
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")

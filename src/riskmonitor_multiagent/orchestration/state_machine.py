@@ -6,6 +6,7 @@ import uuid
 from typing import Any, Literal, Optional
 
 from riskmonitor_multiagent import config
+from riskmonitor_multiagent.agents.base import BaseAgent
 from riskmonitor_multiagent.agents.roles import ManagerAgent, RiskAnalystAgent, SystemEngineerAgent
 from riskmonitor_multiagent.contracts.agent_outputs import (
     normalize_manager_output,
@@ -74,6 +75,18 @@ def _is_auto_approved() -> bool:
     return os.getenv("HITL_AUTO_APPROVE", "1").strip() not in {"0", "false", "False"}
 
 
+def _judge_mode() -> str:
+    return os.getenv("QUALITY_GATE_JUDGE_MODE", "rule").strip() or "rule"
+
+
+def _judge_min_score() -> float:
+    v = os.getenv("QUALITY_GATE_JUDGE_MIN_SCORE", "0.6").strip() or "0.6"
+    try:
+        return float(v)
+    except Exception:
+        return 0.6
+
+
 def _get_token_budget() -> int:
     return int(os.getenv("TOKEN_BUDGET", "2000"))
 
@@ -130,6 +143,89 @@ def _budget_snapshot_for_ctx(budget: dict[str, Any]) -> dict[str, Any]:
         "exceeded_node": budget.get("exceeded_node"),
         "exceeded_reason": budget.get("exceeded_reason"),
     }
+
+
+def _rule_judge_analyst(*, event: dict[str, Any], analyst: dict[str, Any]) -> dict[str, Any]:
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    desk = payload.get("desk")
+    exposure = payload.get("exposure")
+
+    key_facts = analyst.get("key_facts") if isinstance(analyst.get("key_facts"), dict) else {}
+    evidence = analyst.get("evidence") if isinstance(analyst.get("evidence"), dict) else {}
+    confidence = analyst.get("confidence")
+
+    reasons: list[str] = []
+    score = 1.0
+
+    if not isinstance(key_facts, dict) or len(key_facts.keys()) == 0:
+        reasons.append("key_facts_empty")
+        score -= 0.4
+    else:
+        if key_facts.get("desk") is None and isinstance(desk, str) and desk:
+            reasons.append("key_facts_missing_desk")
+            score -= 0.2
+        if key_facts.get("exposure") is None and isinstance(exposure, (int, float)):
+            reasons.append("key_facts_missing_exposure")
+            score -= 0.2
+
+    if not isinstance(evidence, dict) or len(evidence.keys()) == 0:
+        reasons.append("missing_evidence")
+        score -= 0.4
+
+    if isinstance(confidence, (int, float)) and float(confidence) < 0.4:
+        reasons.append("confidence_too_low")
+        score -= 0.4
+
+    score = max(0.0, min(1.0, float(score)))
+    ok = score >= _judge_min_score()
+    return {"schema_version": "quality_judge.v1", "mode": "rule", "ok": bool(ok), "score": float(score), "reasons": reasons}
+
+
+async def _llm_judge_analyst(*, run_id: str, event: dict[str, Any], analyst: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    fallback = _rule_judge_analyst(event=event, analyst=analyst)
+    agent = BaseAgent(
+        name="quality_judge",
+        system_prompt=(
+            "You are a strict evaluation judge for an AI risk analyst output.\n"
+            "Return only valid JSON.\n"
+            "Keys: schema_version, mode, ok, score, reasons.\n"
+            "schema_version must be quality_judge.v1.\n"
+            "mode must be llm.\n"
+            "ok must be boolean.\n"
+            "score must be a number between 0 and 1.\n"
+            "reasons must be a list of short snake_case strings.\n"
+            "Judge only based on the provided event, analyst output and context.\n"
+            "Never invent evidence.\n"
+        ),
+        prompt_version="quality_judge_prompt.v1",
+        policy_version=get_policy_version(),
+    )
+    result = await agent.ask_json(
+        user_prompt=(
+            "Event:\n"
+            f"{event}\n\n"
+            "Analyst output:\n"
+            f"{analyst}\n\n"
+            "Context:\n"
+            f"{context}\n\n"
+            "Evaluate if the analyst output is actionable, grounded and complete.\n"
+            f"Minimum score threshold: {_judge_min_score()}.\n"
+        ),
+        fallback=fallback,
+        max_tokens=256,
+    )
+    out = dict(result.output) if isinstance(result.output, dict) else dict(fallback)
+    out.setdefault("schema_version", "quality_judge.v1")
+    out["mode"] = "llm"
+    if not isinstance(out.get("ok"), bool):
+        out["ok"] = bool(fallback.get("ok") is True)
+    if not isinstance(out.get("score"), (int, float)):
+        out["score"] = float(fallback.get("score") or 0.0)
+    if not isinstance(out.get("reasons"), list):
+        out["reasons"] = list(fallback.get("reasons") or [])
+    store = _ctx_store()
+    store.upsert(run_id=run_id, event_id=str(event.get("event_id") or "unknown"), patch={"llm_meta_quality_judge": result.meta or {}})
+    return out
 
 
 
@@ -472,7 +568,7 @@ async def _node_risk_analyst(state: _State) -> dict[str, Any]:
     return {"analyst": out, "budget": budget}
 
 
-def _node_quality_gate(state: _State) -> dict[str, Any]:
+async def _node_quality_gate(state: _State) -> dict[str, Any]:
     started = time.monotonic()
     analyst = state.get("analyst") or {}
     ok, errors = validate_risk_analyst_output(analyst)
@@ -487,14 +583,40 @@ def _node_quality_gate(state: _State) -> dict[str, Any]:
     if not isinstance(evidence, dict) or len(evidence.keys()) == 0:
         gate_errors.append("missing_evidence")
 
+    run_id = state["run_id"]
+    event = state["event"]
+    judge_mode = _judge_mode()
+    judge: dict[str, Any] | None = None
+    if judge_mode == "llm":
+        judge = await _llm_judge_analyst(
+            run_id=run_id,
+            event=event,
+            analyst=analyst if isinstance(analyst, dict) else {},
+            context={
+                "facts": state.get("facts"),
+                "observations": state.get("observations"),
+                "rag": state.get("rag"),
+                "receipts": state.get("receipts"),
+            },
+        )
+    else:
+        judge = _rule_judge_analyst(event=event, analyst=analyst if isinstance(analyst, dict) else {})
+    if isinstance(judge, dict):
+        score = judge.get("score")
+        ok_judge = judge.get("ok")
+        if not isinstance(ok_judge, bool) or ok_judge is not True:
+            gate_errors.append("judge_failed")
+        if isinstance(score, (int, float)) and float(score) < _judge_min_score():
+            gate_errors.append("judge_score_too_low")
+
     rewrite_count = int(state.get("rewrite_count") or 0)
     need_rewrite = len(gate_errors) > 0 and rewrite_count < 2
 
     store = _ctx_store()
     store.upsert(
-        run_id=state["run_id"],
-        event_id=str(state["event"].get("event_id") or "unknown"),
-        patch={"quality_gate": {"ok": not need_rewrite, "errors": gate_errors, "rewrite_count": rewrite_count}},
+        run_id=run_id,
+        event_id=str(event.get("event_id") or "unknown"),
+        patch={"quality_gate": {"ok": not need_rewrite, "errors": gate_errors, "rewrite_count": rewrite_count, "judge": judge}},
     )
 
     if need_rewrite:

@@ -63,7 +63,7 @@
  - [x] evidence 非空率 (关键结论必须有来源)
 - [x] 离线评测与回归集
  - [x] 固定回归集 events + 期望结构化输出 (base vs new 版本一键对比)
- - [ ] LLM-as-judge 或规则评分作为质量闸门
+ - [x] LLM-as-judge 或规则评分作为质量闸门
  - [x] 防幻觉与引用治理
  - [x] 关键结论必须引用 tool 或 rag evidence, 否则降级或拒答
 
@@ -73,7 +73,7 @@
  - [x] System Engineer 只允许读取与诊断类工具
  - [x] Risk Analyst 允许读取业务数据与检索
  - [x] Manager 才能发起写库/推送, 且 CRITICAL 必须 HITL
- - [ ] Role-based 工具权限 (治理增强)
+- [x] Role-based 工具权限 (治理增强)
  - [x] 工具能力分级: read_only / side_effect / pii / admin 等标签化治理
  - [x] side_effect 工具必须走审批与审计, 且可配置策略(按 severity/actionability)
  - [x] 工具 deny 的原因与证据必须结构化写入 Context Store
@@ -349,6 +349,8 @@
   - [x] **治理回归集**
     - [x] 固定用例覆盖: rbac_deny, approval_required, approval_reject
     - [x] 一键运行并输出结构化结果(通过/失败原因/证据链)
+  - [x] **RBAC 治理增强**
+    - [x] Tool meta 级 allowed_targets/owner 约束, 防止跨角色工具调用
   - [x] **可观测补齐**
     - [x] /metrics 输出治理关键指标: rbac_denied_total, approval_required_total
 - **验收**
@@ -375,8 +377,8 @@
     - [x] evidence 非空率 (关键结论必须有来源)
   - [x] **离线评测与回归集**
     - [x] 固定回归集 events + 期望结构化输出, base vs new 一键对比
-  - [ ] **LLM as judge 或规则评分**
-    - [ ] 评分结果作为质量闸门的一部分, 不达标则失败
+  - [x] **LLM as judge 或规则评分**
+    - [x] 评分结果作为质量闸门的一部分, 不达标则失败
   - [x] **防幻觉与引用治理**
     - [x] 关键结论必须引用 tool 或 rag evidence, 否则降级或拒答
 - **验收**

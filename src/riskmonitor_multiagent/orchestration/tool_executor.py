@@ -189,6 +189,14 @@ def _is_allowed_by_role(*, meta: ToolMeta, target_agent: str) -> bool:
     return False
 
 
+def _is_allowed_by_meta(*, meta: ToolMeta, target_agent: str) -> bool:
+    if isinstance(meta.allowed_targets, tuple) and len(meta.allowed_targets) > 0:
+        return target_agent in set(meta.allowed_targets)
+    if meta.owner in {"system_engineer", "risk_analyst", "manager"}:
+        return target_agent == meta.owner
+    return True
+
+
 def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
     started = time.monotonic()
     ok_cmd, errors = validate_agent_command(cmd)
@@ -243,6 +251,30 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
                 "timeout_ms": timeout_ms,
                 "reason": "rbac_denied",
                 "capability": meta.capability,
+                "policy_version": RBAC_POLICY_VERSION,
+            },
+            "artifacts": [],
+            "error": "rbac_denied",
+            "output": None,
+        }
+
+    if not _is_allowed_by_meta(meta=meta, target_agent=str(target)):
+        inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+        inc_counter("rm_rbac_denied_total", labels={"target_agent": str(target), "action": str(action), "capability": meta.capability})
+        return {
+            "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
+            "run_id": cmd["run_id"],
+            "command_id": cmd["command_id"],
+            "target_agent": target,
+            "ok": False,
+            "latency_ms": 0.0,
+            "evidence": {
+                "action": action,
+                "timeout_ms": timeout_ms,
+                "reason": "role_not_allowed",
+                "capability": meta.capability,
+                "owner": meta.owner,
+                "allowed_targets": list(meta.allowed_targets) if isinstance(meta.allowed_targets, tuple) else None,
                 "policy_version": RBAC_POLICY_VERSION,
             },
             "artifacts": [],

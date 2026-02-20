@@ -23,6 +23,7 @@ class ToolMeta:
     description: str
     risk_level: str
     default_timeout_ms: int
+    allowed_targets: Optional[tuple[str, ...]] = None
     side_effect_policy: Optional[SideEffectPolicy] = None
 
 
@@ -83,6 +84,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
         description="collect service metrics",
         risk_level="low",
         default_timeout_ms=1000,
+        allowed_targets=("system_engineer",),
     ),
     "mysql_health": ToolMeta(
         action="mysql_health",
@@ -91,6 +93,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
         description="mysql health check",
         risk_level="low",
         default_timeout_ms=1000,
+        allowed_targets=("system_engineer",),
     ),
     "chroma_health": ToolMeta(
         action="chroma_health",
@@ -99,6 +102,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
         description="chroma health check",
         risk_level="low",
         default_timeout_ms=1000,
+        allowed_targets=("system_engineer",),
     ),
     "kafka_lag": ToolMeta(
         action="kafka_lag",
@@ -107,6 +111,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
         description="kafka lag estimate",
         risk_level="low",
         default_timeout_ms=1000,
+        allowed_targets=("system_engineer",),
     ),
     "query_positions_by_desk": ToolMeta(
         action="query_positions_by_desk",
@@ -115,6 +120,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
         description="query positions by desk",
         risk_level="low",
         default_timeout_ms=1500,
+        allowed_targets=("risk_analyst",),
     ),
     "search_similar_alerts": ToolMeta(
         action="search_similar_alerts",
@@ -123,6 +129,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
         description="search similar alerts in chroma",
         risk_level="low",
         default_timeout_ms=1500,
+        allowed_targets=("risk_analyst",),
     ),
     "write_alert": ToolMeta(
         action="write_alert",
@@ -131,6 +138,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
         description="write alert record to database",
         risk_level="high",
         default_timeout_ms=2000,
+        allowed_targets=("manager",),
         side_effect_policy=SideEffectPolicy(require_approval=True, require_reason=True, min_severity="INFO"),
     ),
 }

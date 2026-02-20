@@ -92,3 +92,35 @@ def test_week11_manager_can_execute_side_effect_tool_after_approval(monkeypatch)
     receipt = execute_agent_command(cmd)
     assert receipt["ok"] is True
     assert calls["n"] == 1
+
+
+def test_week13_rbac_enhanced_denies_cross_role_read_only_tool():
+    cmd = new_agent_command(
+        run_id="run-1",
+        command_id="cmd-4",
+        target_agent="risk_analyst",
+        action="collect_metrics",
+        params={},
+        timeout_ms=1000,
+        expected_output_schema="tool_result.v1",
+    )
+    receipt = execute_agent_command(cmd)
+    assert receipt["ok"] is False
+    assert receipt["error"] == "rbac_denied"
+    assert receipt["evidence"]["reason"] == "role_not_allowed"
+
+
+def test_week13_rbac_enhanced_denies_manager_calling_analyst_tool():
+    cmd = new_agent_command(
+        run_id="run-1",
+        command_id="cmd-5",
+        target_agent="manager",
+        action="search_similar_alerts",
+        params={"query": "desk=Equity Derivatives", "top_k": 1},
+        timeout_ms=1000,
+        expected_output_schema="tool_result.v1",
+    )
+    receipt = execute_agent_command(cmd)
+    assert receipt["ok"] is False
+    assert receipt["error"] == "rbac_denied"
+    assert receipt["evidence"]["reason"] == "role_not_allowed"
