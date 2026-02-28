@@ -413,3 +413,80 @@
 | **Reflex**| **Sentinel** | Python, Kafka Consumer | 轻量过滤与阈值检测, 触发智能体 |
 | **Nerves**| **Event Bus** | **Kafka**, Debezium | 实时数据捕获与传输 |
 | **Hands** | **MCP Server** | **FastMCP** | 数据库读写, 原子工具暴露 |
+
+---
+
+## 下一代演进计划 (Next-Gen Evolution)
+
+### 🌟 核心变革 (Paradigm Shift)
+1.  **从 Event-Driven 到 Intent-Driven**：逐步移除 Kafka/CDC 依赖，转为 API Gateway 模式，支持 Human/System 双模输入。
+2.  **从 Pipeline 到 Orchestration**：引入 Orchestrator + Critic 双核驱动，实现动态规划与风险制衡。
+3.  **从 Hardcoded 到 Configurable**：MCP 工具模块化独立部署，支持配置驱动的热插拔。
+
+### Week 17: Configurable MCP & Tool Ecosystem (工具生态)
+**目标**: 实现工具的"即插即用"与配置化集成，解耦核心业务代码与外部设施
+
+- **交付**
+  - [ ] **独立 MCP 服务化**
+    - 将 `riskmonitor_multiagent.server` 拆分为独立微服务
+    - 支持 HTTP/SSE 远程调用，不再依赖进程内函数
+  - [ ] **配置驱动集成 (Config-driven)**
+    - 设计 `tools_config.yaml` 声明工具 Endpoint/Schema/Auth
+    - 实战: 通过配置接入外部 Redis 和新 MySQL 实例，零代码修改
+  - [ ] **Ingress API (De-Eventing Step 1)**
+    - 新增统一 API Gateway，替代 Sentinel
+    - 接收 `{"source": "human/system", "content": "..."}` 通用指令
+
+### Week 18: The New Brain (Orchestrator & Critic)
+**目标**: 升级大脑，引入动态规划与内部对抗机制
+
+- **交付**
+  - [ ] **Orchestrator Agent (Commander)**
+    - 替代 Manager，具备意图识别 (Query/Action/Analysis)
+    - 实现多步规划 (Multi-step Planning)，生成动态任务链
+    - 负责任务分发给 Engineer/Analyst
+  - [ ] **Critic Agent (Guardian)**
+    - 风险评估: 在执行前评估 Plan 的可行性与风险
+    - 结果审计: 审查 Agent 结论的证据链与幻觉
+    - 人机仲裁: 高风险操作强制触发 HITL
+  - [ ] **Collaboration Loop 2.0**
+    - 实现 Orchestrator -> Critic -> Engineer/Analyst 的完整闭环
+
+### Week 19: Unified Memory System (统一记忆)
+**目标**: 构建分层记忆，实现跨会话的经验积累
+
+- **交付**
+  - [ ] **分层存储架构**
+    - **Short-term**: Redis 存储当前 Session 对话与状态
+    - **Long-term**: PostgreSQL (JSONB) 存储历史 Case 与规划模板
+    - **Semantic**: Chroma 存储知识库索引
+  - [ ] **统一记忆协议**
+    - 定义 `MemoryEntry` Schema (agent_id, type, content, timestamp)
+    - 确保所有 Agent 读写记忆遵循同一协议
+  - [ ] **Planning as Memory**
+    - 将成功的规划路径作为"中期记忆"存档，供下次复用
+
+### Week 20: Governance Platform (治理平台)
+**目标**: 打造企业级管理平面，管控 Prompt 与 成本
+
+- **交付**
+  - [ ] **Prompt Registry & UI**
+    - 建立 Prompt 版本管理系统 (v1.0, v1.1)
+    - 提供 Web UI 查看、编辑、回滚 Prompt
+  - [ ] **LLM Cost Governance**
+    - **熔断机制**: 监测 Token 消耗速率，异常自动阻断
+    - **成本核算**: 按 User/Agent 统计 Token Usage
+    - **Rate Limiting**: 对非关键意图限流
+  - [ ] **Visualization UI**
+    - 开发 Chat UI 展示 Orchestrator 思考过程与 Critic 审查意见
+
+## 目标架构 (Target Architecture)
+
+| Layer | Component | Technology | Responsibility |
+| :--- | :--- | :--- | :--- |
+| **Brain** | **Orchestrator** | **LLM, Dynamic Planner** | 意图识别, 多步规划, 任务分发 |
+| **Guardian** | **Critic** | **LLM, Rule Engine** | 风险评估, 结果审计, 人机仲裁 |
+| **Memory**| **Unified Memory** | **Redis, PG, Chroma** | 分层记忆存储 (Short/Long/Semantic) |
+| **Interface**| **API Gateway** | **FastAPI** | 统一入口, 接收 Human/System 指令 (取代 Kafka) |
+| **Hands** | **Configurable MCP** | **FastMCP, Config** | 工具热插拔, 外部系统集成 (Redis/MySQL) |
+
