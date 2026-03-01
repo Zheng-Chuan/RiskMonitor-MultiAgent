@@ -423,48 +423,46 @@
 2.  **从 Pipeline 到 Orchestration**：引入 Orchestrator + Critic 双核驱动，实现动态规划与风险制衡。
 3.  **从 Hardcoded 到 Configurable**：MCP 工具模块化独立部署，支持配置驱动的热插拔。
 
-### Week 17: Configurable MCP & Tool Ecosystem (工具生态)
-**目标**: 实现工具的"即插即用"与配置化集成，解耦核心业务代码与外部设施
-
-- **交付**
-  - [ ] **独立 MCP 服务化**
-    - 将 `riskmonitor_multiagent.server` 拆分为独立微服务
-    - 支持 HTTP/SSE 远程调用，不再依赖进程内函数
-  - [ ] **配置驱动集成 (Config-driven)**
-    - 设计 `tools_config.yaml` 声明工具 Endpoint/Schema/Auth
-    - 实战: 通过配置接入外部 Redis 和新 MySQL 实例，零代码修改
-  - [ ] **Ingress API (De-Eventing Step 1)**
-    - 新增统一 API Gateway，替代 Sentinel
-    - 接收 `{"source": "human/system", "content": "..."}` 通用指令
-
 ### Week 18: The New Brain (Orchestrator & Critic)
 **目标**: 升级大脑，引入动态规划与内部对抗机制
 
 - **交付**
-  - [ ] **Orchestrator Agent (Commander)**
+  - [x] **Orchestrator Agent (Commander)**
     - 替代 Manager，具备意图识别 (Query/Action/Analysis)
     - 实现多步规划 (Multi-step Planning)，生成动态任务链
     - 负责任务分发给 Engineer/Analyst
-  - [ ] **Critic Agent (Guardian)**
+  - [x] **Critic Agent (Guardian)**
     - 风险评估: 在执行前评估 Plan 的可行性与风险
     - 结果审计: 审查 Agent 结论的证据链与幻觉
     - 人机仲裁: 高风险操作强制触发 HITL
-  - [ ] **Collaboration Loop 2.0**
+  - [x] **Collaboration Loop 2.0**
     - 实现 Orchestrator -> Critic -> Engineer/Analyst 的完整闭环
+- **验收**
+  - [x] 运行一次 Orchestrator 工作流可产出 `orchestrator_run.v1` 结构化结果
+  - [x] 输出包含 intent 与 plan_steps 且可通过 orchestrator_output 契约校验
+  - [x] Critic 在 plan 阶段输出 `critic_review.v1` 且 `require_human_approval` 生效
+  - [x] 当 `HITL_AUTO_APPROVE=0` 且 Critic 要求人工确认时, 工作流在 plan 阶段停止并返回 `approval.required=true, approved=false`
+  - [x] 单测 `tests/unit/test_orchestrator_workflow.py` 通过
 
 ### Week 19: Unified Memory System (统一记忆)
 **目标**: 构建分层记忆，实现跨会话的经验积累
 
 - **交付**
-  - [ ] **分层存储架构**
-    - **Short-term**: Redis 存储当前 Session 对话与状态
-    - **Long-term**: PostgreSQL (JSONB) 存储历史 Case 与规划模板
+  - [x] **分层存储架构**
+    - **Short-term**: Redis 或内存存储当前 Session 对话与状态
+    - **Long-term**: SQLite 默认, 可配置 PostgreSQL 等 SQLAlchemy 后端 (JSON)
     - **Semantic**: Chroma 存储知识库索引
-  - [ ] **统一记忆协议**
-    - 定义 `MemoryEntry` Schema (agent_id, type, content, timestamp)
+  - [x] **统一记忆协议**
+    - 定义 `MemoryEntry` Schema (agent_id, kind/type, content, ts_ms)
     - 确保所有 Agent 读写记忆遵循同一协议
-  - [ ] **Planning as Memory**
-    - 将成功的规划路径作为"中期记忆"存档，供下次复用
+  - [x] **Planning as Memory**
+    - 将规划与结论作为"中期记忆"存档，供后续复用
+- **验收**
+  - [x] MemoryEntry 可 normalize 与 validate 且字段完整
+  - [x] Long-term store 默认 sqlite 可用, 可通过 SQLAlchemy URL 切换到外部数据库
+  - [x] SqlMemoryStore 支持 append 与 list_recent 回读
+  - [x] Orchestrator 工作流会写入 plan 与 final 到统一记忆并可查询
+  - [x] 单测 `tests/unit/test_memory.py` 通过
 
 ### Week 20: Governance Platform (治理平台)
 **目标**: 打造企业级管理平面，管控 Prompt 与 成本
@@ -473,12 +471,18 @@
   - [ ] **Prompt Registry & UI**
     - 建立 Prompt 版本管理系统 (v1.0, v1.1)
     - 提供 Web UI 查看、编辑、回滚 Prompt
-  - [ ] **LLM Cost Governance**
+  - [x] **LLM Cost Governance**
     - **熔断机制**: 监测 Token 消耗速率，异常自动阻断
     - **成本核算**: 按 User/Agent 统计 Token Usage
     - **Rate Limiting**: 对非关键意图限流
   - [ ] **Visualization UI**
     - 开发 Chat UI 展示 Orchestrator 思考过程与 Critic 审查意见
+- **验收**
+  - [x] 限流启用时, 超出 token bucket 会触发熔断并回退到 fallback, 且输出 meta.governance.blocked=true
+  - [x] 支持 default 与 non_critical 两档限流配置并可通过环境变量调参
+  - [x] 成本核算会记录按 user agent priority 聚合的 token 与 call 指标
+  - [x] 单测 `tests/unit/test_week20_llm_cost_governance.py` 通过
+  - [x] 单元测试 `pytest -q tests/unit` 全量通过
 
 ## 目标架构 (Target Architecture)
 
@@ -489,4 +493,3 @@
 | **Memory**| **Unified Memory** | **Redis, PG, Chroma** | 分层记忆存储 (Short/Long/Semantic) |
 | **Interface**| **API Gateway** | **FastAPI** | 统一入口, 接收 Human/System 指令 (取代 Kafka) |
 | **Hands** | **Configurable MCP** | **FastMCP, Config** | 工具热插拔, 外部系统集成 (Redis/MySQL) |
-

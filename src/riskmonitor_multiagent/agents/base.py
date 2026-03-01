@@ -12,6 +12,7 @@ from riskmonitor_multiagent.llm.openrouter_client import OpenRouterClient
 from riskmonitor_multiagent.llm.openrouter_client import OpenRouterError
 from riskmonitor_multiagent.llm.openrouter_client import extract_first_text
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
+from riskmonitor_multiagent.governance.llm_cost_governance import get_llm_cost_governor
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class BaseAgent:
         *,
         user_prompt: str,
         fallback: dict[str, Any],
+        governance: dict[str, Any] | None = None,
         temperature: float = 0.2,
         max_tokens: int | None = 512,
     ) -> AgentResult:
@@ -54,7 +56,10 @@ class BaseAgent:
         model_label = (self._model or "").strip() or "default"
         try:
             llm_disabled = os.getenv("DISABLE_LLM", "0").strip() not in {"0", "false", "False"}
-            api_key_missing = config.get_openrouter_api_key().strip() == ""
+            try:
+                api_key_missing = config.get_openrouter_api_key().strip() == ""
+            except Exception:
+                api_key_missing = True
             if llm_disabled or api_key_missing:
                 inc_counter("rm_llm_skipped_total", labels={"agent": self._name, "model": model_label})
                 return AgentResult(
@@ -63,6 +68,18 @@ class BaseAgent:
                     usage=None,
                     meta={"agent": self._name, "model": model_label, "temperature": float(temperature), "max_tokens": int(max_tokens) if isinstance(max_tokens, int) else None, "prompt_version": self._prompt_version, "policy_version": self._policy_version},
                 )
+
+            g = dict(governance) if isinstance(governance, dict) else {}
+            user_id = str(g.get("user_id") or os.getenv("RM_USER_ID", "") or "unknown")
+            priority = str(g.get("priority") or "default")
+            est = int(max_tokens) if isinstance(max_tokens, int) else 512
+            governor = get_llm_cost_governor()
+            allowed, gov_meta = governor.allow(agent=self._name, user_id=user_id, priority=priority, estimated_tokens=est)
+            if not allowed:
+                inc_counter("rm_llm_circuit_break_total", labels={"agent": self._name, "model": model_label, "priority": str(gov_meta.get("priority") or "default")})
+                meta = {"agent": self._name, "model": model_label, "temperature": float(temperature), "max_tokens": int(max_tokens) if isinstance(max_tokens, int) else None, "prompt_version": self._prompt_version, "policy_version": self._policy_version, "governance": {"blocked": True, "user": user_id, "priority": str(gov_meta.get("priority") or "default"), "detail": gov_meta}}
+                return AgentResult(ok=False, output=fallback, usage=None, meta=meta)
+
             client = self._client or OpenRouterClient()
             resp = await client.chat_completions(
                 messages=[
@@ -76,6 +93,8 @@ class BaseAgent:
             latency_ms = (time.monotonic() - started) * 1000.0
             observe_ms("rm_llm_call", float(latency_ms), labels={"agent": self._name, "model": model_label})
             inc_counter("rm_llm_calls_total", labels={"agent": self._name, "model": model_label})
+            if isinstance(governance, dict):
+                inc_counter("rm_llm_calls_by_user_total", labels={"agent": self._name, "model": model_label, "user": user_id, "priority": str(gov_meta.get("priority") or priority)})
             usage = resp.get("usage") if isinstance(resp, dict) else None
             meta = {
                 "agent": self._name,
@@ -84,6 +103,7 @@ class BaseAgent:
                 "max_tokens": int(max_tokens) if isinstance(max_tokens, int) else None,
                 "prompt_version": self._prompt_version,
                 "policy_version": self._policy_version,
+                "governance": {"blocked": False, "user": user_id, "priority": str(gov_meta.get("priority") or priority), "detail": gov_meta},
             }
             if isinstance(usage, dict):
                 for k, metric in (
@@ -94,6 +114,7 @@ class BaseAgent:
                     v = usage.get(k)
                     if isinstance(v, int) and v > 0:
                         inc_counter("rm_llm_tokens_total", labels={"agent": self._name, "model": model_label, "type": metric}, value=v)
+                        inc_counter("rm_llm_tokens_by_user_total", labels={"agent": self._name, "model": model_label, "type": metric, "user": user_id, "priority": str(gov_meta.get("priority") or priority)}, value=v)
             text = extract_first_text(resp).strip()
             data = json.loads(text)
             if isinstance(data, dict):

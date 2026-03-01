@@ -430,6 +430,12 @@ class OrchestratorAgent:
         payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
         content = payload.get("content") if isinstance(payload.get("content"), str) else ""
         source = task.get("source") if isinstance(task.get("source"), str) else ""
+        session_id = task.get("session_id")
+        user_id = task.get("user_id")
+        if not isinstance(user_id, str) or not user_id.strip():
+            user_id = session_id if isinstance(session_id, str) and session_id.strip() else "unknown"
+        text = content.strip()
+        priority = "non_critical" if ("?" in text or "查询" in text or "query" in text.lower()) else "default"
         fallback = {
             "schema_version": "orchestrator_output.v1",
             "intent": {"type": "unknown", "confidence": 0.0, "slots": {}},
@@ -455,6 +461,7 @@ class OrchestratorAgent:
                 "Produce intent, a plan, and if needed propose commands for other agents or tools.\n"
             ),
             fallback=fallback,
+            governance={"user_id": user_id, "priority": priority},
             max_tokens=max_tokens,
         )
         out = normalize_orchestrator_output(result.output if isinstance(result.output, dict) else {})
@@ -496,6 +503,10 @@ class CriticAgent:
         receipts: list[dict[str, Any]] | None = None,
         max_tokens: int | None = 512,
     ) -> AgentResult:
+        session_id = task.get("session_id")
+        user_id = task.get("user_id")
+        if not isinstance(user_id, str) or not user_id.strip():
+            user_id = session_id if isinstance(session_id, str) and session_id.strip() else "unknown"
         fallback = {
             "schema_version": "critic_review.v1",
             "ok": False,
@@ -523,6 +534,7 @@ class CriticAgent:
                 "Decide if human approval is required.\n"
             ),
             fallback=fallback,
+            governance={"user_id": user_id, "priority": "default"},
             max_tokens=max_tokens,
         )
         out = normalize_critic_review(result.output if isinstance(result.output, dict) else {})

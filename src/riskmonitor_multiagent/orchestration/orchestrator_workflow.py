@@ -35,6 +35,7 @@ class _State(TypedDict):
     iter: int
     orchestrator_plan: dict[str, Any]
     critic_plan: dict[str, Any]
+    approval: dict[str, Any]
     engineer: dict[str, Any]
     analyst: dict[str, Any]
     orchestrator_final: dict[str, Any]
@@ -49,6 +50,10 @@ def _ctx_store() -> FileContextStore:
 
 def _should_use_langgraph() -> bool:
     return os.getenv("ENABLE_LANGGRAPH", "1").strip() not in {"0", "false", "False"}
+
+
+def _is_auto_approved() -> bool:
+    return os.getenv("HITL_AUTO_APPROVE", "1").strip() not in {"0", "false", "False"}
 
 
 def _node_normalize(state: _State) -> dict[str, Any]:
@@ -127,6 +132,10 @@ async def _node_critic_plan(state: _State) -> dict[str, Any]:
         out["schema_errors"] = errors
     store = _ctx_store()
     store.upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"critic_plan": out})
+    require = bool(out.get("require_human_approval") is True)
+    approved = True if not require else _is_auto_approved()
+    approval = {"required": require, "approved": bool(approved), "reason": "critic_required" if require else None}
+    store.upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"approval": approval})
     try:
         mem = _memory()
         session_id = str(task.get("session_id") or "default")
@@ -144,10 +153,13 @@ async def _node_critic_plan(state: _State) -> dict[str, Any]:
     except Exception:
         pass
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "critic_plan"})
-    return {"critic_plan": out}
+    return {"critic_plan": out, "approval": approval}
 
 
-def _route_after_plan(state: _State) -> Literal["revise", "dispatch"]:
+def _route_after_plan(state: _State) -> Literal["revise", "dispatch", "end"]:
+    approval = state.get("approval") if isinstance(state.get("approval"), dict) else {}
+    if approval.get("required") and not approval.get("approved"):
+        return "end"
     critic = state.get("critic_plan") if isinstance(state.get("critic_plan"), dict) else {}
     iter_n = int(state.get("iter") or 0)
     if critic.get("ok") is True:
@@ -296,6 +308,7 @@ def _node_end(state: _State) -> dict[str, Any]:
         "task": task,
         "orchestrator_plan": state.get("orchestrator_plan"),
         "critic_plan": state.get("critic_plan"),
+        "approval": state.get("approval"),
         "engineer": state.get("engineer"),
         "analyst": state.get("analyst"),
         "orchestrator_final": state.get("orchestrator_final"),
@@ -323,7 +336,7 @@ def _build_graph():
     graph.add_edge(START, "normalize")
     graph.add_edge("normalize", "orchestrator_plan")
     graph.add_edge("orchestrator_plan", "critic_plan")
-    graph.add_conditional_edges("critic_plan", _route_after_plan, {"revise": "iter_inc", "dispatch": "dispatch_specialists"})
+    graph.add_conditional_edges("critic_plan", _route_after_plan, {"revise": "iter_inc", "dispatch": "dispatch_specialists", "end": "end"})
     graph.add_edge("iter_inc", "orchestrator_plan")
     graph.add_edge("dispatch_specialists", "orchestrator_finalize")
     graph.add_edge("orchestrator_finalize", "critic_final")
@@ -334,12 +347,21 @@ def _build_graph():
 
 _COMPILED_GRAPH = None
 _MEMORY = None
+_MEMORY_SIG = None
 
 
 def _memory() -> UnifiedMemory:
-    global _MEMORY  # pylint: disable=global-statement
-    if _MEMORY is None:
+    global _MEMORY, _MEMORY_SIG  # pylint: disable=global-statement
+    sig = (
+        os.getenv("WORKING_MEMORY_BACKEND", "").strip(),
+        os.getenv("REDIS_URL", "").strip(),
+        os.getenv("LONG_TERM_MEMORY_DB_URL", "").strip(),
+        os.getenv("MEMORY_SQLITE_PATH", "").strip(),
+        os.getenv("CHROMA_PERSIST_DIR", "").strip(),
+    )
+    if _MEMORY is None or _MEMORY_SIG != sig:
         _MEMORY = UnifiedMemory()
+        _MEMORY_SIG = sig
     return _MEMORY
 
 
@@ -359,6 +381,7 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
                 "iter": 0,
                 "orchestrator_plan": {},
                 "critic_plan": {},
+                "approval": {},
                 "engineer": {},
                 "analyst": {},
                 "orchestrator_final": {},
