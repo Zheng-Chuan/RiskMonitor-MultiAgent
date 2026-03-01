@@ -20,6 +20,10 @@ langgraph>=0.2.0
 # 向量数据库
 chromadb>=0.5.0
 
+# 记忆存储
+redis>=5.0.0
+psycopg[binary]>=3.1.0
+
 # 环境变量
 python-dotenv>=1.0.0
 

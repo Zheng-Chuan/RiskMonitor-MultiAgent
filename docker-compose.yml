@@ -224,10 +224,45 @@ services:
     profiles:
       - kb
 
+  redis:
+    image: redis:7-alpine
+    container_name: riskmonitor-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - riskmonitor-network
+    restart: unless-stopped
+    profiles:
+      - memory
+
+  postgres:
+    image: postgres:16
+    container_name: riskmonitor-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-riskmonitor_memory}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - riskmonitor-network
+    restart: unless-stopped
+    profiles:
+      - memory
+
 volumes:
   mysql_data:
     driver: local
   chroma_data:
+    driver: local
+  pg_data:
     driver: local
 
 networks:
