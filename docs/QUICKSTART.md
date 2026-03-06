@@ -156,11 +156,15 @@ make kb-query QUERY="desk Equity Derivatives breach" TOP_K=5
 
 - search_similar_alerts query="desk Equity Derivatives breach" top_k=5
 
-治理回归与回放对比
+评测与质量闸门
 
 ```bash
-make governance-regression
-make governance-replay-compare EVENT_FILE=/path/to/event.json POLICY_A=policy.a POLICY_B=policy.b
+make eval-run RUN_TAG=baseline
+make eval-gate RUN_TAG=baseline
+make eval-compare BASE=baseline CAND=candidate
+make eval-run RUN_TAG=cost_strict BUDGET_PROFILE=strict REPEATS=2
+make eval-run RUN_TAG=cost_balanced BUDGET_PROFILE=balanced REPEATS=2
+make eval-compare BASE=cost_strict CAND=cost_balanced
 ```
 
 如果你希望跑覆盖率

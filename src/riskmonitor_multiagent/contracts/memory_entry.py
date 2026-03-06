@@ -34,6 +34,8 @@ def validate_memory_entry(entry: dict[str, Any]) -> tuple[bool, list[str]]:
         errors.append("bad_agent_id")
     if not _is_non_empty_str(entry.get("scope")):
         errors.append("bad_scope")
+    elif str(entry.get("scope")) not in {"private", "shared"}:
+        errors.append("unsupported_scope")
     if not _is_non_empty_str(entry.get("kind")):
         errors.append("bad_kind")
     if not isinstance(entry.get("content"), dict):
@@ -63,6 +65,8 @@ def normalize_memory_entry(entry: dict[str, Any]) -> dict[str, Any]:
     out.setdefault("content", {})
     if not isinstance(out.get("content"), dict):
         out["content"] = {}
+    if out.get("scope") not in {"private", "shared"}:
+        out["scope"] = "shared"
     tags = out.get("tags")
     if tags is not None and not isinstance(tags, list):
         out["tags"] = None
@@ -111,4 +115,3 @@ class MemoryEntry:
             session_id=nd.get("session_id") if isinstance(nd.get("session_id"), str) else None,
             run_id=nd.get("run_id") if isinstance(nd.get("run_id"), str) else None,
         )
-

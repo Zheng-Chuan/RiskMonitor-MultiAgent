@@ -15,7 +15,7 @@ load_dotenv()
 def _require_env(name: str) -> str:
     value = os.getenv(name)
     if value is None or not value.strip():
-        pytest.skip(f"missing env var: {name}")
+        raise RuntimeError(f"missing env var: {name}")
     return value.strip()
 
 
@@ -51,12 +51,9 @@ def test_database_connection(db_connection):
 
 def test_positions_table_exists(db_connection):
     """测试positions表是否存在"""
+    database = _require_env("MYSQL_DATABASE")
     cursor = db_connection.cursor()
-    cursor.execute("""
-        SELECT COUNT(*) as count
-        FROM information_schema.tables
-        WHERE table_schema = 'riskmonitor' AND table_name = 'positions'
-    """)
+    cursor.execute("SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema=%s AND table_name='positions'", (database,))
     result = cursor.fetchone()
     assert result['count'] == 1
     cursor.close()

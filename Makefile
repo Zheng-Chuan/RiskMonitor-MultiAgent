@@ -1,5 +1,4 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-infra register-cdc register-cdc-schema run-sentinel up-kb ingest-knowledge kb-query governance-regression
-.PHONY: governance-replay-compare
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-kb ingest-knowledge kb-query eval-run eval-compare eval-gate
 
 help:
 	@echo "RiskMonitor-MultiAgent Development Commands"
@@ -32,20 +31,15 @@ help:
 	@echo "make shell-db         - Open MySQL shell"
 	@echo "make phpmyadmin       - Start with phpMyAdmin (optional tool)"
 	@echo ""
-	@echo "Week6 CDC Commands:"
-	@echo "make up-infra         - Start Kafka/Debezium/Schema Registry stack"
-	@echo "make register-cdc     - Register Debezium positions connector"
-	@echo "make register-cdc-schema - Register JSON schema to Schema Registry"
-	@echo ""
-	@echo "Week7 Stream Processing Commands:"
-	@echo "make run-sentinel     - Start the Sentinel Service (simple breach detector)"
-	@echo ""
 	@echo "Week8 Knowledge Base Commands:"
 	@echo "make up-kb            - Start vector database (Chroma)"
 	@echo "make ingest-knowledge - Ingest recent alerts into vector database"
 	@echo "make kb-query         - Query vector database, usage: make kb-query QUERY='...' TOP_K=5"
-	@echo "make governance-regression - Run governance regression suite"
-	@echo "make governance-replay-compare - Compare two policy versions for one event json"
+	@echo ""
+	@echo "Evaluation Commands:"
+	@echo "make eval-run         - Run benchmark, usage: make eval-run RUN_TAG=run1 REPEATS=2"
+	@echo "make eval-compare     - Compare two runs, usage: make eval-compare BASE=run1 CAND=run2"
+	@echo "make eval-gate        - Apply quality gate, usage: make eval-gate RUN_TAG=run1"
 
 install:
 	pip install -r requirements.txt
@@ -69,18 +63,6 @@ up:
 	@echo "Containers are running!"
 	@docker compose ps
 
-up-infra:
-	docker compose --profile infra up -d zookeeper kafka kafka-ui debezium schema-registry
-
-register-cdc:
-	./scripts/debezium/register_positions_connector.sh
-
-register-cdc-schema:
-	./scripts/schema_registry/register_positions_cdc_schema.sh
-
-run-sentinel:
-	python ./scripts/run_sentinel.py
-
 ingest-knowledge:
 	python ./scripts/knowledge/kb.py ingest-alerts
 
@@ -90,11 +72,14 @@ up-kb:
 kb-query:
 	python ./scripts/knowledge/kb.py query --query "$(QUERY)" --top-k "$(if $(TOP_K),$(TOP_K),5)"
 
-governance-regression:
-	python ./scripts/governance/run_regression.py
+eval-run:
+	python -m scripts.eval.run_benchmark --bench "$(if $(BENCH),$(BENCH),eval/benchmarks/explainability_cases.jsonl)" --run-tag "$(if $(RUN_TAG),$(RUN_TAG),baseline)" --model "$(MODEL)" --policy-version "$(POLICY_VERSION)" --prompt-version "$(PROMPT_VERSION)" --hitl "$(if $(HITL),$(HITL),1)" --budget-profile "$(BUDGET_PROFILE)" --repeats "$(if $(REPEATS),$(REPEATS),1)"
 
-governance-replay-compare:
-	python ./scripts/governance/replay_compare.py --event-file "$(EVENT_FILE)" --policy-a "$(POLICY_A)" --policy-b "$(POLICY_B)"
+eval-compare:
+	python -m scripts.eval.compare_runs --base "$(BASE)" --cand "$(CAND)"
+
+eval-gate:
+	python -m scripts.eval.quality_gate --run "$(if $(RUN_TAG),$(RUN_TAG),baseline)" --gate "$(if $(GATE),$(GATE),eval/gates/default.json)"
 
 setup-mcp:
 	@echo "=================================="

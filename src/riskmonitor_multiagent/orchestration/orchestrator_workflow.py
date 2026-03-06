@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Literal, Optional
+from typing import Any, Optional, TypedDict
 
 from riskmonitor_multiagent.agents.roles import CriticAgent
+from riskmonitor_multiagent.agents.roles import IntentAgent
 from riskmonitor_multiagent.agents.roles import OrchestratorAgent
 from riskmonitor_multiagent.agents.roles import RiskAnalystAgent
 from riskmonitor_multiagent.agents.roles import SystemEngineerAgent
@@ -14,30 +15,38 @@ from riskmonitor_multiagent.contracts.agent_outputs import (
     validate_critic_review,
     validate_orchestrator_output,
 )
+from riskmonitor_multiagent.contracts.intent_output import normalize_intent_output, validate_intent_output
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
 from riskmonitor_multiagent.orchestration.context_store import FileContextStore, new_run_id
 from riskmonitor_multiagent.memory.unified_memory import UnifiedMemory
+from riskmonitor_multiagent.governance.versions import PROMPT_VERSION_INTENT, get_policy_version
+from riskmonitor_multiagent.orchestration.intent_heuristics import build_intent_metadata
+from riskmonitor_multiagent.orchestration.tool_executor import execute_agent_command, new_agent_command
+from riskmonitor_multiagent.orchestration.tool_registry import get_tool_meta
 
-try:
-    from langgraph.graph import END, START, StateGraph
-    from typing_extensions import TypedDict
-except Exception as e:  # pylint: disable=broad-except
-    END = None
-    START = None
-    StateGraph = None
-    TypedDict = object
-    _LANGGRAPH_IMPORT_ERROR = e
+
+"""Orchestrator 主流程.
+
+职责边界:
+- 组装多角色执行状态 `_State`
+- 串联意图识别、计划与评审、执行、最终汇总
+- 统一产出可回放的结构化 `orchestrator_run.v1`
+"""
 
 
 class _State(TypedDict):
     task: dict[str, Any]
     run_id: str
     iter: int
+    intent: dict[str, Any]
     orchestrator_plan: dict[str, Any]
     critic_plan: dict[str, Any]
     approval: dict[str, Any]
     engineer: dict[str, Any]
     analyst: dict[str, Any]
+    artifacts: dict[str, Any]
+    receipts: list[dict[str, Any]]
+    pending_questions: list[dict[str, Any]]
     orchestrator_final: dict[str, Any]
     critic_final: dict[str, Any]
     final_output: dict[str, Any]
@@ -48,309 +57,16 @@ def _ctx_store() -> FileContextStore:
     return FileContextStore(base_dir=os.getenv("CONTEXT_STORE_DIR"))
 
 
-def _should_use_langgraph() -> bool:
-    return os.getenv("ENABLE_LANGGRAPH", "1").strip() not in {"0", "false", "False"}
-
-
 def _is_auto_approved() -> bool:
     return os.getenv("HITL_AUTO_APPROVE", "1").strip() not in {"0", "false", "False"}
 
 
-def _node_normalize(state: _State) -> dict[str, Any]:
-    started = time.monotonic()
-    task = state.get("task") if isinstance(state.get("task"), dict) else {}
-    run_id = state.get("run_id") or new_run_id(event_id=str(task.get("task_id") or "task"))
-    store = _ctx_store()
-    store.upsert(run_id=run_id, event_id=str(task.get("task_id") or "task"), patch={"task_snapshot": task})
-    try:
-        import asyncio
-
-        loop = asyncio.get_running_loop()
-        mem = _memory()
-        mem_entry = {
-            "agent_id": "orchestrator",
-            "scope": "shared",
-            "kind": "task",
-            "session_id": str(task.get("session_id") or "default"),
-            "run_id": run_id,
-            "content": {"text": f"source={task.get('source')} content={(task.get('payload') or {}).get('content') if isinstance(task.get('payload'), dict) else ''}"},
-        }
-        loop.create_task(mem.append(mem_entry))
-    except Exception:
-        pass
-    observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "orchestrator_normalize"})
-    return {"run_id": run_id, "iter": 0, "errors": []}
-
-
-async def _node_orchestrator_plan(state: _State) -> dict[str, Any]:
-    started = time.monotonic()
-    agent = OrchestratorAgent()
-    task = state.get("task") if isinstance(state.get("task"), dict) else {}
-    context = {
-        "phase": "plan",
-        "critic": state.get("critic_plan"),
-    }
-    result = await agent.orchestrate(task=task, context=context)
-    out = normalize_orchestrator_output(result.output if isinstance(result.output, dict) else {})
-    ok_out, errors = validate_orchestrator_output(out)
-    if not ok_out:
-        out["schema_errors"] = errors
-    store = _ctx_store()
-    store.upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"orchestrator_plan": out})
-    try:
-        mem = _memory()
-        session_id = str(task.get("session_id") or "default")
-        intent = out.get("intent") if isinstance(out.get("intent"), dict) else {}
-        plan_steps = out.get("plan_steps") if isinstance(out.get("plan_steps"), list) else []
-        step_kinds = [s.get("kind") for s in plan_steps if isinstance(s, dict) and isinstance(s.get("kind"), str)]
-        text = f"intent={intent.get('type')} steps={','.join(step_kinds[:10])}"
-        await mem.append(
-            {
-                "agent_id": "orchestrator",
-                "scope": "shared",
-                "kind": "plan",
-                "session_id": session_id,
-                "run_id": state["run_id"],
-                "content": {"text": text, "intent": intent, "plan_steps": plan_steps},
-            }
-        )
-    except Exception:
-        pass
-    observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "orchestrator_plan"})
-    return {"orchestrator_plan": out}
-
-
-async def _node_critic_plan(state: _State) -> dict[str, Any]:
-    started = time.monotonic()
-    agent = CriticAgent()
-    task = state.get("task") if isinstance(state.get("task"), dict) else {}
-    orchestrator_plan = state.get("orchestrator_plan") if isinstance(state.get("orchestrator_plan"), dict) else {}
-    result = await agent.review(task=task, orchestrator=orchestrator_plan)
-    out = normalize_critic_review(result.output if isinstance(result.output, dict) else {})
-    ok_out, errors = validate_critic_review(out)
-    if not ok_out:
-        out["schema_errors"] = errors
-    store = _ctx_store()
-    store.upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"critic_plan": out})
-    require = bool(out.get("require_human_approval") is True)
-    approved = True if not require else _is_auto_approved()
-    approval = {"required": require, "approved": bool(approved), "reason": "critic_required" if require else None}
-    store.upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"approval": approval})
-    try:
-        mem = _memory()
-        session_id = str(task.get("session_id") or "default")
-        text = f"ok={out.get('ok')} risk_level={out.get('risk_level')}"
-        await mem.append(
-            {
-                "agent_id": "critic",
-                "scope": "shared",
-                "kind": "review",
-                "session_id": session_id,
-                "run_id": state["run_id"],
-                "content": {"text": text, "review": out},
-            }
-        )
-    except Exception:
-        pass
-    observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "critic_plan"})
-    return {"critic_plan": out, "approval": approval}
-
-
-def _route_after_plan(state: _State) -> Literal["revise", "dispatch", "end"]:
-    approval = state.get("approval") if isinstance(state.get("approval"), dict) else {}
-    if approval.get("required") and not approval.get("approved"):
-        return "end"
-    critic = state.get("critic_plan") if isinstance(state.get("critic_plan"), dict) else {}
-    iter_n = int(state.get("iter") or 0)
-    if critic.get("ok") is True:
-        return "dispatch"
-    if iter_n >= 1:
-        return "dispatch"
-    return "revise"
-
-
-def _node_iter_inc(state: _State) -> dict[str, Any]:
-    n = int(state.get("iter") or 0) + 1
-    return {"iter": n}
-
-
-async def _node_dispatch_specialists(state: _State) -> dict[str, Any]:
-    started = time.monotonic()
-    task = state.get("task") if isinstance(state.get("task"), dict) else {}
-    plan = state.get("orchestrator_plan") if isinstance(state.get("orchestrator_plan"), dict) else {}
-    steps = plan.get("plan_steps") if isinstance(plan.get("plan_steps"), list) else []
-
-    engineer_instruction = ""
-    analyst_instruction = ""
-    for s in steps:
-        if not isinstance(s, dict):
-            continue
-        if s.get("kind") != "delegate":
-            continue
-        tgt = s.get("target_agent")
-        instr = s.get("instruction")
-        if tgt == "system_engineer" and isinstance(instr, str):
-            engineer_instruction = instr
-        if tgt == "risk_analyst" and isinstance(instr, str):
-            analyst_instruction = instr
-
-    engineer_agent = SystemEngineerAgent()
-    analyst_agent = RiskAnalystAgent()
-
-    engineer_res = await engineer_agent.analyze_task(task=task, context={"instruction": engineer_instruction, "plan": plan})
-    analyst_res = await analyst_agent.analyze_task(task=task, context={"instruction": analyst_instruction, "plan": plan})
-
-    engineer_out = engineer_res.output if isinstance(engineer_res.output, dict) else {}
-    analyst_out = analyst_res.output if isinstance(analyst_res.output, dict) else {}
-
-    store = _ctx_store()
-    store.upsert(
-        run_id=state["run_id"],
-        event_id=str(task.get("task_id") or "task"),
-        patch={"engineer": engineer_out, "analyst": analyst_out},
-    )
-    try:
-        mem = _memory()
-        session_id = str(task.get("session_id") or "default")
-        await mem.append(
-            {
-                "agent_id": "system_engineer",
-                "scope": "shared",
-                "kind": "analysis",
-                "session_id": session_id,
-                "run_id": state["run_id"],
-                "content": {"text": str(engineer_out.get("summary") or engineer_out.get("reason") or ""), "output": engineer_out},
-            }
-        )
-        await mem.append(
-            {
-                "agent_id": "risk_analyst",
-                "scope": "shared",
-                "kind": "analysis",
-                "session_id": session_id,
-                "run_id": state["run_id"],
-                "content": {"text": str(analyst_out.get("report") or ""), "output": analyst_out},
-            }
-        )
-    except Exception:
-        pass
-    observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "dispatch_specialists"})
-    return {"engineer": engineer_out, "analyst": analyst_out}
-
-
-async def _node_orchestrator_finalize(state: _State) -> dict[str, Any]:
-    started = time.monotonic()
-    agent = OrchestratorAgent()
-    task = state.get("task") if isinstance(state.get("task"), dict) else {}
-    context = {
-        "phase": "finalize",
-        "orchestrator_plan": state.get("orchestrator_plan"),
-        "critic_plan": state.get("critic_plan"),
-        "engineer": state.get("engineer"),
-        "analyst": state.get("analyst"),
-    }
-    result = await agent.orchestrate(task=task, context=context)
-    out = normalize_orchestrator_output(result.output if isinstance(result.output, dict) else {})
-    ok_out, errors = validate_orchestrator_output(out)
-    if not ok_out:
-        out["schema_errors"] = errors
-    store = _ctx_store()
-    store.upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"orchestrator_final": out})
-    try:
-        mem = _memory()
-        session_id = str(task.get("session_id") or "default")
-        intent = out.get("intent") if isinstance(out.get("intent"), dict) else {}
-        text = f"final intent={intent.get('type')} degraded={out.get('degraded')}"
-        await mem.append(
-            {
-                "agent_id": "orchestrator",
-                "scope": "shared",
-                "kind": "final",
-                "session_id": session_id,
-                "run_id": state["run_id"],
-                "content": {"text": text, "output": out},
-            }
-        )
-    except Exception:
-        pass
-    observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "orchestrator_finalize"})
-    return {"orchestrator_final": out}
-
-
-async def _node_critic_final(state: _State) -> dict[str, Any]:
-    started = time.monotonic()
-    agent = CriticAgent()
-    task = state.get("task") if isinstance(state.get("task"), dict) else {}
-    orchestrator_final = state.get("orchestrator_final") if isinstance(state.get("orchestrator_final"), dict) else {}
-    result = await agent.review(
-        task=task,
-        orchestrator=orchestrator_final,
-        engineer=state.get("engineer") if isinstance(state.get("engineer"), dict) else None,
-        analyst=state.get("analyst") if isinstance(state.get("analyst"), dict) else None,
-        receipts=None,
-    )
-    out = normalize_critic_review(result.output if isinstance(result.output, dict) else {})
-    ok_out, errors = validate_critic_review(out)
-    if not ok_out:
-        out["schema_errors"] = errors
-    store = _ctx_store()
-    store.upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"critic_final": out})
-    observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "critic_final"})
-    return {"critic_final": out}
-
-
-def _node_end(state: _State) -> dict[str, Any]:
-    task = state.get("task") if isinstance(state.get("task"), dict) else {}
-    final_output = {
-        "schema_version": "orchestrator_run.v1",
-        "run_id": state.get("run_id"),
-        "task_id": task.get("task_id"),
-        "task": task,
-        "orchestrator_plan": state.get("orchestrator_plan"),
-        "critic_plan": state.get("critic_plan"),
-        "approval": state.get("approval"),
-        "engineer": state.get("engineer"),
-        "analyst": state.get("analyst"),
-        "orchestrator_final": state.get("orchestrator_final"),
-        "critic_final": state.get("critic_final"),
-        "errors": state.get("errors") or [],
-    }
-    store = _ctx_store()
-    store.upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"final_output": final_output})
-    return {"final_output": final_output}
-
-
-def _build_graph():
-    if StateGraph is None:
-        raise RuntimeError(f"langgraph_import_failed: {_LANGGRAPH_IMPORT_ERROR}")
-    graph = StateGraph(_State)
-    graph.add_node("normalize", _node_normalize)
-    graph.add_node("orchestrator_plan", _node_orchestrator_plan)
-    graph.add_node("critic_plan", _node_critic_plan)
-    graph.add_node("iter_inc", _node_iter_inc)
-    graph.add_node("dispatch_specialists", _node_dispatch_specialists)
-    graph.add_node("orchestrator_finalize", _node_orchestrator_finalize)
-    graph.add_node("critic_final", _node_critic_final)
-    graph.add_node("end", _node_end)
-
-    graph.add_edge(START, "normalize")
-    graph.add_edge("normalize", "orchestrator_plan")
-    graph.add_edge("orchestrator_plan", "critic_plan")
-    graph.add_conditional_edges("critic_plan", _route_after_plan, {"revise": "iter_inc", "dispatch": "dispatch_specialists", "end": "end"})
-    graph.add_edge("iter_inc", "orchestrator_plan")
-    graph.add_edge("dispatch_specialists", "orchestrator_finalize")
-    graph.add_edge("orchestrator_finalize", "critic_final")
-    graph.add_edge("critic_final", "end")
-    graph.add_edge("end", END)
-    return graph.compile()
-
-
-_COMPILED_GRAPH = None
 _MEMORY = None
 _MEMORY_SIG = None
 
 
 def _memory() -> UnifiedMemory:
+    # 按关键环境变量做惰性重建，避免测试/回放过程中污染跨用例状态。
     global _MEMORY, _MEMORY_SIG  # pylint: disable=global-statement
     sig = (
         os.getenv("WORKING_MEMORY_BACKEND", "").strip(),
@@ -365,35 +81,649 @@ def _memory() -> UnifiedMemory:
     return _MEMORY
 
 
-async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
-    if not _should_use_langgraph():
-        return {"ok": False, "error": "langgraph_disabled"}
-    global _COMPILED_GRAPH  # pylint: disable=global-statement
+def _max_plan_revisions() -> int:
+    v = os.getenv("ORCH_MAX_PLAN_REVISIONS", "1").strip()
     try:
-        inc_counter("rm_orchestrator_runs_total")
-        if _COMPILED_GRAPH is None:
-            _COMPILED_GRAPH = _build_graph()
-        start = time.monotonic()
-        out = await _COMPILED_GRAPH.ainvoke(
+        return max(0, int(v))
+    except Exception:
+        return 1
+
+
+def _max_exec_rounds() -> int:
+    v = os.getenv("ORCH_MAX_EXEC_ROUNDS", "1").strip()
+    try:
+        return max(1, int(v))
+    except Exception:
+        return 1
+
+
+async def _append_memory_safe(entry: dict[str, Any]) -> None:
+    # 记忆存储是增强能力，不应阻塞主链路。
+    try:
+        mem = _memory()
+        await mem.append(entry)
+    except Exception:
+        return
+
+
+async def _plan_with_revise_loop(state: _State) -> None:
+    task = state.get("task") if isinstance(state.get("task"), dict) else {}
+    session_id = str(task.get("session_id") or "default")
+    plan_agent = OrchestratorAgent()
+    critic_agent = CriticAgent()
+    max_rev = _max_plan_revisions()
+    rev = 0
+    while True:
+        started = time.monotonic()
+        context = {
+            "phase": "plan",
+            "intent": state.get("intent"),
+            "artifacts": state.get("artifacts"),
+            "receipts": state.get("receipts"),
+            "critic": state.get("critic_plan"),
+            "revision": rev,
+        }
+        result = await plan_agent.orchestrate(task=task, context=context)
+        out = normalize_orchestrator_output(result.output if isinstance(result.output, dict) else {})
+        ok_out, errors = validate_orchestrator_output(out)
+        if not ok_out:
+            out["schema_errors"] = errors
+        state["orchestrator_plan"] = out
+        _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"orchestrator_plan": out})
+        plan_steps = out.get("plan_steps") if isinstance(out.get("plan_steps"), list) else []
+        step_kinds = [s.get("kind") for s in plan_steps if isinstance(s, dict) and isinstance(s.get("kind"), str)]
+        await _append_memory_safe(
             {
-                "task": task,
-                "run_id": "",
-                "iter": 0,
-                "orchestrator_plan": {},
-                "critic_plan": {},
-                "approval": {},
-                "engineer": {},
-                "analyst": {},
-                "orchestrator_final": {},
-                "critic_final": {},
-                "final_output": {},
-                "errors": [],
+                "agent_id": "orchestrator",
+                "scope": "shared",
+                "kind": "plan",
+                "session_id": session_id,
+                "run_id": state["run_id"],
+                "content": {"text": f"rev={rev} steps={','.join(step_kinds[:12])}", "plan_steps": plan_steps, "revision": rev},
             }
         )
-        latency_ms = (time.monotonic() - start) * 1000.0
-        observe_ms("rm_pipeline_total", float(latency_ms), labels={"workflow": "orchestrator_workflow"})
-        final_output = out.get("final_output") if isinstance(out, dict) else None
-        return {"ok": True, "latency_ms": float(latency_ms), "result": final_output}
+        observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "orchestrator_plan"})
+
+        started = time.monotonic()
+        review = await critic_agent.review(task=task, orchestrator=out, receipts=state.get("receipts"))
+        critic = normalize_critic_review(review.output if isinstance(review.output, dict) else {})
+        ok_review, errors_review = validate_critic_review(critic)
+        if not ok_review:
+            critic["schema_errors"] = errors_review
+        state["critic_plan"] = critic
+        _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"critic_plan": critic})
+        require = bool(critic.get("require_human_approval") is True)
+        approved = True if not require else _is_auto_approved()
+        approval = {"required": require, "approved": bool(approved), "reason": "critic_required" if require else None}
+        state["approval"] = approval
+        _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"approval": approval})
+        await _append_memory_safe(
+            {
+                "agent_id": "critic",
+                "scope": "shared",
+                "kind": "review",
+                "session_id": session_id,
+                "run_id": state["run_id"],
+                "content": {"text": f"rev={rev} ok={critic.get('ok')} risk_level={critic.get('risk_level')}", "review": critic, "revision": rev},
+            }
+        )
+        observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "critic_plan"})
+
+        if approval.get("required") and not approval.get("approved"):
+            return
+        if critic.get("ok") is True:
+            return
+        if rev >= max_rev:
+            return
+        rev += 1
+        state["iter"] = rev
+
+
+async def _execute_plan(state: _State) -> None:
+    task = state.get("task") if isinstance(state.get("task"), dict) else {}
+    session_id = str(task.get("session_id") or "default")
+    plan = state.get("orchestrator_plan") if isinstance(state.get("orchestrator_plan"), dict) else {}
+    steps = plan.get("plan_steps") if isinstance(plan.get("plan_steps"), list) else []
+
+    syseng = SystemEngineerAgent()
+    analyst = RiskAnalystAgent()
+
+    receipts = state.get("receipts") if isinstance(state.get("receipts"), list) else []
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    pending_questions = state.get("pending_questions") if isinstance(state.get("pending_questions"), list) else []
+
+    cmds = plan.get("commands") if isinstance(plan.get("commands"), list) else []
+    for cmd in cmds:
+        if not isinstance(cmd, dict):
+            continue
+        receipt = execute_agent_command(cmd)
+        receipts.append(receipt)
+        cid = receipt.get("command_id") or cmd.get("command_id")
+        artifacts[f"cmd:{cid}"] = {"kind": "receipt", "receipt": receipt}
+        if receipt.get("error") == "approval_required":
+            state["approval"] = {"required": True, "approved": False, "reason": "approval_required"}
+            pending_questions.append(
+                {
+                    "type": "approval",
+                    "command_id": cid,
+                    "action": cmd.get("action"),
+                    "note": "side_effect requires approval",
+                }
+            )
+            break
+
+    if state.get("approval", {}).get("required") and not state.get("approval", {}).get("approved"):
+        state["receipts"] = receipts
+        state["artifacts"] = artifacts
+        state["pending_questions"] = pending_questions
+        _ctx_store().upsert(
+            run_id=state["run_id"],
+            event_id=str(task.get("task_id") or "task"),
+            patch={"receipts": receipts, "artifacts": artifacts, "approval": state.get("approval"), "pending_questions": pending_questions},
+        )
+        return
+
+    for idx, step in enumerate(steps):
+        if not isinstance(step, dict):
+            continue
+        kind = step.get("kind")
+        step_id = step.get("step_id")
+        if not isinstance(step_id, str) or not step_id.strip():
+            step_id = f"s{idx+1}"
+
+        if kind == "delegate":
+            target = step.get("target_agent")
+            instruction = step.get("instruction")
+            ctx = {
+                "instruction": instruction if isinstance(instruction, str) else "",
+                "plan": plan,
+                "intent": state.get("intent"),
+                "receipts": receipts,
+                "artifacts": artifacts,
+            }
+            if target == "system_engineer":
+                res = await syseng.analyze_task(task=task, context=ctx)
+                out = res.output if isinstance(res.output, dict) else {}
+                if isinstance(out.get("evidence"), dict) and receipts:
+                    out["evidence"].setdefault("receipt_command_ids", [r.get("command_id") for r in receipts if isinstance(r, dict) and isinstance(r.get("command_id"), str)])
+                artifacts[step_id] = {"kind": "delegate", "target_agent": target, "ok": bool(res.ok), "output": out}
+                state["engineer"] = out
+                await _append_memory_safe(
+                    {
+                        "agent_id": "system_engineer",
+                        "scope": "shared",
+                        "kind": "analysis",
+                        "session_id": session_id,
+                        "run_id": state["run_id"],
+                        "content": {"text": str(out.get("summary") or out.get("reason") or ""), "output": out, "step_id": step_id},
+                    }
+                )
+            elif target == "risk_analyst":
+                res = await analyst.analyze_task(task=task, context=ctx)
+                out = res.output if isinstance(res.output, dict) else {}
+                if isinstance(out.get("evidence"), dict) and receipts:
+                    out["evidence"].setdefault("receipt_command_ids", [r.get("command_id") for r in receipts if isinstance(r, dict) and isinstance(r.get("command_id"), str)])
+                artifacts[step_id] = {"kind": "delegate", "target_agent": target, "ok": bool(res.ok), "output": out}
+                state["analyst"] = out
+                await _append_memory_safe(
+                    {
+                        "agent_id": "risk_analyst",
+                        "scope": "shared",
+                        "kind": "analysis",
+                        "session_id": session_id,
+                        "run_id": state["run_id"],
+                        "content": {"text": str(out.get("report") or ""), "output": out, "step_id": step_id},
+                    }
+                )
+            else:
+                state["errors"].append(f"unknown_target_agent:{target}")
+                artifacts[step_id] = {"kind": "delegate", "target_agent": target, "ok": False, "error": "unknown_target_agent"}
+
+        elif kind == "tool_call":
+            tool_name = step.get("tool_name")
+            params = step.get("params") if isinstance(step.get("params"), dict) else {}
+            meta = get_tool_meta(str(tool_name))
+            target_agent = None
+            if meta is not None and meta.owner in {"system_engineer", "risk_analyst", "manager"}:
+                target_agent = meta.owner
+            if target_agent is None and meta is not None and meta.capability == "side_effect":
+                target_agent = "manager"
+            if target_agent is None:
+                target_agent = "system_engineer"
+            if isinstance(state.get("approval"), dict):
+                params.setdefault("approval", state.get("approval"))
+            timeout_ms = meta.default_timeout_ms if meta is not None else 1000
+            cmd = new_agent_command(
+                run_id=state["run_id"],
+                command_id=f"{step_id}:{tool_name}",
+                target_agent=str(target_agent),
+                action=str(tool_name),
+                params=params,
+                timeout_ms=int(timeout_ms),
+                expected_output_schema="tool_result.v1",
+            )
+            receipt = execute_agent_command(cmd)
+            receipts.append(receipt)
+            artifacts[step_id] = {"kind": "tool_call", "tool_name": tool_name, "receipt": receipt}
+            if receipt.get("error") == "approval_required":
+                state["approval"] = {"required": True, "approved": False, "reason": "approval_required"}
+                pending_questions.append(
+                    {
+                        "type": "approval",
+                        "command_id": cmd.get("command_id"),
+                        "action": tool_name,
+                        "note": "side_effect requires approval",
+                    }
+                )
+                break
+
+        elif kind == "ask_human":
+            q = step.get("question")
+            options = step.get("options")
+            pending_questions.append({"type": "question", "step_id": step_id, "question": q, "options": options})
+            state["approval"] = {"required": True, "approved": False, "reason": "ask_human"}
+            break
+
+        elif kind in {"finalize"}:
+            artifacts[step_id] = {"kind": "finalize", "ok": True}
+
+        elif kind in {"stop"}:
+            artifacts[step_id] = {"kind": "stop", "ok": True}
+            break
+
+        else:
+            state["errors"].append(f"unknown_step_kind:{kind}")
+            artifacts[step_id] = {"kind": str(kind), "ok": False, "error": "unknown_step_kind"}
+            break
+
+    state["artifacts"] = artifacts
+    state["receipts"] = receipts
+    state["pending_questions"] = pending_questions
+    _ctx_store().upsert(
+        run_id=state["run_id"],
+        event_id=str(task.get("task_id") or "task"),
+        patch={"engineer": state.get("engineer"), "analyst": state.get("analyst"), "artifacts": artifacts, "receipts": receipts, "approval": state.get("approval"), "pending_questions": pending_questions},
+    )
+
+
+async def _finalize_and_review(state: _State) -> None:
+    task = state.get("task") if isinstance(state.get("task"), dict) else {}
+    session_id = str(task.get("session_id") or "default")
+    orch = OrchestratorAgent()
+    critic = CriticAgent()
+
+    started = time.monotonic()
+    context = {
+        "phase": "finalize",
+        "intent": state.get("intent"),
+        "orchestrator_plan": state.get("orchestrator_plan"),
+        "critic_plan": state.get("critic_plan"),
+        "engineer": state.get("engineer"),
+        "analyst": state.get("analyst"),
+        "artifacts": state.get("artifacts"),
+        "receipts": state.get("receipts"),
+    }
+    res = await orch.orchestrate(task=task, context=context)
+    out = normalize_orchestrator_output(res.output if isinstance(res.output, dict) else {})
+    receipts = state.get("receipts") if isinstance(state.get("receipts"), list) else []
+    if isinstance(out.get("evidence"), dict) and receipts:
+        out["evidence"].setdefault(
+            "receipt_command_ids",
+            [r.get("command_id") for r in receipts if isinstance(r, dict) and isinstance(r.get("command_id"), str)],
+        )
+    ok_out, errors = validate_orchestrator_output(out)
+    if not ok_out:
+        out["schema_errors"] = errors
+    state["orchestrator_final"] = out
+    _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"orchestrator_final": out})
+    await _append_memory_safe(
+        {
+            "agent_id": "orchestrator",
+            "scope": "shared",
+            "kind": "final",
+            "session_id": session_id,
+            "run_id": state["run_id"],
+            "content": {"text": f"degraded={out.get('degraded')}", "output": out},
+        }
+    )
+    observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "orchestrator_finalize"})
+
+    started = time.monotonic()
+    res2 = await critic.review(
+        task=task,
+        orchestrator=out,
+        engineer=state.get("engineer") if isinstance(state.get("engineer"), dict) else None,
+        analyst=state.get("analyst") if isinstance(state.get("analyst"), dict) else None,
+        receipts=receipts,
+    )
+    c = normalize_critic_review(res2.output if isinstance(res2.output, dict) else {})
+    ok_c, errs = validate_critic_review(c)
+    if not ok_c:
+        c["schema_errors"] = errs
+    state["critic_final"] = c
+    _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"critic_final": c})
+    observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "critic_final"})
+    try:
+        mem = _memory()
+        summary = c.get("run_summary") if isinstance(c.get("run_summary"), dict) else {"text": c.get("summary") or ""}
+        if not isinstance(summary, dict):
+            summary = {}
+        summary.setdefault("schema_version", "run_summary.v1")
+        summary.setdefault("run_id", state.get("run_id"))
+        if not isinstance(summary.get("text"), str):
+            summary["text"] = ""
+        if not isinstance(summary.get("key_points"), list):
+            summary["key_points"] = []
+        if not isinstance(summary.get("receipt_command_ids"), list):
+            summary["receipt_command_ids"] = []
+        receipt_ids = [r.get("command_id") for r in receipts if isinstance(r, dict) and isinstance(r.get("command_id"), str)]
+        if receipt_ids and not summary.get("receipt_command_ids"):
+            summary["receipt_command_ids"] = receipt_ids
+        evidence = c.get("evidence") if isinstance(c.get("evidence"), dict) else {}
+        if isinstance(evidence, dict):
+            summary.setdefault("evidence", evidence)
+        await mem.upsert_run_summary(run_id=state["run_id"], summary=summary)
+    except Exception:
+        pass
+
+
+def _has_evidence_refs(evidence: dict[str, Any] | None) -> bool:
+    if not isinstance(evidence, dict):
+        return False
+    receipt_ids = evidence.get("receipt_command_ids")
+    fields = evidence.get("fields")
+    rag_hits = evidence.get("rag_hit_ids")
+    has_receipts = isinstance(receipt_ids, list) and any(isinstance(x, str) and x.strip() for x in receipt_ids)
+    has_fields = isinstance(fields, list) and any(isinstance(x, str) and x.strip() for x in fields)
+    has_rag = isinstance(rag_hits, list) and any(isinstance(x, str) and x.strip() for x in rag_hits)
+    return bool(has_receipts or has_fields or has_rag)
+
+
+def _quality_summary(state: _State) -> dict[str, Any]:
+    plan = state.get("orchestrator_plan") if isinstance(state.get("orchestrator_plan"), dict) else {}
+    final_out = state.get("orchestrator_final") if isinstance(state.get("orchestrator_final"), dict) else {}
+    critic_plan = state.get("critic_plan") if isinstance(state.get("critic_plan"), dict) else {}
+    critic_final = state.get("critic_final") if isinstance(state.get("critic_final"), dict) else {}
+    engineer = state.get("engineer") if isinstance(state.get("engineer"), dict) else {}
+    analyst = state.get("analyst") if isinstance(state.get("analyst"), dict) else {}
+    intent = state.get("intent") if isinstance(state.get("intent"), dict) else {}
+    receipts = state.get("receipts") if isinstance(state.get("receipts"), list) else []
+
+    steps = plan.get("plan_steps") if isinstance(plan.get("plan_steps"), list) else []
+    total_steps = 0
+    steps_with_reason = 0
+    for s in steps:
+        if not isinstance(s, dict):
+            continue
+        total_steps += 1
+        reason = s.get("reason")
+        if isinstance(reason, str) and reason.strip():
+            steps_with_reason += 1
+    step_reason_coverage = float(steps_with_reason / total_steps) if total_steps > 0 else 1.0
+
+    outputs = [intent, plan, final_out, critic_plan, critic_final, engineer, analyst]
+    evidence_total = 0
+    evidence_missing = 0
+    receipt_ref_total = 0
+    receipt_ref_missing = 0
+    contract_fail_count = 0
+    receipt_ids = {
+        str(r.get("command_id"))
+        for r in receipts
+        if isinstance(r, dict) and isinstance(r.get("command_id"), str) and str(r.get("command_id")).strip()
+    }
+    for out in outputs:
+        if not isinstance(out, dict) or not out:
+            continue
+        if isinstance(out.get("schema_errors"), list) and out.get("schema_errors"):
+            contract_fail_count += 1
+        evidence_total += 1
+        evidence = out.get("evidence") if isinstance(out.get("evidence"), dict) else None
+        if not _has_evidence_refs(evidence):
+            evidence_missing += 1
+        ref_ids = evidence.get("receipt_command_ids") if isinstance(evidence, dict) else None
+        if isinstance(ref_ids, list):
+            for rid in ref_ids:
+                if not isinstance(rid, str) or not rid.strip():
+                    continue
+                receipt_ref_total += 1
+                if rid not in receipt_ids:
+                    receipt_ref_missing += 1
+
+    evidence_missing_rate = float(evidence_missing / evidence_total) if evidence_total > 0 else 0.0
+    receipt_binding_rate = float((receipt_ref_total - receipt_ref_missing) / receipt_ref_total) if receipt_ref_total > 0 else 1.0
+    contract_fail_rate = float(contract_fail_count / evidence_total) if evidence_total > 0 else 0.0
+
+    breach_total = 0
+    breach_hits = 0
+    alert_submit_total = 0
+    alert_submit_ok = 0
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            continue
+        output = receipt.get("output") if isinstance(receipt.get("output"), dict) else {}
+        breaches = output.get("breaches")
+        alerts = output.get("alerts")
+        if isinstance(breaches, list):
+            b = len(breaches)
+            if b > 0:
+                breach_total += b
+                a = len(alerts) if isinstance(alerts, list) else 0
+                breach_hits += min(a, b)
+        saved = output.get("saved")
+        if isinstance(saved, int):
+            alert_submit_total += 1
+            if bool(receipt.get("ok")) and saved > 0:
+                alert_submit_ok += 1
+
+    breach_hit_consistency = float(breach_hits / breach_total) if breach_total > 0 else None
+    alert_write_success_rate = float(alert_submit_ok / alert_submit_total) if alert_submit_total > 0 else None
+    explainability_score = float(
+        (step_reason_coverage + receipt_binding_rate + (1.0 - evidence_missing_rate) + (1.0 - contract_fail_rate)) / 4.0
+    )
+    return {
+        "step_reason_coverage": round(step_reason_coverage, 6),
+        "evidence_missing_rate": round(evidence_missing_rate, 6),
+        "receipt_binding_rate": round(receipt_binding_rate, 6),
+        "contract_fail_rate": round(contract_fail_rate, 6),
+        "breach_hit_consistency": round(float(breach_hit_consistency), 6) if isinstance(breach_hit_consistency, float) else None,
+        "alert_write_success_rate": round(float(alert_write_success_rate), 6) if isinstance(alert_write_success_rate, float) else None,
+        "explainability_score": round(explainability_score, 6),
+        "counts": {
+            "plan_steps_total": total_steps,
+            "plan_steps_with_reason": steps_with_reason,
+            "receipt_ref_total": receipt_ref_total,
+            "receipt_ref_missing": receipt_ref_missing,
+            "receipts_total": len(receipts),
+            "evidence_outputs_total": evidence_total,
+            "evidence_outputs_missing": evidence_missing,
+            "contract_fail_outputs": contract_fail_count,
+        },
+    }
+
+
+def _build_step_trace(state: _State) -> list[dict[str, Any]]:
+    plan = state.get("orchestrator_plan") if isinstance(state.get("orchestrator_plan"), dict) else {}
+    steps = plan.get("plan_steps") if isinstance(plan.get("plan_steps"), list) else []
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    out: list[dict[str, Any]] = []
+    for idx, s in enumerate(steps):
+        if not isinstance(s, dict):
+            continue
+        step_id = s.get("step_id")
+        if not isinstance(step_id, str) or not step_id.strip():
+            step_id = f"s{idx+1}"
+        aid = artifacts.get(step_id) if isinstance(artifacts.get(step_id), dict) else {}
+        output = aid.get("output") if isinstance(aid.get("output"), dict) else {}
+        evidence = output.get("evidence") if isinstance(output.get("evidence"), dict) else {}
+        refs: list[str] = []
+        for k in ("fields", "receipt_command_ids", "rag_hit_ids"):
+            v = evidence.get(k) if isinstance(evidence, dict) else None
+            if isinstance(v, list):
+                refs.extend([str(x) for x in v if isinstance(x, str) and x.strip()])
+        out.append(
+            {
+                "step_id": step_id,
+                "kind": s.get("kind"),
+                "reason": s.get("reason"),
+                "evidence_refs": refs,
+                "artifact_kind": aid.get("kind") if isinstance(aid, dict) else None,
+            }
+        )
+    return out
+
+
+def _build_final_output(state: _State) -> dict[str, Any]:
+    task = state.get("task") if isinstance(state.get("task"), dict) else {}
+    quality = _quality_summary(state)
+    approval = state.get("approval") if isinstance(state.get("approval"), dict) else {}
+    pending = bool(approval.get("required") and not approval.get("approved"))
+    has_evidence_breach = bool(float(quality.get("evidence_missing_rate") or 0.0) > 0.0 or float(quality.get("contract_fail_rate") or 0.0) > 0.0)
+    if has_evidence_breach and not pending:
+        approval = {"required": True, "approved": False, "reason": "evidence_missing"}
+        state["approval"] = approval
+        q = state.get("pending_questions") if isinstance(state.get("pending_questions"), list) else []
+        q.append({"type": "evidence", "note": "missing evidence links in outputs"})
+        state["pending_questions"] = q
+        pending = True
+    final_output = {
+        "schema_version": "orchestrator_run.v1",
+        "run_id": state.get("run_id"),
+        "task_id": task.get("task_id"),
+        "task": task,
+        "intent": state.get("intent"),
+        "orchestrator_plan": state.get("orchestrator_plan"),
+        "critic_plan": state.get("critic_plan"),
+        "approval": approval,
+        "status": "pending_approval" if pending else "completed",
+        "engineer": state.get("engineer"),
+        "analyst": state.get("analyst"),
+        "artifacts": state.get("artifacts"),
+        "receipts": state.get("receipts"),
+        "pending_questions": state.get("pending_questions"),
+        "orchestrator_final": state.get("orchestrator_final"),
+        "critic_final": state.get("critic_final"),
+        "step_trace": _build_step_trace(state),
+        "quality": quality,
+        "errors": state.get("errors") or [],
+    }
+    _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"final_output": final_output})
+    return final_output
+
+
+def _ok_result(*, start: float, final_output: dict[str, Any]) -> dict[str, Any]:
+    latency_ms = (time.monotonic() - start) * 1000.0
+    observe_ms("rm_pipeline_total", float(latency_ms), labels={"workflow": "orchestrator_workflow"})
+    return {"ok": True, "latency_ms": float(latency_ms), "result": final_output}
+
+
+async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
+    try:
+        inc_counter("rm_orchestrator_runs_total")
+        start = time.monotonic()
+        t = task if isinstance(task, dict) else {}
+        run_id = new_run_id(event_id=str(t.get("task_id") or "task"))
+        state: _State = {
+            "task": t,
+            "run_id": run_id,
+            "iter": 0,
+            "intent": {},
+            "orchestrator_plan": {},
+            "critic_plan": {},
+            "approval": {},
+            "engineer": {},
+            "analyst": {},
+            "artifacts": {},
+            "receipts": [],
+            "pending_questions": [],
+            "orchestrator_final": {},
+            "critic_final": {},
+            "final_output": {},
+            "errors": [],
+        }
+
+        store = _ctx_store()
+        store.upsert(run_id=run_id, event_id=str(t.get("task_id") or "task"), patch={"task_snapshot": t})
+        session_id = str(t.get("session_id") or "default")
+        payload = t.get("payload") if isinstance(t.get("payload"), dict) else {}
+        content = payload.get("content") if isinstance(payload.get("content"), str) else ""
+        await _append_memory_safe(
+            {
+                "agent_id": "orchestrator",
+                "scope": "shared",
+                "kind": "task",
+                "session_id": session_id,
+                "run_id": run_id,
+                "content": {"text": f"source={t.get('source')} content={content}"},
+            }
+        )
+
+        intent_agent = IntentAgent()
+        md = build_intent_metadata(task=t, policy_version=get_policy_version(), prompt_version=PROMPT_VERSION_INTENT)
+        intent_res = await intent_agent.recognize(task=t, metadata=md)
+        intent_out = normalize_intent_output(intent_res.output if isinstance(intent_res.output, dict) else {})
+        ok_intent, intent_errors = validate_intent_output(intent_out)
+        if not ok_intent:
+            intent_out["schema_errors"] = intent_errors
+        state["intent"] = intent_out
+        store.upsert(run_id=run_id, event_id=str(t.get("task_id") or "task"), patch={"intent": intent_out})
+        await _append_memory_safe(
+            {
+                "agent_id": "intent",
+                "scope": "shared",
+                "kind": "intent",
+                "session_id": session_id,
+                "run_id": run_id,
+                "content": {"text": f"type={intent_out.get('primary_intent_type')} risk={intent_out.get('risk_level')}", "intent": intent_out},
+            }
+        )
+        try:
+            intents = intent_out.get("intents") if isinstance(intent_out.get("intents"), list) else []
+            dis = intent_out.get("disambiguation") if isinstance(intent_out.get("disambiguation"), dict) else {}
+            if len(intents) > 1 and isinstance(dis.get("explanation"), str) and dis.get("explanation").strip():
+                await _append_memory_safe(
+                    {
+                        "agent_id": "intent",
+                        "scope": "shared",
+                        "kind": "intent_disambiguation",
+                        "session_id": session_id,
+                        "run_id": run_id,
+                        "content": {"text": dis.get("explanation"), "intents": intents},
+                    }
+                )
+        except Exception:
+            pass
+
+        await _plan_with_revise_loop(state)
+
+        approval = state.get("approval") if isinstance(state.get("approval"), dict) else {}
+        if approval.get("required") and not approval.get("approved"):
+            final_output = _build_final_output(state)
+            return _ok_result(start=start, final_output=final_output)
+
+        rounds = _max_exec_rounds()
+        for _ in range(rounds):
+            await _execute_plan(state)
+            approval = state.get("approval") if isinstance(state.get("approval"), dict) else {}
+            if approval.get("required") and not approval.get("approved"):
+                final_output = _build_final_output(state)
+                return _ok_result(start=start, final_output=final_output)
+            plan = state.get("orchestrator_plan") if isinstance(state.get("orchestrator_plan"), dict) else {}
+            if plan.get("degraded") is True:
+                break
+            await _plan_with_revise_loop(state)
+            approval = state.get("approval") if isinstance(state.get("approval"), dict) else {}
+            if approval.get("required") and not approval.get("approved"):
+                break
+            next_plan = state.get("orchestrator_plan") if isinstance(state.get("orchestrator_plan"), dict) else {}
+            next_steps = next_plan.get("plan_steps") if isinstance(next_plan.get("plan_steps"), list) else []
+            has_executable = any(isinstance(s, dict) and s.get("kind") in {"delegate", "tool_call", "ask_human", "stop"} for s in next_steps)
+            if not has_executable:
+                break
+
+        await _finalize_and_review(state)
+        final_output = _build_final_output(state)
+        return _ok_result(start=start, final_output=final_output)
     except Exception as e:  # pylint: disable=broad-except
         inc_counter("rm_orchestrator_errors_total", labels={"code": "EXCEPTION"})
         return {"ok": False, "error": str(e)}

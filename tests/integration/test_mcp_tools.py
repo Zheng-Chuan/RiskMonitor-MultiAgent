@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 import pytest
-pytest.importorskip("mcp")
+import mcp  # noqa: F401
 
 from main import (  
     query_all_positions,
@@ -25,7 +25,7 @@ from main import (
 def _require_env(name: str) -> str:
     value = os.getenv(name)
     if value is None or not value.strip():
-        pytest.skip(f"missing env var: {name}")
+        raise RuntimeError(f"missing env var: {name}")
     return value.strip()
 
 

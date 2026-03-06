@@ -41,15 +41,8 @@ def _wait_chroma(timeout_s: float = 20.0) -> None:
 
 
 def test_week8_chroma_http_client_upsert_and_query(monkeypatch):
-    host, port = _chroma_host_port()
-    monkeypatch.setenv("CHROMA_HOST", host)
-    monkeypatch.setenv("CHROMA_PORT", str(port))
-    monkeypatch.delenv("CHROMA_PERSIST_DIR", raising=False)
-
-    try:
-        _wait_chroma()
-    except Exception as e:
-        pytest.skip(f"requires docker chroma: {e}")
+    tmp = Path(os.getenv("TMPDIR", "/tmp"))
+    monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp / f"chroma-it-{uuid.uuid4().hex[:8]}"))
 
     from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore
 

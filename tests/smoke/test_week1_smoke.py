@@ -17,7 +17,7 @@ import sys
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-pytest.importorskip("mcp")
+import mcp  # noqa: F401
 
 from tests.fixtures.market_snapshot_server import Handler
 

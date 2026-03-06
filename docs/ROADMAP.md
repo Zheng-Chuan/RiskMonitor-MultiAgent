@@ -1,495 +1,441 @@
-# 开发计划 (Advanced Real-time Multi-Agent)
+# ROADMAP (RiskMonitor-MultiAgent)
 
-本项目旨在构建一个**金融级 实时 知识增强的 Multi-Agent 风控系统**
-对标 Datadog/PagerDuty 的高级智能监控架构 集成 CDC 流计算 RAG 和多智能体编排
+本项目是一个面向金融风控演示的 Multi-Agent 系统, 目标是用可治理的方式把“意图识别 → 多步规划 → 工具执行 → 证据链输出 → 可回放与成本治理”落到工程代码里.
 
-## 技术架构亮点与必须落地清单 (工程作品集标准)
+## 当前仓库的真实边界
 
-说明
+- 主要输入形态: 人类输入 task 或 MCP 客户端调用工具
+- 不包含: Kafka/Debezium/CDC/Sentinel 事件驱动链路, Schema Registry, DLQ/Replay(事件级)
+- 核心主线: Intent Router + Schema-first Intent Extractor + Planner-Executor(动态循环) + Critic/HITL + Unified Memory + MCP Tools
 
-- 这些是必须落地的技术点, 用 checklist 方式确保可衡量 可测试 可验证
-- Week 内容只是实现路径, 但无论如何这些能力最终都要落地
+## 架构分层(以代码为准)
 
-### A. 事件驱动架构 (工程完善 重新纳入主线)
-
-说明
-
-- 事件驱动链路已经完成从数据库变更到 Agent 触发的最小闭环
-- 后续把 Schema Registry 兼容 幂等 去重 重试 DLQ Replay 作为工程完善目标
-
-- [x] CDC 数据动脉: MySQL -> Debezium -> Kafka topic
-- [x] 标准事件 Envelope (企业对齐)
- - [x] schema_version + event_id + correlation_id + causation_id + occurred_at + producer
- - [x] Schema Registry 与兼容策略 (breaking change 流程)
-- [x] 事件分级与性质分类
- - [x] severity (INFO/WARNING/CRITICAL) 与 category (system/business)
- - [x] actionability (是否可执行) 与 confidence (置信度)
- - [x] 每类事件的默认处理策略 (拦截/降级/升级/人工审批)
-- [x] 幂等与去重
- - [x] 基于 event_id 或 partition+offset 的去重表
- - [x] 同一事件重放不重复写库 不重复推送
-- [x] 重试与 DLQ
- - [x] 可配置重试次数与退避
- - [x] 不可恢复错误进入 DLQ 并可追溯
-- [x] 可回放 Replay
- - [x] 选定 event_id 可重放并产出一致的结构化输出 (允许文本不同)
-
-### B. Multi-Agent 协作 (必须实现)
-
-- [x] 三角色拆分
- - [x] System Engineer Agent: 专注 IT 报错与抖动分析
- - [x] Risk Analyst Agent: 专注业务风险分析与事实报告
- - [x] Manager Agent: 汇总信息, 向人类汇报, 下发可执行指令并等待结果
-- [x] Manager 指令协议 (可执行且可验证)
- - [x] 指令 schema: target_agent + action + params + timeout_ms + expected_output_schema
- - [x] 执行回执 schema: ok + evidence + artifacts + latency_ms + error
-- [x] 状态机编排 (LangGraph)
- - [x] Quality Gate + RewriteLoop + Human-in-the-loop
- - [x] 可回放与幂等内置在编排层
-
-### C. Agent 上下文共享机制 (必须实现)
-
-- [x] RAG 知识库 (Chroma)
-- [x] Context Store (共享上下文)
- - [x] 黑板模型: event snapshot + tool results + rag hits + decisions + approvals
- - [x] 结构化引用 evidence (每条结论必须能追溯到 tool/rag/事件字段)
-- [x] Prompt/Policy 版本化 (可回放)
- - [x] 每次 Agent run 记录 prompt_version, model, temperature, tool_versions
-
-### D. 工程化质量门禁 (必须实现)
-
-- [x] Contract Tests (结构化输出质量)
- - [x] JSON 可解析率, 字段齐全率, 类型正确率
- - [x] evidence 非空率 (关键结论必须有来源)
-- [x] 离线评测与回归集
- - [x] 固定回归集 events + 期望结构化输出 (base vs new 版本一键对比)
- - [x] LLM-as-judge 或规则评分作为质量闸门
- - [x] 防幻觉与引用治理
- - [x] 关键结论必须引用 tool 或 rag evidence, 否则降级或拒答
-
-### E. 安全与权限治理 (必须实现)
-
-- [x] Role-based 工具权限 (基础版)
- - [x] System Engineer 只允许读取与诊断类工具
- - [x] Risk Analyst 允许读取业务数据与检索
- - [x] Manager 才能发起写库/推送, 且 CRITICAL 必须 HITL
-- [x] Role-based 工具权限 (治理增强)
- - [x] 工具能力分级: read_only / side_effect / pii / admin 等标签化治理
- - [x] side_effect 工具必须走审批与审计, 且可配置策略(按 severity/actionability)
- - [x] 工具 deny 的原因与证据必须结构化写入 Context Store
-- [x] 审计与追责
-
-### F. 可观测性与生产化 (必须实现)
-
-- [x] 端到端指标: CDC lag, consumer lag, pipeline latency (分节点), LLM error rate, Chroma latency
-
-## 核心架构愿景 (The Advanced Stack)
-
-1. **Level 1: The Nerves (感知层)**
- - **Event Ingestion**: Debezium + Kafka 实时捕获变更
- - **Contracts**: 事件 envelope + schema registry + 兼容策略
-2. **Level 2: The Reflexes (快速反射层)**
- - **Sentinel**: 轻量过滤与阈值检测, 把噪音挡在 LLM 外
- - **Deterministic Guardrails**: 技术故障拦截, 幂等, 降级, 重试
-3. **Level 3: The Brain (大脑层)**
- - **Memory (RAG)**: Chroma 存储历史告警与知识
- - **Orchestration**: LangGraph 编排多智能体协作与人机协作
- - **Action**: MCP Server 提供原子化操作工具 (读写分离, HITL 约束)
-
----
-
-## 历史里程碑 (已完成)
-
-### Week 1(Phase 0): 监控链路 MVP(vertical slice)
-
-- 交付
- - [x] 业务用例固化
- - [x] 定义口径与 contract
- - [x] positions schema, market snapshot schema, risk limits schema
- - [x] output schema: exposure, breaches, alerts, citations(如果有)
- - [x] 实现 1 个用例级入口(可被 MCP 与 HTTP 复用)
- - [x] 示例: monitor_desk_exposure(desk, as_of, horizon, limit_profile)
- - [x] 实时性与可观测性底座(最小版)
- - [x] 数据访问层: 超时, 重试, 资源释放, 明确事务边界
- - [x] 结构化日志: request_id, tool name, latency_ms, error.code
- - [x] 指标: 至少输出 2 个核心指标(例如 qps, p95 latency)的最小实现方式
- - [x] demo 与回归入口
- - [x] 1 条 demo 脚本: 从查询头寸 -> 聚合 exposure -> 限额判断 -> 输出告警 payload
- - [x] 1 条端到端 smoke test 覆盖该链路
-
-- 验收
- - [x] 端到端 demo 可复现
- - [x] 本地一键启动数据库与 server
- - [x] MCP 客户端可调用至少 2 个工具
- - [x] demo 脚本输出包含:
- - [x] exposure(按 desk 聚合)
- - [x] breaches(超限判断)
- - [x] request_id 与可定位日志
- - [x] 工程化底线满足
- - [x] 无明文 secrets
- - [x] 核心链路具备超时与结构化错误返回
- - [x] tests 可运行且通过
-
-### Week 2(Phase 0): 工程化强化与性能
-
-- 交付
- - [x] 模块化重构
- - [x] 拆分 main.py 为模块(接口层, service 层, 计算层, 数据访问层, 配置层)
- - [x] 统一输入输出 schema 与错误结构
- - [x] 数据访问层工业化
- - [x] SQLAlchemy Engine 连接池与超时
- - [x] 重试策略(下沉到 data_access)
- - [x] 错误映射
- - [x] 读写分离预留点或 cache 抽象(先不实现也可)
- - [x] 性能与容量口径
- - [x] 固化压测用例(固定请求集)
- - [x] 定义并输出 p50, p95 latency 的目标与测量方法
-
-- 验收
- - [x] p95 latency 在固定用例下达到目标(目标: 500ms 以内, 方法: scripts/benchmarks/bench_monitor_desk_exposure.py --p95-target-ms 500)
- - [x] 关键模块可单测, 用例级逻辑可集成测试
-
-### Week 3(Phase 1): 服务化形态与 DX 固化
-
-- 交付
- - [x] streamable-http 部署形态固化
- - [x] streamable-http 作为推荐部署方式
- - [x] health check, readiness, graceful shutdown
- - [x] DX 固化
- - [x] 统一启动与测试入口(Makefile 提供 make setup-mcp, make test-all)
- - [x] 明确目录职责(例如 src, scripts, tests)
-
-- 验收
- - [x] 在 streamable-http 模式下可稳定运行并可被客户端连接
- - [x] tests 全部通过
-
-### Week 4(Phase 3 最小版): 可观测与告警闭环
-
-- 交付
- - [x] 告警闭环
- - [x] 告警规则最小集合(desk delta breach, 支持 INFO/WARNING/CRITICAL 三级)
- - [x] 告警路由(写入 alerts 表, 支持按 request_id/alert_id/desk/severity 查询)
- - [x] 可观测与容量口径
- - [x] 指标可观测: /metrics 端点暴露 Prometheus 格式指标(request_count, avg_latency, error_rate)
- - [x] 已有压测脚本(scripts/benchmarks/bench_monitor_desk_exposure.py)
-
-- 验收
- - [x] 告警可端到端触发并可追踪(request_id, alert_id)
- - [x] /metrics 端点可正常访问, 暴露关键指标
- - [x] tests 全部通过(截至目前 36 个测试)
-
----
-
-## 演进计划 (Week 5-10)
-
-### Week 5: MCP Foundation (坚实底座)
-**目标**: 清洗现有架构 确保 MCP Server 无状态 安全且 AI 友好
-
-- **交付**
- - [x] **架构清洗 (Stateless & Secure)**
- - [x] **删除** `task_registry.py`: 移除内存任务队列 回归无状态
- - [x] **拆分读写边界**: `monitor_desk_exposure` 保持无副作用, 写入动作由 `submit_alerts` 承担
- - [x] **Auth**: 实现基于 Token 的 HTTP Header 鉴权桩
- - [x] **Resources & Prompts**
- - [x] 实现 `risk://metadata/desks` 和 `risk://limits/global` Resources
- - [x] 内置 `analyze-risk-breach` Prompt 模版
- - [x] **LLM Provider 适配 (OpenRouter)**
- - [x] 新增独立模块 `riskmonitor_multiagent.llm.openrouter_client` 统一封装 OpenRouter 调用
- - [x] 从仓库根目录 `.env` 自动读取 `OPENROUTER_API_KEY` 等配置, 默认使用免费模型
- - [x] 不注册为 MCP 工具, 供后续 server/worker 在业务流程内直接调用
-
-### Week 6: Infrastructure & CDC (数据动脉)
-**目标**: 搭建 Kafka 生态 打通从 DB 到流的实时通道
-
-- **交付**
- - [x] **容器化基础设施**
- - [x] `docker-compose.yml`: 添加 Zookeeper, Kafka, Kafka UI, Debezium Connect, Schema Registry
- - [x] **CDC Pipeline**
- - [x] 配置 Debezium Connector 监听 MySQL `positions` 表
- - [x] 验证 Binlog 变更能实时进入 Kafka Topic `risk.positions.cdc`
- - [x] **Schema Registry**
- - [x] 定义 CDC 事件 JSON Schema 并提供注册脚本, 供下游 Consumer 类型对齐与演进
-
-### Week 7: Sentinel & Agent Pipeline (哨兵与智能体流水线)
-**目标**: 放弃复杂的流计算框架 使用轻量级 Sentinel 脚本直接连接 Kafka 与 Multi-Agent 系统 实现 "Event -> Agent" 的快速闭环
-
-- **交付**
- - [x] **Sentinel Service (轻量级哨兵)**
- - [x] 编写 `riskmonitor_multiagent.sentinel.service` 使用 `aiokafka` 监听 `risk.positions.cdc`
- - [x] 实现基础过滤逻辑 解析 CDC 事件 发现 Exposure > Limit 即触发后续流程
- - [x] **Agent Roles Implementation (三大角色)**
- - [x] **System Engineer Agent (IT 运维)**: 基于实时观测(Kafka/MySQL/Chroma/服务指标)走 LLM 诊断 过滤技术故障
- - [x] **Risk Analyst Agent (风险分析师)**: 专门分析业务风险 基于事件与上下文生成客观事实报告与风险点列表
- - [x] **Manager Agent (管理者/指挥官)**: 汇总前两者信息进行分析与处理 向人类汇报 并向其他两个 Agent 下发可执行指令并等待执行结果
- - [x] **Sequential Pipeline (线性编排)**
- - [x] 在 Sentinel 中串联 `SystemEngineer -> RiskAnalyst -> Manager` 的调用链
- - [x] **Verification**
- - [x] 修改数据库 `positions` 表 -> Kafka 产出事件 -> Sentinel 捕获 -> 触发 Agent -> 输出决策日志
-
-### Week 8: RAG & Knowledge Base (知识记忆 - 海马体)
-**目标**: 让 Agent 拥有记忆 能参考历史案例
-
-- **交付**
- - [x] **Vector DB 部署**
- - [x] 在 docker compose 中增加 **Chroma** 服务并提供持久化 volume
- - [x] **Knowledge Ingestion**
- - [x] 提供 CLI 将最近 `alerts` 表数据向量化写入 Chroma
- - [x] **Context Retrieval Tool**
- - [x] 新增 MCP Tool `search_similar_alerts` 读取 Chroma 并返回相似历史告警
- - [x] **CLI 工具**
- - [x] 提供 `kb ingest-alerts` 与 `kb query` 两个子命令 用于本地验证与排障
- - **验收**
- - [x] 一键复现
- - [x] `docker compose --profile kb up -d` 可启动 Chroma 且重启后数据仍在
- - [x] `make ingest-knowledge` 成功写入向量库 并输出写入条数
- - [x] 检索可用
- - [x] CLI query 能返回 top_k 结果 每条包含 similarity 与 alert_id
- - [x] MCP tool `search_similar_alerts` 返回结构与 CLI 一致
- - [x] 回归覆盖
- - [x] tests 覆盖 ingest 与检索核心逻辑 且 pytest 全量通过
-
-### Week 9: Multi-Agent Orchestration (Advanced)
-**目标**: 将线性流程升级为可治理的状态机, 支持质量门禁, 重写回路, 人机协作与可回放.
-
-- **交付**
- - [x] **Contracts (输入输出契约)**
- - [x] 定义并固化 `RiskEvent` 事件结构与版本号(event_id, correlation_id, causation_id, occurred_at, producer, schema_version).
- - [x] 定义事件分级与性质分类(severity, category/system_or_business, actionability, confidence), 并明确每类事件的默认处理策略.
- - [x] 定义并固化三个 Agent 的结构化输出 schema, 并提供校验与兼容策略.
- - [x] **State Machine (LangGraph)**
- - [x] 节点建议: NormalizeEvent -> RetrieveContext(tools + Chroma) -> EngineerCheck -> RiskAnalyst -> QualityGate -> RewriteLoop -> Manager -> HumanApproval -> Execute.
- - [x] Manager 节点支持向 System Engineer 与 Risk Analyst 下发可执行指令并等待执行结果.
- - [x] **Collaboration Loop (协作闭环, 必须可验证)**
- - [x] Manager 产出可执行计划 plan_steps, 每一步要么是 tool call 要么是 agent instruction
- - [x] System Engineer 与 Risk Analyst 可被 Manager 反向调度, 且必须返回结构化回执 ok evidence artifacts latency_ms error
- - [x] 至少实现 1 次协作回路, Manager 下发指令, Agent 执行工具, Manager 汇总并二次决策
- - [x] **Context Store (共享上下文与同步记忆)**
- - [x] 黑板模型落地, 每次 run 生成 run_id, 记录 event snapshot, tool results, rag hits, agent outputs, decisions, approvals
- - [x] 上下文在多个 Agent 之间共享, 同一 run_id 下读取到一致的 facts 与 artifacts
- - [x] 关键结论必须携带 evidence 引用, 证据来源必须可追溯到 tool 或 rag 或事件字段
- - [x] 同步记忆最小闭环, 将 Manager 的最终结论摘要写入 Chroma, 可被后续事件检索命中
- - [x] **Observation Tools (环境信息收集)**
- - [x] 工具清单固化, 至少包含 service metrics, mysql health, kafka consumer lag, chroma health
- - [x] 工具调用必须记录到 Context Store, 包含 input output latency_ms error, 形成可审计证据链
- - [x] Role based allowlist, Engineer 只读诊断, Analyst 只读业务与检索, Manager 才能触发有副作用工具
- - [x] **Quality Gate**
- - [x] 当报告缺字段或置信度过低时触发 rewrite 回路, 并限制最大重试次数.
- - [x] 当 LLM 不可用时自动降级到规则化输出, 保证闭环不中断.
- - [x] **Human-in-the-loop**
- - [x] 对 CRITICAL 级别动作必须人工确认后才能执行有副作用操作(至少写库/推送).
- - **验收**
- - [x] 工作流可运行
- - [x] 提供 demo 脚本 输入一个 breach event 能跑完整状态机并输出最终决策(结构化 JSON).
- - [x] 可回放与幂等
- - [x] 同一 event_id 重放不会重复写入/重复推送, 并且输出结构保持一致.
- - [x] 回路生效
- - [x] 当 Risk Analyst 输出缺字段时触发 rewrite 回路, 至少重写一次后再进入 Manager.
- - [x] 人工介入
- - [x] CRITICAL 动作必须进入 human approval, 未确认不得执行写库动作.
- - [x] 多智能体协作可验证
- - [x] 至少 1 个 case 触发 Manager 下发指令给 Engineer 或 Analyst 并等待回执
- - [x] Manager 最终输出必须引用来自其他 Agent 回执的 evidence
- - [x] 共享与同步记忆可验证
- - [x] Context Store 中可查到完整 run 轨迹, 包含 tool outputs 与 rag hits
- - [x] 同一 run_id 下两个 Agent 的输出能引用同一份共享 facts
- - [x] 将最终结论摘要写入 Chroma 后, 下一次相似事件能通过检索命中并被引用
- - [x] 环境观察与工具调用可验证
- - [x] 至少调用 2 个诊断工具并把结果写入 Context Store
- - [x] 发生工具错误时能结构化记录并触发降级或人工介入策略
- - [x] 测试覆盖
- - [x] tests 覆盖 system_issue, rewrite, human approval, fallback 等关键分支, pytest 全量通过.
-
-### Week 10: Production Readiness (生产化)
-**目标**: 全链路压测与可观测性
-
-- **交付**
- - [x] **End-to-End Stress Test**
- - [x] 制造"风暴场景" 短时间内大量交易触发多个 Desk 违规
- - [x] 验证 Kafka Backpressure 和 Agent 响应延迟
- - [x] 提供 positions 注入脚本 scripts/stress/storm_positions.py
- - [x] **Observability Dashboard**
- - [x] 监控 CDC 延迟, Kafka consumer lag, Sentinel 吞吐, pipeline latency(分节点), LLM 调用成功率与 token 消耗, Chroma query p95 与命中率
- - [x] 指标实现与业务代码隔离在 observability 模块
- - [x] /metrics 输出 Sentinel 吞吐与延迟
- - [x] /metrics 输出 pipeline 分节点延迟与总延迟
- - [x] /metrics 输出 LLM 调用成功率与 token 统计
- - [x] /metrics 输出 Chroma query p95 与命中计数
- - [x] /metrics 输出 Kafka lag 估计值
- - [x] **Documentation**
- - [x] 完整的架构图 操作手册与故障排查 Runbook
- - **验收**
- - [x] 压测可复现
- - [x] 提供脚本能在本地注入 N 条 positions 变更并触发 Sentinel 与 Agent
- - [x] 证明在风暴场景下无重复告警(同一 event_id/alert_id 幂等)
- - [x] 指标可观测
- - [x] /metrics 至少新增 CDC lag, consumer lag, pipeline latency, LLM error rate, Chroma latency 指标
- - [x] 稳定性
- - [x] 连续运行 30 分钟 无崩溃 无明显内存泄漏 关键错误有结构化日志
- - [x] 故障演练
- - [x] LLM 不可用时自动降级仍能产出结构化决策
- - [x] Chroma 不可用时仍可运行但明确标注 memory 不可用
-
-### Week 12: Side-Effect 工具与审计闭环
-**目标**: 把"有副作用的工具"从概念变成工程闭环: 可审批 可审计 可追责 可回滚/补偿
-
-- **交付**
-  - [x] **Side-effect 工具框架**
-    - [x] 将写库/推送类能力以 side_effect 工具形态暴露, 默认禁用
-    - [x] 支持 per-action 策略: require_approval, require_severity, require_reason
-  - [x] **审计事件**
-    - [x] 每次 side_effect 执行写入审计记录(包含 event_id, correlation_id, command_id, actor, approved_by)
-    - [x] 审计记录可在 Context Store 与数据库中双向关联
-- **验收**
-  - [x] 审计可验证: 任意一次副作用执行都能追溯到审批与输入证据
-
-### Week 13: 治理回归集 (RBAC/Side-effect)
-**目标**: 把 RBAC/审批这些治理能力变成"不会被回归破坏"的工程资产
-
-- **交付**
-  - [x] **治理回归集**
-    - [x] 固定用例覆盖: rbac_deny, approval_required, approval_reject
-    - [x] 一键运行并输出结构化结果(通过/失败原因/证据链)
-  - [x] **RBAC 治理增强**
-    - [x] Tool meta 级 allowed_targets/owner 约束, 防止跨角色工具调用
-  - [x] **可观测补齐**
-    - [x] /metrics 输出治理关键指标: rbac_denied_total, approval_required_total
-- **验收**
-  - [x] 回归可用: 任意改动不会静默破坏 RBAC/审批能力
-
-### Week 14: Policy Prompt 版本化与可回放
-**目标**: 让每次 Agent run 可复现 可对比 可回放 形成可治理的策略迭代体系
-
-- **交付**
-  - [x] **Policy Prompt 版本化**
-    - [x] 每个 Agent 固化 prompt_version 与 policy_version
-    - [x] Context Store 记录 model temperature tool_versions prompt_version
-  - [x] **可回放对比**
-    - [x] 同一 event_id 在不同 policy_version 下可并行跑并生成对比报告
-- **验收**
-  - [x] 可回放可对比: 输出包含版本字段且差异可追溯到 policy 或 prompt 变更
-
-### Week 15: 工程化质量门禁 (Quality Gate)
-**目标**: 用可量化的质量闸门保证结构化输出稳定可靠
-
-- **交付**
-  - [x] **Contract Tests**
-    - [x] JSON 可解析率, 字段齐全率, 类型正确率
-    - [x] evidence 非空率 (关键结论必须有来源)
-  - [x] **离线评测与回归集**
-    - [x] 固定回归集 events + 期望结构化输出, base vs new 一键对比
-  - [x] **LLM as judge 或规则评分**
-    - [x] 评分结果作为质量闸门的一部分, 不达标则失败
-  - [x] **防幻觉与引用治理**
-    - [x] 关键结论必须引用 tool 或 rag evidence, 否则降级或拒答
-- **验收**
-  - [x] 一键运行质量门禁并输出通过失败原因与证据链
-  - [x] 任意策略改动无法绕过门禁进入交付
-
-### Week 16: 事件驱动工程加固 (Schema, Idempotency, DLQ, Replay)
-**目标**: 补齐事件链路的可演进性与可恢复性, 支持稳定重放与故障隔离
-
-- **交付**
-  - [x] **Schema Registry 兼容策略**
-    - [x] 定义 breaking change 流程与兼容检查规则
-  - [x] **幂等与去重**
-    - [x] 去重表设计与落库, 以 event_id 或 partition+offset 去重
-    - [x] 重放不重复写库, 不重复推送
-  - [x] **重试与 DLQ**
-    - [x] 可配置重试次数与退避
-    - [x] 不可恢复错误进入 DLQ 并可追溯
-  - [x] **Replay**
-    - [x] 选定 event_id 可重放并产出一致的结构化输出 (允许文本不同)
-- **验收**
-  - [x] 重复事件与重放不会产生重复副作用
-  - [x] DLQ 可定位失败原因并支持恢复流程
-
-
-## 架构层次总结
-
-| Layer | Component | Technology | Responsibility |
+| Layer | Component | Responsibility | 主要实现 |
 | :--- | :--- | :--- | :--- |
-| **Brain** | **Manager Orchestrator** | LLM, State Machine | 汇总信息, 下发指令, 等待执行, 向人类汇报 |
-| **Memory**| **Knowledge Base** | **Chroma**, RAG | 历史经验检索, 规则文档查询 |
-| **Reflex**| **Sentinel** | Python, Kafka Consumer | 轻量过滤与阈值检测, 触发智能体 |
-| **Nerves**| **Event Bus** | **Kafka**, Debezium | 实时数据捕获与传输 |
-| **Hands** | **MCP Server** | **FastMCP** | 数据库读写, 原子工具暴露 |
+| Brain | Orchestrator + Critic | 规划/审查/汇总, HITL 门禁 | `src/riskmonitor_multiagent/orchestration/orchestrator_workflow.py`, `src/riskmonitor_multiagent/agents/roles.py` |
+| Intent | Router + Extractor | 候选意图路由 + Schema-first 抽取 | `src/riskmonitor_multiagent/orchestration/intent_router.py`, `src/riskmonitor_multiagent/contracts/intent_output.py` |
+| Hands | MCP Server + Tools | 原子工具暴露, DB 读写, 风险计算 | `src/riskmonitor_multiagent/server.py`, `src/riskmonitor_multiagent/tools/mcp_tools.py` |
+| Security | RBAC + Side-effect Policy | 工具能力分级, 审批/拒绝证据 | `src/riskmonitor_multiagent/orchestration/tool_registry.py`, `src/riskmonitor_multiagent/orchestration/tool_executor.py`, `src/riskmonitor_multiagent/services/auth_service.py` |
+| Memory | Unified Memory | 短期/长期/语义记忆统一协议 | `src/riskmonitor_multiagent/memory/unified_memory.py`, `src/riskmonitor_multiagent/memory/stores.py`, `src/riskmonitor_multiagent/knowledge/chroma_store.py` |
+| Observability | Metrics + Logging | 指标与结构化日志 | `src/riskmonitor_multiagent/observability/metrics.py`, `src/riskmonitor_multiagent/services/logging_service.py`, `src/riskmonitor_multiagent/services/prometheus_metrics_service.py` |
+| Governance | Versions + Cost | prompt/policy 版本与成本限流 | `src/riskmonitor_multiagent/governance/versions.py`, `src/riskmonitor_multiagent/governance/llm_cost_governance.py` |
 
 ---
 
-## 下一代演进计划 (Next-Gen Evolution)
+## Phase 划分
 
-### 🌟 核心变革 (Paradigm Shift)
-1.  **从 Event-Driven 到 Intent-Driven**：逐步移除 Kafka/CDC 依赖，转为 API Gateway 模式，支持 Human/System 双模输入。
-2.  **从 Pipeline 到 Orchestration**：引入 Orchestrator + Critic 双核驱动，实现动态规划与风险制衡。
-3.  **从 Hardcoded 到 Configurable**：MCP 工具模块化独立部署，支持配置驱动的热插拔。
+- Phase 0: MVP 风控链路与服务化 (Week 01-05)
+- Phase 1: 知识与记忆 (Week 08, 19)
+- Phase 2: 权限与副作用闭环 (Week 11-13, 12)
+- Phase 3: 编排与治理平台 (Week 14, 18, 20-21)
+- Phase 4: 契约与质量闸门(最小版) (Week 15)
+- Phase 5: 量化评测与CLI回归 (Week 22-23)
 
-### Week 18: The New Brain (Orchestrator & Critic)
-**目标**: 升级大脑，引入动态规划与内部对抗机制
+说明: Week 编号保留历史顺序, 但只保留“仓库中确实存在的能力与验收”.
 
-- **交付**
-  - [x] **Orchestrator Agent (Commander)**
-    - 替代 Manager，具备意图识别 (Query/Action/Analysis)
-    - 实现多步规划 (Multi-step Planning)，生成动态任务链
-    - 负责任务分发给 Engineer/Analyst
-  - [x] **Critic Agent (Guardian)**
-    - 风险评估: 在执行前评估 Plan 的可行性与风险
-    - 结果审计: 审查 Agent 结论的证据链与幻觉
-    - 人机仲裁: 高风险操作强制触发 HITL
-  - [x] **Collaboration Loop 2.0**
-    - 实现 Orchestrator -> Critic -> Engineer/Analyst 的完整闭环
-- **验收**
-  - [x] 运行一次 Orchestrator 工作流可产出 `orchestrator_run.v1` 结构化结果
-  - [x] 输出包含 intent 与 plan_steps 且可通过 orchestrator_output 契约校验
-  - [x] Critic 在 plan 阶段输出 `critic_review.v1` 且 `require_human_approval` 生效
-  - [x] 当 `HITL_AUTO_APPROVE=0` 且 Critic 要求人工确认时, 工作流在 plan 阶段停止并返回 `approval.required=true, approved=false`
-  - [x] 单测 `tests/unit/test_orchestrator_workflow.py` 通过
+---
+
+## Phase 0: MVP 风控链路与服务化
+
+### Week 01: 监控链路 MVP (vertical slice)
+
+**目标**
+- 形成一个端到端可复现的“查询头寸 → 聚合敞口 → 违规判断 → 生成告警记录(不落库)”链路.
+
+**输入**
+- MCP 工具调用参数: `desk`, `as_of`, `market_snapshot_url` 或 `market_snapshot`, `abs_delta_limit`
+- 数据依赖: MySQL `positions` 表
+
+**输出**
+- `monitor_desk_exposure` 结构化结果: `exposure`, `breaches`, `alerts`, `request_id`, `latency_ms`
+
+**交付 Checklist**
+- [x] MCP Server 基本可用并注册核心工具
+- [x] 头寸查询与风险聚合计算可运行
+- [x] 结构化输出包含 request_id 与关键字段
+- [x] 端到端 smoke test 覆盖主链路
+
+**验收 Checklist**
+- [x] MCP client 可通过 stdio 调用至少 2 个工具
+- [x] smoke test 可复现并通过
+
+---
+
+### Week 02: 数据访问与工程化底座
+
+**目标**
+- 将数据库访问工程化: 连接池/超时/错误封装, 避免业务层直接依赖裸连接.
+
+**输入**
+- MySQL 连接配置: `MYSQL_*` 环境变量
+
+**输出**
+- 可复用的数据访问模块与健康检查
+
+**交付 Checklist**
+- [x] SQLAlchemy Engine 封装与连接池配置
+- [x] MySQL 健康检查
+- [x] 配置集中管理与 `.env` 加载
+
+**验收 Checklist**
+- [x] 集成测试可连接 MySQL 并查询 positions
+
+---
+
+### Week 03: 服务化形态与 DX
+
+**目标**
+- 固化可运行的服务端形态, 提供 health/ready/metrics, 支持本地与容器运行.
+
+**输入**
+- HTTP Header 鉴权 Token
+
+**输出**
+- `/health`, `/ready`, `/metrics` 端点
+
+**交付 Checklist**
+- [x] health 与 readiness
+- [x] Prometheus metrics 输出
+- [x] 优雅退出(ready 先切 not_ready)
+
+**验收 Checklist**
+- [x] 未授权访问 `/metrics` 与 `/ready` 会被拒绝
+
+---
+
+### Week 04: 告警规则(最小闭环)
+
+**目标**
+- 在不引入复杂事件总线的前提下, 形成“规则评估 → 生成告警记录 →(可选)写库”的闭环.
+
+**输入**
+- 风险计算结果(例如 abs_delta 与阈值)
+
+**输出**
+- 告警结构: severity/desk/message/created_at 等
+
+**交付 Checklist**
+- [x] 告警规则引擎(最小集合)
+- [x] 告警输出格式化
+
+**验收 Checklist**
+- [x] `monitor_desk_exposure` 输出的 alerts 结构稳定
+
+---
+
+### Week 05: MCP Foundation (无状态 + AI 友好)
+
+**目标**
+- MCP Server 无状态, 工具语义清晰, 读写边界明确.
+
+**输入**
+- MCP tool params, HTTP headers
+
+**输出**
+- 读工具与写工具边界清晰, 鉴权/错误结构统一
+
+**交付 Checklist**
+- [x] 读写边界: `monitor_desk_exposure` 无副作用, 写库由 `submit_alerts` 承担
+- [x] Token 鉴权
+- [x] Resources/Prompts 注册
+
+**验收 Checklist**
+- [x] 未授权调用在服务端返回结构化错误
+
+---
+
+## Phase 1: 知识与记忆
+
+### Week 08: Knowledge Base (Chroma)
+
+**目标**
+- 支持把历史告警/知识写入向量库并检索相似告警.
+
+**输入**
+- Chroma 配置: `CHROMA_PERSIST_DIR` 或 `CHROMA_HOST/CHROMA_PORT`
+
+**输出**
+- `ChromaVectorStore` 的 upsert/query 能力
+
+**交付 Checklist**
+- [x] Chroma store 封装, 支持 persistent 与 http client
+- [x] 相似告警检索工具路径可用
+
+**验收 Checklist**
+- [x] integration 测试可完成 upsert+query
+
+---
 
 ### Week 19: Unified Memory System (统一记忆)
-**目标**: 构建分层记忆，实现跨会话的经验积累
 
-- **交付**
-  - [x] **分层存储架构**
-    - **Short-term**: Redis 或内存存储当前 Session 对话与状态
-    - **Long-term**: SQLite 默认, 可配置 PostgreSQL 等 SQLAlchemy 后端 (JSON)
-    - **Semantic**: Chroma 存储知识库索引
-  - [x] **统一记忆协议**
-    - 定义 `MemoryEntry` Schema (agent_id, kind/type, content, ts_ms)
-    - 确保所有 Agent 读写记忆遵循同一协议
-  - [x] **Planning as Memory**
-    - 将规划与结论作为"中期记忆"存档，供后续复用
-- **验收**
-  - [x] MemoryEntry 可 normalize 与 validate 且字段完整
-  - [x] Long-term store 默认 sqlite 可用, 可通过 SQLAlchemy URL 切换到外部数据库
-  - [x] SqlMemoryStore 支持 append 与 list_recent 回读
-  - [x] Orchestrator 工作流会写入 plan 与 final 到统一记忆并可查询
-  - [x] 单测 `tests/unit/test_memory.py` 通过
+**目标**
+- 统一记忆协议, 短期记忆与长期记忆分层治理.
+- 短期记忆拆分为单 Agent 独有与多 Agent 共享, 全部使用 Redis.
+- 长期记忆使用 MongoDB, 仅存储“任务完成后的 run 总结”, 由 Critic 产出并以 run_id 为键.
 
-### Week 20: Governance Platform (治理平台)
-**目标**: 打造企业级管理平面，管控 Prompt 与 成本
+**输入**
+- Redis: `REDIS_URL`, `WORKING_MEMORY_TTL_S`, `WORKING_MEMORY_MAX_LEN`
+- MongoDB: `MONGO_URL`, `MONGO_DB`, `MONGO_RUN_SUMMARY_COLLECTION`
+- Chroma: `CHROMA_PERSIST_DIR`
 
-- **交付**
-  - [ ] **Prompt Registry & UI**
-    - 建立 Prompt 版本管理系统 (v1.0, v1.1)
-    - 提供 Web UI 查看、编辑、回滚 Prompt
-  - [x] **LLM Cost Governance**
-    - **熔断机制**: 监测 Token 消耗速率，异常自动阻断
-    - **成本核算**: 按 User/Agent 统计 Token Usage
-    - **Rate Limiting**: 对非关键意图限流
-  - [ ] **Visualization UI**
-    - 开发 Chat UI 展示 Orchestrator 思考过程与 Critic 审查意见
-- **验收**
-  - [x] 限流启用时, 超出 token bucket 会触发熔断并回退到 fallback, 且输出 meta.governance.blocked=true
-  - [x] 支持 default 与 non_critical 两档限流配置并可通过环境变量调参
-  - [x] 成本核算会记录按 user agent priority 聚合的 token 与 call 指标
-  - [x] 单测 `tests/unit/test_week20_llm_cost_governance.py` 通过
-  - [x] 单元测试 `pytest -q tests/unit` 全量通过
+**输出**
+- 短期: `MemoryEntry` 协议, 支持 scope=`private|shared`
+- 长期: `run_summary` 文档(以 run_id 为键), 存储 Critic 的总结与证据引用
 
-## 目标架构 (Target Architecture)
+**交付 Checklist**
+- [x] MemoryEntry normalize/validate
+- [x] Redis 短期记忆支持两种 scope
+- [x] Critic 在任务结束后产出 run_summary 并落 Mongo
+- [x] 短期与长期接口解耦, 避免把所有过程数据写入长期库
 
-| Layer | Component | Technology | Responsibility |
-| :--- | :--- | :--- | :--- |
-| **Brain** | **Orchestrator** | **LLM, Dynamic Planner** | 意图识别, 多步规划, 任务分发 |
-| **Guardian** | **Critic** | **LLM, Rule Engine** | 风险评估, 结果审计, 人机仲裁 |
-| **Memory**| **Unified Memory** | **Redis, PG, Chroma** | 分层记忆存储 (Short/Long/Semantic) |
-| **Interface**| **API Gateway** | **FastAPI** | 统一入口, 接收 Human/System 指令 (取代 Kafka) |
-| **Hands** | **Configurable MCP** | **FastMCP, Config** | 工具热插拔, 外部系统集成 (Redis/MySQL) |
+**验收 Checklist**
+- [x] 单测覆盖 private/shared 短期记忆写入与读取
+- [x] 单测覆盖 run_summary 落 Mongo(可使用 mock client)
+
+---
+
+## Phase 2: 权限与副作用闭环
+
+### Week 11: RBAC (基础版)
+
+**目标**
+- 对工具执行引入最小 RBAC, 禁止跨角色调用, side_effect 必须审批.
+
+**输入**
+- AgentCommand: `target_agent`, `action`, `params`, `approval`
+
+**输出**
+- AgentReceipt: ok/error/evidence
+
+**交付 Checklist**
+- [x] 工具 registry 元信息(capability/risk/owner/side_effect_policy)
+- [x] command 校验与拒绝原因结构化输出
+
+**验收 Checklist**
+- [x] system_engineer 调用 side_effect 动作会被拒绝
+- [x] privileged 角色(代码里仍沿用 manager 命名) 执行 side_effect 必须审批
+
+---
+
+### Week 12: Side-effect 工具与审计闭环
+
+**目标**
+- 将“有副作用的动作”纳入策略与审计, 默认要求审批并可追责.
+
+**输入**
+- side_effect 工具调用参数 + approval
+
+**输出**
+- 写库动作的可控执行与审计落点
+
+**交付 Checklist**
+- [x] side_effect policy: require_approval/require_reason/min_severity
+- [x] 拒绝原因与证据结构化写入 receipt
+
+**验收 Checklist**
+- [x] 未审批的 side_effect 调用返回 `approval_required`
+
+---
+
+### Week 13: RBAC (治理增强)
+
+**目标**
+- 防止“同为 read_only 但跨域滥用”的情况, 把 allowed_targets/owner 作为约束.
+
+**输入**
+- AgentCommand
+
+**输出**
+- 更细粒度的 deny reason
+
+**交付 Checklist**
+- [x] cross-role 调用 read_only 工具被拒绝
+- [x] deny reason 区分 role_not_allowed/rbac_denied
+
+**验收 Checklist**
+- [x] 单测覆盖跨角色 deny
+
+---
+
+## Phase 3: 编排与治理平台
+
+### Week 14: Policy/Prompt 版本化与可回放(最小版)
+
+**目标**
+- 输出携带 prompt_version/policy_version, 便于策略迭代对比.
+- 为后续 A/B 评测建立可追溯的版本维度, 支持按 run 对齐指标与证据链.
+
+**输入**
+- `POLICY_VERSION` 与各 agent prompt version 常量
+
+**输出**
+- AgentResult.meta 中包含版本字段, 可追溯
+- 对比实验最小维度: prompt_version, policy_version, model, governance 开关
+
+**交付 Checklist**
+- [x] BaseAgent 返回 meta 包含 prompt_version/policy_version
+
+**验收 Checklist**
+- [x] 单测/回放产物可定位版本差异
+- [x] 回放产物可按版本维度聚合为实验分组
+
+---
+
+### Week 18: Orchestrator & Critic (The New Brain)
+
+**目标**
+- 用 Orchestrator + Critic 双核完成动态规划与风险制衡.
+
+**输入**
+- task: `task_id/session_id/source/payload.content`
+
+**输出**
+- `orchestrator_run.v1`: plan/review/approval/specialists/final
+
+**交付 Checklist**
+- [x] Orchestrator 生成 plan_steps
+- [x] Critic 审查 plan 并可触发 HITL
+- [x] Context Store 记录 run 轨迹
+
+**验收 Checklist**
+- [x] `HITL_AUTO_APPROVE=0` 时可在 plan 阶段被阻断
+
+---
+
+### Week 20: LLM Cost Governance
+
+**目标**
+- 为 LLM 调用提供 token bucket 限流与按 user/agent 的成本统计.
+
+**输入**
+- `LLM_RATE_LIMIT_*` 环境变量, `RM_USER_ID`
+
+**输出**
+- meta.governance 字段与 token/call 指标
+- 成本与可用性对比的基础指标: rate_limited, degraded, blocked
+
+**交付 Checklist**
+- [x] 限流启用时回退到 fallback
+- [x] 记录 tokens/calls 指标(含 user/priority)
+
+**验收 Checklist**
+- [x] 单测覆盖 rate limit 与成本核算
+- [x] 支持在同一基准集上比较不同 budget 配置的质量与成本
+
+---
+
+### Week 21: Intent Router & Flexible Planning
+
+**目标**
+- 意图识别仅保留 Schema-first Intent Extractor, 输入为用户输入 + 基础元数据.
+- Intent Extractor 支持多意图输出, 并包含多意图之间的解释与取舍建议, 写入共享短期记忆.
+- 多步规划采用 Planner-Executor 动态循环, 支持 plan-revise 与 mid-flight replan.
+- 修复多步规划常见工程缺口: 执行器只跑 delegate, commands->receipts 未闭环, HITL 只在 plan 阶段, 证据链不一致.
+
+**输入**
+- task.payload.content
+
+**输出**
+- `intent_output.v2`(支持 intents + disambiguation) + `orchestrator_run.v1` 扩展字段: `intent`, `artifacts`, `receipts`
+
+**交付 Checklist**
+- [x] 删除 Router 角色与相关产物字段
+- [x] Intent Extractor 输出 strict JSON, 支持多意图与解释, 并写入 shared 短期记忆
+- [x] Executor 支持 plan_steps 多种 kind(tool_call/ask_human/stop/finalize) 且不会静默忽略
+- [x] commands->receipts 接入主闭环: 执行 commands 生成 receipts 并回灌 Planner/Critic
+- [x] HITL 细粒度: step/command 触发审批并可中断返回 pending_approval
+- [x] 证据链一致: plan/review/analysis/final 必须引用 receipts 或输入字段, 不满足则降级或阻断
+- [x] 可解释性闭环: 每个 plan_step 需要 reason, 每个执行结果需要可验证 evidence
+
+**验收 Checklist**
+- [x] 多意图输出可复现, disambiguation 写入 shared 短期记忆
+- [x] 至少 1 个 case 生成 commands 并执行产生 receipts, Critic.review 能看到 receipts
+- [x] 运行产物可逐步回答 why this step 和 what evidence proves result
+- [x] `pytest -q -W error` 全量通过
+
+---
+
+## Phase 5: 量化评测与CLI回归
+
+### Week 22: Explainability Metrics & Benchmark
+
+**目标**
+- 将业务成功定义固化为可量化指标: agent 规划与执行结果都有据可依, 全流程可解释可验证.
+- 建立统一基准集与 A/B 对比协议, 支持版本和治理策略对比.
+
+**输入**
+- 基准任务集: `eval/benchmarks/explainability_cases.jsonl`
+- 运行配置: prompt_version, policy_version, model, `HITL_AUTO_APPROVE`, `LLM_RATE_LIMIT_*`
+
+**输出**
+- 每次评测输出 `eval/results/<run_tag>.jsonl` 和汇总 `eval/results/<run_tag>.summary.json`
+- 指标分层: latency, cost, governance, explainability, business_consistency
+
+**交付 Checklist**
+- [x] 定义 explainability 主指标
+- [x] 定义 evidence_coverage 与 evidence_missing_rate
+- [x] 定义 step_reason_coverage 与 receipt_binding_rate
+- [x] 定义 breach_hit_consistency 与 alert_write_success_rate
+- [x] 提供 benchmark case schema 与最小样例集
+- [x] 评测结果产物包含 run_id, task_id, version, governance 配置快照
+
+**验收 Checklist**
+- [x] 同一基准集可稳定复现两组配置差异
+- [x] 指标报告可定位到具体 run 与具体 step 的证据缺失点
+- [x] 至少包含 1 组 质量优先 和 1 组 成本优先 的实验对比
+
+---
+
+### Week 23: Evaluation CLI & Quality Gate
+
+**目标**
+- 提供可一键运行的评测 CLI 与质量闸门, 将对比实验纳入日常回归.
+
+**输入**
+- `eval/benchmarks/*.jsonl`
+- CLI 参数: `--model`, `--policy-version`, `--prompt-version`, `--hitl`, `--budget-profile`, `--run-tag`
+
+**输出**
+- CLI 命令:
+  - `python -m scripts.eval.run_benchmark`
+  - `python -m scripts.eval.compare_runs --base <tag> --cand <tag>`
+  - `python -m scripts.eval.quality_gate --run <tag>`
+- 质量闸门结果: pass/fail 和失败原因列表
+
+**交付 Checklist**
+- [x] 实现 benchmark 运行 CLI
+- [x] 实现 run 对比 CLI 与差异报告
+- [x] 实现 quality gate CLI 与阈值配置
+- [x] 在 docs 增加评测 CLI 使用说明和示例
+- [x] Makefile 新增评测相关 target
+
+**验收 Checklist**
+- [x] 单命令可从基准集产出 summary 报告
+- [x] gate 能卡住 evidence_missing_rate 与 contract_fail_rate 超阈值
+- [x] gate 输出同时包含 p95 latency 和 tokens 预算是否达标
+
+---
+
+## Phase 4: 契约与质量闸门(最小版)
+
+### Week 15: Contracts & Quality Gate (Minimal)
+
+**目标**
+- 对关键结构化输出进行契约校验, 防止字段漂移与证据链缺失.
+- 将协作流程可解释性纳入质量定义, 重点约束 reason 与 evidence 的一致性.
+
+**输入**
+- Agent 输出: orchestrator_output/critic_review/system_engineer_output/risk_analyst_output
+
+**输出**
+- validate errors 列表, 以及 degraded 降级策略
+
+**交付 Checklist**
+- [x] 关键输出有 normalize/validate
+- [x] evidence 至少包含 fields/receipt_command_ids/rag_hit_ids 之一
+- [x] 增加 step_reason 与 receipt 绑定校验规则
+- [x] 增加 evidence 关联字段完整性统计输出
+
+**验收 Checklist**
+- [x] 单测覆盖 contracts 最小校验
+- [x] 新增负例用例: reason 缺失, evidence 引用缺失, receipts 不一致

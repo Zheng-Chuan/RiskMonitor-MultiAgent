@@ -13,6 +13,17 @@ from sqlalchemy.engine import Engine
 
 from riskmonitor_multiagent.contracts.memory_entry import MemoryEntry, normalize_memory_entry
 
+_SQL_ENGINES: list[Engine] = []
+
+
+def dispose_all_sql_memory_engines() -> None:
+    for e in list(_SQL_ENGINES):
+        try:
+            e.dispose()
+        except Exception:
+            pass
+    _SQL_ENGINES.clear()
+
 
 @dataclass(frozen=True)
 class MemoryQuery:
@@ -40,9 +51,9 @@ class InMemoryStore:
         for it in reversed(self._items):
             if not isinstance(it, dict):
                 continue
-            if it.get("agent_id") != query.agent_id:
-                continue
             if it.get("scope") != query.scope:
+                continue
+            if query.scope != "shared" and it.get("agent_id") != query.agent_id:
                 continue
             if query.session_id is not None and it.get("session_id") != query.session_id:
                 continue
@@ -59,6 +70,7 @@ class InMemoryStore:
 class SqlMemoryStore:
     def __init__(self, *, url: str) -> None:
         self._engine = create_engine(url)
+        _SQL_ENGINES.append(self._engine)
         self._meta = MetaData()
         self._table = Table(
             "memory_entries",
@@ -104,10 +116,9 @@ class SqlMemoryStore:
         kinds = set(query.kinds) if isinstance(query.kinds, list) else None
 
         def _read() -> list[dict[str, Any]]:
-            stmt = select(self._table).where(
-                self._table.c.agent_id == query.agent_id,
-                self._table.c.scope == query.scope,
-            )
+            stmt = select(self._table).where(self._table.c.scope == query.scope)
+            if query.scope != "shared":
+                stmt = stmt.where(self._table.c.agent_id == query.agent_id)
             if query.session_id is not None:
                 stmt = stmt.where(self._table.c.session_id == query.session_id)
             if query.run_id is not None:
@@ -160,7 +171,9 @@ class RedisMemoryStore:
 
     def _key(self, *, agent_id: str, scope: str, session_id: str | None) -> str:
         sid = session_id or "default"
-        return f"rm:mem:{scope}:{agent_id}:{sid}"
+        if scope == "shared":
+            return f"rm:mem:shared:{sid}"
+        return f"rm:mem:private:{agent_id}:{sid}"
 
     async def append(self, entry: dict[str, Any]) -> dict[str, Any]:
         nd = normalize_memory_entry(entry)
@@ -188,6 +201,8 @@ class RedisMemoryStore:
                 if query.run_id is not None and d.get("run_id") != query.run_id:
                     continue
                 if isinstance(query.kinds, list) and d.get("kind") not in set(query.kinds):
+                    continue
+                if query.scope != "shared" and d.get("agent_id") != query.agent_id:
                     continue
                 out.append(normalize_memory_entry(d))
             except Exception:

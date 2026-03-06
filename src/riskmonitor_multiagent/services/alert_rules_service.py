@@ -6,7 +6,7 @@ Week4: 可观测与告警闭环
 """
 
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -50,7 +50,7 @@ def evaluate_desk_delta_breach(
                 f"abs_delta={abs_delta:.2f} exceeds threshold={threshold:.2f} "
                 f"by {breach_amount:.2f}"
             ),
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "acknowledged": False,
             "acknowledged_at": None,
             "acknowledged_by": None

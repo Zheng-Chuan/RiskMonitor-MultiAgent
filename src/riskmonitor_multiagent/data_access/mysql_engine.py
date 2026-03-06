@@ -57,3 +57,17 @@ def get_engine() -> Engine:
         max_overflow=config.get_mysql_max_overflow(),
         connect_args=connect_args,
     )
+
+
+def dispose_engine() -> None:
+    try:
+        engine = get_engine()
+    except Exception:
+        return
+    try:
+        engine.dispose()
+    finally:
+        try:
+            get_engine.cache_clear()
+        except Exception:
+            pass

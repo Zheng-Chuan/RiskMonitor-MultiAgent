@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-pytest.importorskip("mcp")
+import mcp  # noqa: F401
 
 from mcp.client.session import ClientSession  
 from mcp.client.stdio import (  

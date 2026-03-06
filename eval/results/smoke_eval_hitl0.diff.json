@@ -1,0 +1,16 @@
+{
+  "base": "smoke_eval",
+  "candidate": "smoke_eval_hitl0",
+  "base_pass_rate": 1.0,
+  "candidate_pass_rate": 1.0,
+  "aggregates_delta": {
+    "contract_fail_rate": 0.0,
+    "evidence_missing_rate": 0.571429,
+    "explainability_score": -0.142857,
+    "latency_ms_avg": 10.734097,
+    "latency_ms_p95": 258.670875,
+    "receipt_binding_rate": 0.0,
+    "step_reason_coverage": 0.0,
+    "tokens_total": 0.0
+  }
+}

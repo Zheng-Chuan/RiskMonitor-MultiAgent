@@ -1,182 +1,76 @@
-# 系统架构和技术特点
+# 系统架构
 
-本项目现在有两条主链路  
-一条是交互式问答链路 让 MCP 客户端按需查询和计算  
-一条是事件驱动告警链路 让数据库变更自动触发哨兵和多智能体分析  
+本文档只描述当前代码已经落地的结构，不包含历史方案。
 
-## 一分钟理解
+## 一分钟总览
 
-你可以把它理解成一个风控操作系统  
-Hands 是 MCP Server 负责查库和写库  
-Nerves 是 CDC 负责把数据库变化变成事件  
-Reflex 是 Sentinel 负责做第一层快速判断  
-Brain 是状态机编排的 Multi Agent 负责写报告 给决策 下发指令并收集证据  
+项目由两条主链路组成：
+
+- 交互式链路：MCP Client -> MCP Server -> tools/data_access
+- 事件编排链路：Sentinel -> orchestrator_workflow -> 多角色协作 -> 结构化结果
 
 ```mermaid
 flowchart LR
-  DB[(MySQL)] -->|binlog| Deb[Debezium]
-  Deb -->|CDC event| K[(Kafka)]
-  K --> Sen[Sentinel]
-  Sen --> SM[State Machine]
-  SM --> Eng[System Engineer]
-  SM --> Ana[Risk Analyst]
-  SM --> Mgr[Manager]
-  SM --> CS[(Context Store)]
-  SM --> Out[Final output]
+  User[MCP Client] --> Server[MCP Server]
+  Server --> Tools[tools + services]
+  Tools --> DB[(MySQL)]
 
-  Client[MCP client] --> MCP[MCP Server]
-  MCP --> DB
+  CDC[(Kafka CDC)] --> Sentinel[Sentinel]
+  Sentinel --> WF[orchestrator_workflow]
+  WF --> Intent[Intent]
+  WF --> Plan[Orchestrator Plan]
+  WF --> Critic[Critic Review]
+  WF --> Exec[Command Execute]
+  WF --> Final[orchestrator_run.v1]
+  WF --> Context[(Context Store)]
+  WF --> Memory[(Unified Memory)]
 ```
 
-## 核心组件
+## 代码入口
 
-### MySQL
+- 服务入口：[main.py](../main.py)
+- MCP 服务实现：[server.py](../src/riskmonitor_multiagent/server.py)
+- 编排主流程：[orchestrator_workflow.py](../src/riskmonitor_multiagent/orchestration/orchestrator_workflow.py)
+- 工具执行与治理：[tool_executor.py](../src/riskmonitor_multiagent/orchestration/tool_executor.py)
+- 工具元信息注册：[tool_registry.py](../src/riskmonitor_multiagent/orchestration/tool_registry.py)
+- 上下文存储：[context_store.py](../src/riskmonitor_multiagent/orchestration/context_store.py)
+- 统一记忆：[unified_memory.py](../src/riskmonitor_multiagent/memory/unified_memory.py)
 
-保存 positions 和 alerts  
-初始化脚本在 [init_db.sql](../scripts/init_db.sql)  
+## 编排流程
 
-### MCP Server
+`run_orchestrator_workflow` 采用固定阶段推进：
 
-对外提供 MCP tools 和 HTTP endpoints  
-负责读写数据库并返回结构化结果  
-入口在 [server.py](../src/riskmonitor_multiagent/server.py)  
-对应的核心业务代码主要在 src/riskmonitor_multiagent/services  
+1. 识别意图并写入 shared memory
+2. Planner + Critic 计划评审循环
+3. 执行 plan_steps 与 commands，产生 receipts
+4. 再次计划修订直到收敛或到达轮次上限
+5. Final + Critic 输出，构建 `orchestrator_run.v1`
 
-### Kafka + Debezium
+最终产物重点字段：
 
-Debezium 订阅 MySQL binlog 并把 positions 的变化写入 Kafka topic `risk.positions.cdc`  
-docker compose profile 为 infra  
-connector 配置文件在 [positions-connector.json](../scripts/debezium/positions-connector.json)  
+- `intent`：意图识别结果
+- `orchestrator_plan` / `critic_plan`：计划与评审
+- `artifacts` / `receipts`：执行证据链
+- `status`：`completed` 或 `pending_approval`
+- `step_trace`：逐步 why + evidence 追踪
+- `quality`：可解释性与契约指标
 
-### Sentinel
+## 治理与安全
 
-Sentinel 是一个轻量消费者  
-它从 `risk.positions.cdc` 读取事件  
-做阈值检测 发现超限就触发状态机编排  
-入口在 [service.py](../src/riskmonitor_multiagent/sentinel/service.py)  
+- 角色权限：通过 tool registry capability + target_agent 强约束
+- side_effect 门禁：必须审批，未审批返回 `approval_required`
+- 契约校验：关键输出通过 normalize/validate，异常写入 `schema_errors`
+- 质量阻断：证据缺失或契约失败可进入 `pending_approval`
 
-### Multi Agent 三角色
+## 存储分层
 
-System Engineer Agent  
-先检查事件是否像技术问题 比如字段缺失 延迟过大  
+- 短期上下文：Context Store（按 run_id 持久化）
+- 工作记忆：Redis/SQLite（private/shared scope）
+- 长期总结：Mongo run_summary（按 run_id upsert）
+- 语义记忆：按开关写入 Chroma（默认关闭）
 
-Risk Analyst Agent  
-把事件翻译成事实报告  
+## 相关文档
 
-Manager Agent  
-给出决策和动作建议  
-
-代码在 [agents](../src/riskmonitor_multiagent/agents/)  
-线性编排入口在 src/riskmonitor_multiagent/agents/pipeline.py  
-状态机编排入口在 [state_machine.py](../src/riskmonitor_multiagent/orchestration/state_machine.py)  
-状态机说明文档在 [STATE_MACHINE.md](STATE_MACHINE.md)  
-
-### Tool governance Week12
-
-本项目把 Agent 的工具调用当作受控执行  
-核心目标是可控 可审计 可测试  
-
-- Tool registry 统一维护 action 元数据与 capability 标签  
-  - read_only side_effect pii admin  
-  - 入口在 [tool_registry.py](../src/riskmonitor_multiagent/orchestration/tool_registry.py)  
-- RBAC 强制执行在执行层  
-  - system_engineer risk_analyst 只能执行 read_only  
-  - manager 可以执行 side_effect 但必须审批  
-  - 执行器入口在 [tool_executor.py](../src/riskmonitor_multiagent/orchestration/tool_executor.py)  
-- 审批门禁在状态机与执行层双保险  
-  - 状态机 HumanApproval 节点会对 side_effect commands 强制要求审批  
-  - Execute 节点会把 approval 注入到 command params 供执行层校验  
-- side_effect per-action 策略  
-  - require_approval require_reason min_severity  
-  - require_reason 使用 approval.note 作为审批备注或原因  
-- side effect 写库动作示例  
-  - action write_alert 会调用 alerts_repository 写入 alerts 表  
-- 审计记录  
-  - 每次 side_effect command 会生成 audit_records 并写入 Context Store 与 final_output  
-  - 字段包含 event_id correlation_id run_id command_id action target_agent actor approved approved_by approval_reason ok error ts_ms  
-  - 可选写入 MySQL audit_events 表 由 ENABLE_AUDIT_DB_WRITE 控制  
-  - schema 在 scripts/init_db.sql 与 db/migrations/004_create_audit_events_table.sql  
- - 版本化与回放  
-  - Context Store run_meta 记录 policy_version tool_versions prompt_versions  
-  - replay compare 支持同一事件对比两个 policy_version 输出差异  
-
-### Knowledge Base
-
-知识库使用向量数据库 Chroma  
-Chroma 在 docker compose profile kb 中运行 对宿主机暴露端口 8001  
-你可以用 make up-kb 启动向量库  
-再用 make ingest-knowledge 从 alerts 表把最近告警写入向量库  
-CLI 也可以用于排障 scripts/knowledge/kb.py query  
-MCP tool search_similar_alerts 会读取 Chroma 并返回相似告警列表  
-
-### LLM OpenRouter
-
-OpenRouter 客户端封装在 [openrouter_client.py](../src/riskmonitor_multiagent/llm/openrouter_client.py)  
-当 LLM 不可用时 仍然会使用 fallback 结果保证链路可跑通  
-测试或本地回归可以设置 DISABLE_LLM=1 强制跳过上游调用  
-
-## 数据流 1 交互式问答链路
-
-适合按需查询 比如监控某个 desk 的 exposure  
-
-```mermaid
-sequenceDiagram
-  participant C as MCP client
-  participant S as MCP Server
-  participant DB as MySQL
-  C->>S: tool call monitor or query
-  S->>DB: SELECT positions and limits
-  DB-->>S: rows
-  S-->>C: structured response
-```
-
-## 数据流 2 事件驱动告警链路
-
-适合自动化 只要数据库有变化 就会触发哨兵和多智能体  
-
-```mermaid
-sequenceDiagram
-  participant DB as MySQL
-  participant Deb as Debezium
-  participant K as Kafka
-  participant Sen as Sentinel
-  participant SM as State Machine
-  participant Eng as System Engineer
-  participant Ana as Risk Analyst
-  participant Mgr as Manager
-  participant CS as Context Store
-
-  DB->>Deb: binlog update positions
-  Deb->>K: publish risk.positions.cdc
-  K->>Sen: consume event
-  Sen->>SM: invoke
-  SM->>Eng: engineer check
-  Eng-->>SM: output
-  SM->>CS: write snapshots
-  SM->>Ana: analyst report
-  Ana-->>SM: output
-  SM->>Mgr: manager decision
-  Mgr-->>SM: output and commands
-  SM->>CS: persist final output
-```
-
-## 现状与下一步
-
-当前已完成  
-- CDC topic 打通  
-- Sentinel 消费并优先触发状态机编排  
-- Context Store 写入 run 轨迹 支持 replay  
-- 状态机失败时自动 fallback 到线性流水线  
-- Tool governance 基础版 capability RBAC approval gate  
-
-下一步建议  
-- Manager 输出必须引用 receipts evidence 并做契约门禁  
-- 把最终结论摘要写入 Chroma 形成同步记忆闭环  
-- 引入真实 HumanApproval 界面替换自动审批开关  
-
-## 关键入口一览
-
-- Roadmap: [ROADMAP.md](ROADMAP.md)  
-- Quickstart: [QUICKSTART.md](QUICKSTART.md)  
-- Sentinel: [service.py](../src/riskmonitor_multiagent/sentinel/service.py)  
-- Agents: [agents](../src/riskmonitor_multiagent/agents/)  
+- 快速开始：[QUICKSTART.md](./QUICKSTART.md)
+- 数据与契约：[DATA.md](./DATA.md)
+- 路线图：[ROADMAP.md](./ROADMAP.md)

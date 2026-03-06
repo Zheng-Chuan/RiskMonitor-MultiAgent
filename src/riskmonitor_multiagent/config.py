@@ -159,48 +159,6 @@ def get_openrouter_app_title() -> str:
     return (value or "").strip()
 
 
-def get_kafka_bootstrap_servers() -> str:
-    """获取 Kafka Bootstrap Servers, 默认为 localhost:29092."""
-    return os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092").strip() or "localhost:29092"
-
-
-def get_kafka_topic_cdc_positions() -> str:
-    """获取 CDC Positions Topic, 默认为 risk.positions.cdc."""
-    return os.getenv("KAFKA_TOPIC_CDC_POSITIONS", "risk.positions.cdc").strip() or "risk.positions.cdc"
-
-
-def get_kafka_topic_dlq() -> str:
-    value = os.getenv("KAFKA_TOPIC_DLQ")
-    if value is None or not value.strip():
-        _try_load_repo_dotenv()
-        value = os.getenv("KAFKA_TOPIC_DLQ")
-    return (value or "risk.dlq").strip() or "risk.dlq"
-
-
-def get_sentinel_retry_max() -> int:
-    value = os.getenv("SENTINEL_RETRY_MAX")
-    if value is None or not value.strip():
-        _try_load_repo_dotenv()
-        value = os.getenv("SENTINEL_RETRY_MAX")
-    return int((value or "3").strip() or "3")
-
-
-def get_sentinel_retry_backoff_s() -> float:
-    value = os.getenv("SENTINEL_RETRY_BACKOFF_S")
-    if value is None or not value.strip():
-        _try_load_repo_dotenv()
-        value = os.getenv("SENTINEL_RETRY_BACKOFF_S")
-    return float((value or "0.5").strip() or "0.5")
-
-
-def get_sentinel_dlq_enabled() -> bool:
-    value = os.getenv("SENTINEL_DLQ_ENABLED")
-    if value is None:
-        _try_load_repo_dotenv()
-        value = os.getenv("SENTINEL_DLQ_ENABLED")
-    return (value or "1").strip() not in {"0", "false", "False"}
-
-
 def get_knowledge_db_path() -> str:
     """获取知识库 SQLite 文件路径, 默认为 repo_root/data/knowledge.sqlite."""
     value = os.getenv("KNOWLEDGE_DB_PATH")
