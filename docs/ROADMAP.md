@@ -6,14 +6,14 @@
 
 - 主要输入形态: 人类输入 task 或 MCP 客户端调用工具
 - 不包含: Kafka/Debezium/CDC/Sentinel 事件驱动链路, Schema Registry, DLQ/Replay(事件级)
-- 核心主线: Intent Router + Schema-first Intent Extractor + Planner-Executor(动态循环) + Critic/HITL + Unified Memory + MCP Tools
+- 核心主线: Schema-first Intent Extractor + Planner-Executor(动态循环) + Critic/HITL + Unified Memory + MCP Tools
 
 ## 架构分层(以代码为准)
 
 | Layer | Component | Responsibility | 主要实现 |
 | :--- | :--- | :--- | :--- |
 | Brain | Orchestrator + Critic | 规划/审查/汇总, HITL 门禁 | `src/riskmonitor_multiagent/orchestration/orchestrator_workflow.py`, `src/riskmonitor_multiagent/agents/roles.py` |
-| Intent | Router + Extractor | 候选意图路由 + Schema-first 抽取 | `src/riskmonitor_multiagent/orchestration/intent_router.py`, `src/riskmonitor_multiagent/contracts/intent_output.py` |
+| Intent | Extractor | Schema-first 意图抽取与约束输出 | `src/riskmonitor_multiagent/agents/roles.py`, `src/riskmonitor_multiagent/contracts/intent_output.py` |
 | Hands | MCP Server + Tools | 原子工具暴露, DB 读写, 风险计算 | `src/riskmonitor_multiagent/server.py`, `src/riskmonitor_multiagent/tools/mcp_tools.py` |
 | Security | RBAC + Side-effect Policy | 工具能力分级, 审批/拒绝证据 | `src/riskmonitor_multiagent/orchestration/tool_registry.py`, `src/riskmonitor_multiagent/orchestration/tool_executor.py`, `src/riskmonitor_multiagent/services/auth_service.py` |
 | Memory | Unified Memory | 短期/长期/语义记忆统一协议 | `src/riskmonitor_multiagent/memory/unified_memory.py`, `src/riskmonitor_multiagent/memory/stores.py`, `src/riskmonitor_multiagent/knowledge/chroma_store.py` |

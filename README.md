@@ -17,10 +17,9 @@
 
 ## 文档目录
 
-- [docs/README.md](docs/README.md)
 - [docs/QUICKSTART.md](docs/QUICKSTART.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [docs/DATA.md](docs/DATA.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
+- [EVALUATION.md](EVALUATION.md)
 
 ---

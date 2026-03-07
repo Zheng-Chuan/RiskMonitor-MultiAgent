@@ -57,6 +57,21 @@ def _ctx_store() -> FileContextStore:
     return FileContextStore(base_dir=os.getenv("CONTEXT_STORE_DIR"))
 
 
+def _event_id(task: dict[str, Any]) -> str:
+    return str(task.get("task_id") or "task")
+
+
+def _receipt_command_ids(receipts: list[dict[str, Any]]) -> list[str]:
+    out: list[str] = []
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            continue
+        cid = receipt.get("command_id")
+        if isinstance(cid, str) and cid.strip():
+            out.append(cid)
+    return out
+
+
 def _is_auto_approved() -> bool:
     return os.getenv("HITL_AUTO_APPROVE", "1").strip() not in {"0", "false", "False"}
 
@@ -129,7 +144,7 @@ async def _plan_with_revise_loop(state: _State) -> None:
         if not ok_out:
             out["schema_errors"] = errors
         state["orchestrator_plan"] = out
-        _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"orchestrator_plan": out})
+        _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"orchestrator_plan": out})
         plan_steps = out.get("plan_steps") if isinstance(out.get("plan_steps"), list) else []
         step_kinds = [s.get("kind") for s in plan_steps if isinstance(s, dict) and isinstance(s.get("kind"), str)]
         await _append_memory_safe(
@@ -151,12 +166,12 @@ async def _plan_with_revise_loop(state: _State) -> None:
         if not ok_review:
             critic["schema_errors"] = errors_review
         state["critic_plan"] = critic
-        _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"critic_plan": critic})
+        _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"critic_plan": critic})
         require = bool(critic.get("require_human_approval") is True)
         approved = True if not require else _is_auto_approved()
         approval = {"required": require, "approved": bool(approved), "reason": "critic_required" if require else None}
         state["approval"] = approval
-        _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"approval": approval})
+        _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"approval": approval})
         await _append_memory_safe(
             {
                 "agent_id": "critic",
@@ -218,7 +233,7 @@ async def _execute_plan(state: _State) -> None:
         state["pending_questions"] = pending_questions
         _ctx_store().upsert(
             run_id=state["run_id"],
-            event_id=str(task.get("task_id") or "task"),
+            event_id=_event_id(task),
             patch={"receipts": receipts, "artifacts": artifacts, "approval": state.get("approval"), "pending_questions": pending_questions},
         )
         return
@@ -245,7 +260,7 @@ async def _execute_plan(state: _State) -> None:
                 res = await syseng.analyze_task(task=task, context=ctx)
                 out = res.output if isinstance(res.output, dict) else {}
                 if isinstance(out.get("evidence"), dict) and receipts:
-                    out["evidence"].setdefault("receipt_command_ids", [r.get("command_id") for r in receipts if isinstance(r, dict) and isinstance(r.get("command_id"), str)])
+                    out["evidence"].setdefault("receipt_command_ids", _receipt_command_ids(receipts))
                 artifacts[step_id] = {"kind": "delegate", "target_agent": target, "ok": bool(res.ok), "output": out}
                 state["engineer"] = out
                 await _append_memory_safe(
@@ -262,7 +277,7 @@ async def _execute_plan(state: _State) -> None:
                 res = await analyst.analyze_task(task=task, context=ctx)
                 out = res.output if isinstance(res.output, dict) else {}
                 if isinstance(out.get("evidence"), dict) and receipts:
-                    out["evidence"].setdefault("receipt_command_ids", [r.get("command_id") for r in receipts if isinstance(r, dict) and isinstance(r.get("command_id"), str)])
+                    out["evidence"].setdefault("receipt_command_ids", _receipt_command_ids(receipts))
                 artifacts[step_id] = {"kind": "delegate", "target_agent": target, "ok": bool(res.ok), "output": out}
                 state["analyst"] = out
                 await _append_memory_safe(
@@ -341,7 +356,7 @@ async def _execute_plan(state: _State) -> None:
     state["pending_questions"] = pending_questions
     _ctx_store().upsert(
         run_id=state["run_id"],
-        event_id=str(task.get("task_id") or "task"),
+        event_id=_event_id(task),
         patch={"engineer": state.get("engineer"), "analyst": state.get("analyst"), "artifacts": artifacts, "receipts": receipts, "approval": state.get("approval"), "pending_questions": pending_questions},
     )
 
@@ -366,16 +381,14 @@ async def _finalize_and_review(state: _State) -> None:
     res = await orch.orchestrate(task=task, context=context)
     out = normalize_orchestrator_output(res.output if isinstance(res.output, dict) else {})
     receipts = state.get("receipts") if isinstance(state.get("receipts"), list) else []
+    receipt_ids = _receipt_command_ids(receipts)
     if isinstance(out.get("evidence"), dict) and receipts:
-        out["evidence"].setdefault(
-            "receipt_command_ids",
-            [r.get("command_id") for r in receipts if isinstance(r, dict) and isinstance(r.get("command_id"), str)],
-        )
+        out["evidence"].setdefault("receipt_command_ids", receipt_ids)
     ok_out, errors = validate_orchestrator_output(out)
     if not ok_out:
         out["schema_errors"] = errors
     state["orchestrator_final"] = out
-    _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"orchestrator_final": out})
+    _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"orchestrator_final": out})
     await _append_memory_safe(
         {
             "agent_id": "orchestrator",
@@ -401,7 +414,7 @@ async def _finalize_and_review(state: _State) -> None:
     if not ok_c:
         c["schema_errors"] = errs
     state["critic_final"] = c
-    _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"critic_final": c})
+    _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"critic_final": c})
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "critic_final"})
     try:
         mem = _memory()
@@ -416,7 +429,6 @@ async def _finalize_and_review(state: _State) -> None:
             summary["key_points"] = []
         if not isinstance(summary.get("receipt_command_ids"), list):
             summary["receipt_command_ids"] = []
-        receipt_ids = [r.get("command_id") for r in receipts if isinstance(r, dict) and isinstance(r.get("command_id"), str)]
         if receipt_ids and not summary.get("receipt_command_ids"):
             summary["receipt_command_ids"] = receipt_ids
         evidence = c.get("evidence") if isinstance(c.get("evidence"), dict) else {}
@@ -607,7 +619,7 @@ def _build_final_output(state: _State) -> dict[str, Any]:
         "quality": quality,
         "errors": state.get("errors") or [],
     }
-    _ctx_store().upsert(run_id=state["run_id"], event_id=str(task.get("task_id") or "task"), patch={"final_output": final_output})
+    _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"final_output": final_output})
     return final_output
 
 
@@ -643,7 +655,8 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
         }
 
         store = _ctx_store()
-        store.upsert(run_id=run_id, event_id=str(t.get("task_id") or "task"), patch={"task_snapshot": t})
+        event_id = _event_id(t)
+        store.upsert(run_id=run_id, event_id=event_id, patch={"task_snapshot": t})
         session_id = str(t.get("session_id") or "default")
         payload = t.get("payload") if isinstance(t.get("payload"), dict) else {}
         content = payload.get("content") if isinstance(payload.get("content"), str) else ""
@@ -666,7 +679,7 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
         if not ok_intent:
             intent_out["schema_errors"] = intent_errors
         state["intent"] = intent_out
-        store.upsert(run_id=run_id, event_id=str(t.get("task_id") or "task"), patch={"intent": intent_out})
+        store.upsert(run_id=run_id, event_id=event_id, patch={"intent": intent_out})
         await _append_memory_safe(
             {
                 "agent_id": "intent",
