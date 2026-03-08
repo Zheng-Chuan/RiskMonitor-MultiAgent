@@ -15,14 +15,14 @@ if str(_SRC_ROOT) not in sys.path:
 async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTEXT_STORE_DIR", str(tmp_path / "ctx"))
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.setenv("LLM_API_KEY", "test")
     monkeypatch.setenv("LLM_RATE_LIMIT_TOKENS_PER_MIN_DEFAULT", "1000000")
     monkeypatch.setenv("LLM_RATE_LIMIT_BURST_TOKENS_DEFAULT", "1000000")
     monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
     monkeypatch.setenv("MEMORY_SQLITE_PATH", str(tmp_path / "memory.sqlite"))
     monkeypatch.delenv("WORKING_MEMORY_BACKEND", raising=False)
 
-    from riskmonitor_multiagent.llm import openrouter_client
+    from riskmonitor_multiagent.llm import llm_client
 
     async def _fake_chat(self, *, messages, model=None, temperature=0.2, max_tokens=None):
         sys_prompt = (messages[0] or {}).get("content") if isinstance(messages, list) and messages else ""
@@ -99,7 +99,7 @@ async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatc
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
         }
 
-    monkeypatch.setattr(openrouter_client.OpenRouterClient, "chat_completions", _fake_chat, raising=True)
+    monkeypatch.setattr(llm_client.LlmClient, "chat_completions", _fake_chat, raising=True)
 
     from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
     from riskmonitor_multiagent.memory.unified_memory import UnifiedMemory
@@ -157,7 +157,7 @@ async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatc
 async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTEXT_STORE_DIR", str(tmp_path / "ctx"))
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.setenv("LLM_API_KEY", "test")
     monkeypatch.setenv("LLM_RATE_LIMIT_TOKENS_PER_MIN_DEFAULT", "1000000")
     monkeypatch.setenv("LLM_RATE_LIMIT_BURST_TOKENS_DEFAULT", "1000000")
     monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
@@ -165,7 +165,7 @@ async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_p
     monkeypatch.setenv("HITL_AUTO_APPROVE", "0")
     monkeypatch.delenv("WORKING_MEMORY_BACKEND", raising=False)
 
-    from riskmonitor_multiagent.llm import openrouter_client
+    from riskmonitor_multiagent.llm import llm_client
 
     async def _fake_chat(self, *, messages, model=None, temperature=0.2, max_tokens=None):
         sys_prompt = (messages[0] or {}).get("content") if isinstance(messages, list) and messages else ""
@@ -206,7 +206,7 @@ async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_p
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
         }
 
-    monkeypatch.setattr(openrouter_client.OpenRouterClient, "chat_completions", _fake_chat, raising=True)
+    monkeypatch.setattr(llm_client.LlmClient, "chat_completions", _fake_chat, raising=True)
 
     from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
     from riskmonitor_multiagent.memory.unified_memory import UnifiedMemory
@@ -245,7 +245,7 @@ async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_p
 @pytest.mark.asyncio
 async def test_orchestrator_commands_generate_receipts_and_critic_can_see(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTEXT_STORE_DIR", str(tmp_path / "ctx"))
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.setenv("LLM_API_KEY", "test")
     monkeypatch.setenv("MEMORY_SQLITE_PATH", str(tmp_path / "memory.sqlite"))
     monkeypatch.delenv("MONGO_URL", raising=False)
 
@@ -344,7 +344,7 @@ async def test_orchestrator_commands_generate_receipts_and_critic_can_see(tmp_pa
 @pytest.mark.asyncio
 async def test_orchestrator_unknown_step_kind_is_not_silent(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTEXT_STORE_DIR", str(tmp_path / "ctx"))
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.setenv("LLM_API_KEY", "test")
     monkeypatch.setenv("MEMORY_SQLITE_PATH", str(tmp_path / "memory.sqlite"))
 
     from riskmonitor_multiagent.agents.base import AgentResult
@@ -418,7 +418,7 @@ async def test_orchestrator_unknown_step_kind_is_not_silent(tmp_path, monkeypatc
 @pytest.mark.asyncio
 async def test_multi_intent_disambiguation_written_to_shared_memory(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTEXT_STORE_DIR", str(tmp_path / "ctx"))
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.setenv("LLM_API_KEY", "test")
     monkeypatch.setenv("LLM_RATE_LIMIT_TOKENS_PER_MIN_DEFAULT", "1000000")
     monkeypatch.setenv("LLM_RATE_LIMIT_BURST_TOKENS_DEFAULT", "1000000")
     monkeypatch.setenv("MEMORY_SQLITE_PATH", str(tmp_path / "memory.sqlite"))
@@ -426,7 +426,7 @@ async def test_multi_intent_disambiguation_written_to_shared_memory(tmp_path, mo
     from riskmonitor_multiagent.agents.base import AgentResult
     from riskmonitor_multiagent.memory.unified_memory import UnifiedMemory
     from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
-    from riskmonitor_multiagent.llm import openrouter_client
+    from riskmonitor_multiagent.llm import llm_client
 
     async def _fake_chat(self, *, messages, model=None, temperature=0.2, max_tokens=None):
         sys_prompt = (messages[0] or {}).get("content") if isinstance(messages, list) and messages else ""
@@ -469,7 +469,7 @@ async def test_multi_intent_disambiguation_written_to_shared_memory(tmp_path, mo
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
         }
 
-    monkeypatch.setattr(openrouter_client.OpenRouterClient, "chat_completions", _fake_chat, raising=True)
+    monkeypatch.setattr(llm_client.LlmClient, "chat_completions", _fake_chat, raising=True)
 
     async def _fake_intent(self, *, task, metadata=None, max_tokens=None):
         return AgentResult(

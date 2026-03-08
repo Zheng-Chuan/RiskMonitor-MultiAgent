@@ -18,7 +18,7 @@ async def test_audit_event_persistence_and_retrieval():
     from sqlalchemy import text
 
     engine = get_engine()
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         conn.execute(
             text(
                 """
@@ -46,7 +46,6 @@ async def test_audit_event_persistence_and_retrieval():
                 """
             )
         )
-        conn.commit()
 
     event_id = f"test-audit-{int(time.time() * 1000)}"
     record = {

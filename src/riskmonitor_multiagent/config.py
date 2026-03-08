@@ -105,52 +105,62 @@ def get_mysql_pool_recycle_s() -> int:
     return int(os.getenv("MYSQL_POOL_RECYCLE", "1800"))
 
 
-def get_openrouter_api_key() -> str:
+def get_llm_api_key() -> str:
     """
-    获取 OpenRouter API Key.
-    必须设置 OPENROUTER_API_KEY 环境变量.
+    获取 LLM API Key.
+    必须设置 LLM_API_KEY 环境变量.
+    切换平台时在 .env 中更换为对应平台的 Key 即可.
 
     异常:
-        ValueError: 如果未设置 OPENROUTER_API_KEY.
+        ValueError: 如果未设置 LLM_API_KEY.
     """
-    api_key = os.getenv("OPENROUTER_API_KEY")
+    api_key = os.getenv("LLM_API_KEY")
     if api_key is None or not api_key.strip():
         _try_load_repo_dotenv()
-        api_key = os.getenv("OPENROUTER_API_KEY")
+        api_key = os.getenv("LLM_API_KEY")
     if api_key is None or not api_key.strip():
-        raise ValueError("OPENROUTER_API_KEY is not set")
+        raise ValueError("LLM_API_KEY is not set")
     return api_key.strip()
 
 
-def get_openrouter_base_url() -> str:
-    """获取 OpenRouter API Base URL, 默认为 https://openrouter.ai/api/v1."""
-    value = os.getenv("OPENROUTER_BASE_URL")
+def get_llm_base_url() -> str:
+    """获取 LLM 主机 Base URL（OpenAI 兼容接口）. 必须设置 LLM_BASE_URL 环境变量."""
+    value = os.getenv("LLM_BASE_URL")
     if value is None or not value.strip():
         _try_load_repo_dotenv()
-        value = os.getenv("OPENROUTER_BASE_URL")
-    return (value or "https://openrouter.ai/api/v1").strip().rstrip("/") or "https://openrouter.ai/api/v1"
+        value = os.getenv("LLM_BASE_URL")
+    value = (value or "").strip().rstrip("/")
+    if not value:
+        raise ValueError("LLM_BASE_URL is not set")
+    return value
 
 
-def get_openrouter_model() -> str:
-    """获取 OpenRouter 默认模型, 固定为 DeepSeek 免费版本."""
-    return "deepseek/deepseek-r1-0528:free"
+def get_llm_model() -> str:
+    """获取 LLM 模型 ID；优先读 LLM_MODEL，默认 qwen3-8b. 切换平台时在 .env 中改为目标模型名."""
+    value = os.getenv("LLM_MODEL")
+    if value is None or not value.strip():
+        _try_load_repo_dotenv()
+        value = os.getenv("LLM_MODEL")
+    if value and value.strip():
+        return value.strip()
+    return "qwen3-8b"
 
 
-def get_openrouter_http_referer() -> str:
-    """获取 OpenRouter HTTP-Referer(可选)."""
-    value = os.getenv("OPENROUTER_HTTP_REFERER")
+def get_llm_http_referer() -> str:
+    """获取 LLM HTTP-Referer(可选)."""
+    value = os.getenv("LLM_HTTP_REFERER")
     if value is None:
         _try_load_repo_dotenv()
-        value = os.getenv("OPENROUTER_HTTP_REFERER")
+        value = os.getenv("LLM_HTTP_REFERER")
     return (value or "").strip()
 
 
-def get_openrouter_app_title() -> str:
-    """获取 OpenRouter X-Title(可选)."""
-    value = os.getenv("OPENROUTER_APP_TITLE")
+def get_llm_app_title() -> str:
+    """获取 LLM X-Title(可选)."""
+    value = os.getenv("LLM_APP_TITLE")
     if value is None:
         _try_load_repo_dotenv()
-        value = os.getenv("OPENROUTER_APP_TITLE")
+        value = os.getenv("LLM_APP_TITLE")
     return (value or "").strip()
 
 

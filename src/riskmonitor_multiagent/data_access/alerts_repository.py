@@ -36,9 +36,8 @@ def save_alert(alert: Dict[str, Any]) -> None:
     """)
 
     try:
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             conn.execute(sql, alert)
-            conn.commit()
     except Exception as e:
         raise map_mysql_error(e, operation="save_alert") from e
 
@@ -71,9 +70,9 @@ def save_alerts_batch(alerts: List[Dict[str, Any]]) -> None:
     """)
 
     try:
-        with engine.connect() as conn:
-            conn.execute(sql, alerts)
-            conn.commit()
+        with engine.begin() as conn:
+            for alert in alerts:
+                conn.execute(sql, alert)
     except Exception as e:
         raise map_mysql_error(e, operation="save_alerts_batch") from e
 

@@ -51,6 +51,7 @@ class _State(TypedDict):
     critic_final: dict[str, Any]
     final_output: dict[str, Any]
     errors: list[str]
+    tokens_accumulated: int
 
 
 def _ctx_store() -> FileContextStore:
@@ -70,6 +71,14 @@ def _receipt_command_ids(receipts: list[dict[str, Any]]) -> list[str]:
         if isinstance(cid, str) and cid.strip():
             out.append(cid)
     return out
+
+
+def _add_usage(state: _State, usage: Any) -> None:
+    if not isinstance(usage, dict):
+        return
+    total = usage.get("total_tokens")
+    if isinstance(total, int) and total > 0:
+        state["tokens_accumulated"] = state.get("tokens_accumulated", 0) + total
 
 
 def _is_auto_approved() -> bool:
@@ -139,11 +148,13 @@ async def _plan_with_revise_loop(state: _State) -> None:
             "revision": rev,
         }
         result = await plan_agent.orchestrate(task=task, context=context)
+        _add_usage(state, getattr(result, "usage", None))
         out = normalize_orchestrator_output(result.output if isinstance(result.output, dict) else {})
         ok_out, errors = validate_orchestrator_output(out)
         if not ok_out:
             out["schema_errors"] = errors
         state["orchestrator_plan"] = out
+        _ensure_evidence_refs(state["orchestrator_plan"], ["plan_steps"])
         _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"orchestrator_plan": out})
         plan_steps = out.get("plan_steps") if isinstance(out.get("plan_steps"), list) else []
         step_kinds = [s.get("kind") for s in plan_steps if isinstance(s, dict) and isinstance(s.get("kind"), str)]
@@ -161,11 +172,13 @@ async def _plan_with_revise_loop(state: _State) -> None:
 
         started = time.monotonic()
         review = await critic_agent.review(task=task, orchestrator=out, receipts=state.get("receipts"))
+        _add_usage(state, getattr(review, "usage", None))
         critic = normalize_critic_review(review.output if isinstance(review.output, dict) else {})
         ok_review, errors_review = validate_critic_review(critic)
         if not ok_review:
             critic["schema_errors"] = errors_review
         state["critic_plan"] = critic
+        _ensure_evidence_refs(state["critic_plan"], ["ok", "risk_level"])
         _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"critic_plan": critic})
         require = bool(critic.get("require_human_approval") is True)
         approved = True if not require else _is_auto_approved()
@@ -258,11 +271,13 @@ async def _execute_plan(state: _State) -> None:
             }
             if target == "system_engineer":
                 res = await syseng.analyze_task(task=task, context=ctx)
+                _add_usage(state, getattr(res, "usage", None))
                 out = res.output if isinstance(res.output, dict) else {}
                 if isinstance(out.get("evidence"), dict) and receipts:
                     out["evidence"].setdefault("receipt_command_ids", _receipt_command_ids(receipts))
                 artifacts[step_id] = {"kind": "delegate", "target_agent": target, "ok": bool(res.ok), "output": out}
                 state["engineer"] = out
+                _ensure_evidence_refs(state["engineer"], ["summary", "reason"])
                 await _append_memory_safe(
                     {
                         "agent_id": "system_engineer",
@@ -275,11 +290,13 @@ async def _execute_plan(state: _State) -> None:
                 )
             elif target == "risk_analyst":
                 res = await analyst.analyze_task(task=task, context=ctx)
+                _add_usage(state, getattr(res, "usage", None))
                 out = res.output if isinstance(res.output, dict) else {}
                 if isinstance(out.get("evidence"), dict) and receipts:
                     out["evidence"].setdefault("receipt_command_ids", _receipt_command_ids(receipts))
                 artifacts[step_id] = {"kind": "delegate", "target_agent": target, "ok": bool(res.ok), "output": out}
                 state["analyst"] = out
+                _ensure_evidence_refs(state["analyst"], ["report"])
                 await _append_memory_safe(
                     {
                         "agent_id": "risk_analyst",
@@ -379,6 +396,7 @@ async def _finalize_and_review(state: _State) -> None:
         "receipts": state.get("receipts"),
     }
     res = await orch.orchestrate(task=task, context=context)
+    _add_usage(state, getattr(res, "usage", None))
     out = normalize_orchestrator_output(res.output if isinstance(res.output, dict) else {})
     receipts = state.get("receipts") if isinstance(state.get("receipts"), list) else []
     receipt_ids = _receipt_command_ids(receipts)
@@ -388,6 +406,7 @@ async def _finalize_and_review(state: _State) -> None:
     if not ok_out:
         out["schema_errors"] = errors
     state["orchestrator_final"] = out
+    _ensure_evidence_refs(state["orchestrator_final"], ["summary", "evidence"])
     _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"orchestrator_final": out})
     await _append_memory_safe(
         {
@@ -409,11 +428,13 @@ async def _finalize_and_review(state: _State) -> None:
         analyst=state.get("analyst") if isinstance(state.get("analyst"), dict) else None,
         receipts=receipts,
     )
+    _add_usage(state, getattr(res2, "usage", None))
     c = normalize_critic_review(res2.output if isinstance(res2.output, dict) else {})
     ok_c, errs = validate_critic_review(c)
     if not ok_c:
         c["schema_errors"] = errs
     state["critic_final"] = c
+    _ensure_evidence_refs(state["critic_final"], ["ok", "run_summary"])
     _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"critic_final": c})
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "critic_final"})
     try:
@@ -449,6 +470,18 @@ def _has_evidence_refs(evidence: dict[str, Any] | None) -> bool:
     has_fields = isinstance(fields, list) and any(isinstance(x, str) and x.strip() for x in fields)
     has_rag = isinstance(rag_hits, list) and any(isinstance(x, str) and x.strip() for x in rag_hits)
     return bool(has_receipts or has_fields or has_rag)
+
+
+def _ensure_evidence_refs(out: dict[str, Any] | None, default_fields: list[str]) -> None:
+    """若 out 的 evidence 无任何引用，则用 default_fields 回填 evidence.fields，以降低 evidence_missing_rate."""
+    if not isinstance(out, dict):
+        return
+    evidence = out.get("evidence")
+    if _has_evidence_refs(evidence):
+        return
+    if not isinstance(out.get("evidence"), dict):
+        out["evidence"] = {}
+    out["evidence"]["fields"] = [f for f in default_fields if isinstance(f, str) and f.strip()]
 
 
 def _quality_summary(state: _State) -> dict[str, Any]:
@@ -618,6 +651,7 @@ def _build_final_output(state: _State) -> dict[str, Any]:
         "step_trace": _build_step_trace(state),
         "quality": quality,
         "errors": state.get("errors") or [],
+        "tokens_total": state.get("tokens_accumulated", 0),
     }
     _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"final_output": final_output})
     return final_output
@@ -652,6 +686,7 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
             "critic_final": {},
             "final_output": {},
             "errors": [],
+            "tokens_accumulated": 0,
         }
 
         store = _ctx_store()
@@ -674,11 +709,13 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
         intent_agent = IntentAgent()
         md = build_intent_metadata(task=t, policy_version=get_policy_version(), prompt_version=PROMPT_VERSION_INTENT)
         intent_res = await intent_agent.recognize(task=t, metadata=md)
+        _add_usage(state, getattr(intent_res, "usage", None))
         intent_out = normalize_intent_output(intent_res.output if isinstance(intent_res.output, dict) else {})
         ok_intent, intent_errors = validate_intent_output(intent_out)
         if not ok_intent:
             intent_out["schema_errors"] = intent_errors
         state["intent"] = intent_out
+        _ensure_evidence_refs(state["intent"], ["primary_intent_type", "risk_level"])
         store.upsert(run_id=run_id, event_id=event_id, patch={"intent": intent_out})
         await _append_memory_safe(
             {

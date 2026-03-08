@@ -1,3 +1,30 @@
 {"case_id":"exp_case_001","tags":["explainability","read_only"],"task":{"task_id":"eval_task_001","session_id":"eval_session","source":"human","payload":{"content":"请分析当前系统延迟异常可能原因 并给出下一步建议"}}}
 {"case_id":"exp_case_002","tags":["approval","side_effect"],"task":{"task_id":"eval_task_002","session_id":"eval_session","source":"human","payload":{"content":"如果需要写入告警或执行副作用动作 请先给出理由并请求人工确认"}}}
 {"case_id":"exp_case_003","tags":["business","breach"],"task":{"task_id":"eval_task_003","session_id":"eval_session","source":"human","payload":{"content":"检查交易台敞口是否越限 并说明证据与处理建议"}}}
+{"case_id":"exp_case_004","tags":["read_only","query"],"task":{"task_id":"eval_task_004","session_id":"eval_session","source":"human","payload":{"content":"查询 TRADER-001 当前所有头寸并汇总 delta"}}}
+{"case_id":"exp_case_005","tags":["explainability","business"],"task":{"task_id":"eval_task_005","session_id":"eval_session","source":"human","payload":{"content":"解释 Equity Derivatives 台今日敞口变化的主要原因"}}}
+{"case_id":"exp_case_006","tags":["read_only"],"task":{"task_id":"eval_task_006","session_id":"eval_session","source":"human","payload":{"content":"列出各交易台的 delta 汇总 按绝对值排序"}}}
+{"case_id":"exp_case_007","tags":["approval","side_effect"],"task":{"task_id":"eval_task_007","session_id":"eval_session","source":"human","payload":{"content":"若检测到越限请生成告警 并说明触发条件与建议操作"}}}
+{"case_id":"exp_case_008","tags":["business","breach"],"task":{"task_id":"eval_task_008","session_id":"eval_session","source":"human","payload":{"content":"检查是否有头寸 delta 超过阈值 给出证据与处置建议"}}}
+{"case_id":"exp_case_009","tags":["explainability","read_only"],"task":{"task_id":"eval_task_009","session_id":"eval_session","source":"human","payload":{"content":"分析最近告警数量上升的可能原因及下一步排查方向"}}}
+{"case_id":"exp_case_010","tags":["query","read_only"],"task":{"task_id":"eval_task_010","session_id":"eval_session","source":"human","payload":{"content":"按交易员统计当前头寸数量与总 delta"}}}
+{"case_id":"exp_case_011","tags":["business"],"task":{"task_id":"eval_task_011","session_id":"eval_session","source":"human","payload":{"content":"评估 Fixed Income 台当前风险敞口是否在可控范围内"}}}
+{"case_id":"exp_case_012","tags":["explainability","approval"],"task":{"task_id":"eval_task_012","session_id":"eval_session","source":"human","payload":{"content":"如需写告警请先说明理由 再请求确认后执行"}}}
+{"case_id":"exp_case_013","tags":["read_only","query"],"task":{"task_id":"eval_task_013","session_id":"eval_session","source":"human","payload":{"content":"查询包含 AAPL 的头寸列表及对应 delta"}}}
+{"case_id":"exp_case_014","tags":["business","breach"],"task":{"task_id":"eval_task_014","session_id":"eval_session","source":"human","payload":{"content":"检查各台敞口是否超限 超限的列出并给出处理建议"}}}
+{"case_id":"exp_case_015","tags":["explainability"],"task":{"task_id":"eval_task_015","session_id":"eval_session","source":"human","payload":{"content":"说明系统如何判断一条头寸是否越限 依据哪些字段"}}}
+{"case_id":"exp_case_016","tags":["read_only"],"task":{"task_id":"eval_task_016","session_id":"eval_session","source":"human","payload":{"content":"最近 10 条告警的内容与级别"}}}
+{"case_id":"exp_case_017","tags":["approval","side_effect"],"task":{"task_id":"eval_task_017","session_id":"eval_session","source":"human","payload":{"content":"若发现异常请生成告警 执行前需人工确认并说明原因"}}}
+{"case_id":"exp_case_018","tags":["business","query"],"task":{"task_id":"eval_task_018","session_id":"eval_session","source":"human","payload":{"content":"汇总所有交易员的期权头寸 delta 并指出最大敞口所在台"}}}
+{"case_id":"exp_case_019","tags":["explainability","read_only"],"task":{"task_id":"eval_task_019","session_id":"eval_session","source":"human","payload":{"content":"解释 delta 聚合逻辑与按 desk 汇总的计算方式"}}}
+{"case_id":"exp_case_020","tags":["read_only","query"],"task":{"task_id":"eval_task_020","session_id":"eval_session","source":"human","payload":{"content":"按 desk 查询头寸数量与 delta 合计"}}}
+{"case_id":"exp_case_021","tags":["business","breach"],"task":{"task_id":"eval_task_021","session_id":"eval_session","source":"human","payload":{"content":"识别越限头寸 列出 position_id、desk、delta 与建议"}}}
+{"case_id":"exp_case_022","tags":["explainability"],"task":{"task_id":"eval_task_022","session_id":"eval_session","source":"human","payload":{"content":"当前风控规则有哪些 触发告警的条件是什么"}}}
+{"case_id":"exp_case_023","tags":["read_only"],"task":{"task_id":"eval_task_023","session_id":"eval_session","source":"human","payload":{"content":"TRADER-002 负责的头寸及对应 desk 与 delta"}}}
+{"case_id":"exp_case_024","tags":["approval","side_effect"],"task":{"task_id":"eval_task_024","session_id":"eval_session","source":"human","payload":{"content":"如需写入告警或执行写操作 必须先给出理由并等待确认"}}}
+{"case_id":"exp_case_025","tags":["business","query"],"task":{"task_id":"eval_task_025","session_id":"eval_session","source":"human","payload":{"content":"各交易台敞口与限额对比 标注是否接近或超限"}}}
+{"case_id":"exp_case_026","tags":["explainability","read_only"],"task":{"task_id":"eval_task_026","session_id":"eval_session","source":"human","payload":{"content":"说明头寸数据来源与更新频率 以及告警如何产生"}}}
+{"case_id":"exp_case_027","tags":["read_only","query"],"task":{"task_id":"eval_task_027","session_id":"eval_session","source":"human","payload":{"content":"查询 GOOGL 和 MSFT 相关头寸的 delta 汇总"}}}
+{"case_id":"exp_case_028","tags":["business","breach"],"task":{"task_id":"eval_task_028","session_id":"eval_session","source":"human","payload":{"content":"检查全市场敞口是否越限 越限的给出证据与处置建议"}}}
+{"case_id":"exp_case_029","tags":["explainability","approval"],"task":{"task_id":"eval_task_029","session_id":"eval_session","source":"human","payload":{"content":"在需要写告警时先解释原因再请求人工批准后执行"}}}
+{"case_id":"exp_case_030","tags":["read_only","query"],"task":{"task_id":"eval_task_030","session_id":"eval_session","source":"human","payload":{"content":"汇总全系统头寸总数、总 delta 及按 desk 分布"}}}

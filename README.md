@@ -9,7 +9,7 @@
 - **MCP 工具集(已落地)**: 头寸查询 交易台敞口监控 组合 Delta 汇总 告警写入与查询 运行指标查询
 - **服务化形态(已落地)**: stdio 与 streamable-http 两种传输方式 提供 health/ready/metrics 端点
 - **告警闭环最小版(已落地)**: desk delta breach 规则评估 告警持久化与查询
-- **LLM Provider 适配(已落地)**: OpenRouter 客户端封装模块 供后续分析/worker 调用
+- **LLM Provider 适配(已落地)**: 统一 LLM 客户端（OpenAI 兼容），换平台 / API Key / 模型名即可切换
 - **容器化部署**: Docker + MySQL 8.0 支持本地开发与类生产形态
 - **完整测试框架**: 单元测试 + 集成测试 + smoke test 作为唯一验收标准
 

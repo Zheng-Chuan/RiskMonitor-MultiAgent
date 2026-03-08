@@ -69,7 +69,7 @@ def test_intent_output_multi_intent_is_sorted_and_explained():
 @pytest.mark.asyncio
 async def test_intent_agent_raises_when_llm_disabled(monkeypatch):
     monkeypatch.setenv("DISABLE_LLM", "1")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.setenv("LLM_API_KEY", "test")
     from riskmonitor_multiagent.agents.roles import IntentAgent
 
     task = {"task_id": "t1", "session_id": "s1", "source": "human", "payload": {"content": "请查询 TRADER-001 的头寸"}}

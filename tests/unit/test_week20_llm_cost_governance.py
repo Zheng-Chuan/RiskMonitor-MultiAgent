@@ -13,17 +13,18 @@ if str(_SRC_ROOT) not in sys.path:
 @pytest.mark.asyncio
 async def test_week20_rate_limit_blocks_llm_call(monkeypatch):
     monkeypatch.setenv("DISABLE_LLM", "0")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.setenv("LLM_API_KEY", "test")
+    monkeypatch.setenv("LLM_BASE_URL", "https://api.example.com/v1")
     monkeypatch.setenv("LLM_RATE_LIMIT_TOKENS_PER_MIN_NON_CRITICAL", "1")
     monkeypatch.setenv("LLM_RATE_LIMIT_BURST_TOKENS_NON_CRITICAL", "1")
 
     from riskmonitor_multiagent.agents.base import BaseAgent
-    from riskmonitor_multiagent.llm import openrouter_client
+    from riskmonitor_multiagent.llm import llm_client
 
     async def _boom(*args, **kwargs):
         raise AssertionError("should not call upstream when rate limited")
 
-    monkeypatch.setattr(openrouter_client.OpenRouterClient, "chat_completions", _boom, raising=True)
+    monkeypatch.setattr(llm_client.LlmClient, "chat_completions", _boom, raising=True)
 
     agent = BaseAgent(name="orchestrator", system_prompt="Return only valid JSON.")
     with pytest.raises(Exception):
@@ -38,12 +39,13 @@ async def test_week20_rate_limit_blocks_llm_call(monkeypatch):
 @pytest.mark.asyncio
 async def test_week20_cost_accounting_emits_user_metrics(monkeypatch):
     monkeypatch.setenv("DISABLE_LLM", "0")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.setenv("LLM_API_KEY", "test")
+    monkeypatch.setenv("LLM_BASE_URL", "https://api.example.com/v1")
     monkeypatch.setenv("LLM_RATE_LIMIT_TOKENS_PER_MIN_DEFAULT", "1000000")
     monkeypatch.setenv("LLM_RATE_LIMIT_BURST_TOKENS_DEFAULT", "1000000")
 
     from riskmonitor_multiagent.agents.base import BaseAgent
-    from riskmonitor_multiagent.llm import openrouter_client
+    from riskmonitor_multiagent.llm import llm_client
     from riskmonitor_multiagent.observability.metrics import render_prometheus_metrics, reset_observability_metrics
 
     reset_observability_metrics()
@@ -54,7 +56,7 @@ async def test_week20_cost_accounting_emits_user_metrics(monkeypatch):
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
         }
 
-    monkeypatch.setattr(openrouter_client.OpenRouterClient, "chat_completions", _ok, raising=True)
+    monkeypatch.setattr(llm_client.LlmClient, "chat_completions", _ok, raising=True)
 
     agent = BaseAgent(name="critic", system_prompt="Return only valid JSON.")
     res = await agent.ask_json(

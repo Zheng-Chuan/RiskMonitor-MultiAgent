@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from typing import Any
@@ -7,6 +8,26 @@ from typing import Any
 from riskmonitor_multiagent.eval.case_schema import BenchmarkCase
 from riskmonitor_multiagent.eval.metrics import summarize_benchmark_records
 from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
+
+
+def _resolve_config(config: dict[str, Any]) -> dict[str, Any]:
+    """用环境变量补全 config 中为空的 model / policy_version / prompt_version，便于 summary 可追溯."""
+    out = dict(config)
+    if not out.get("model"):
+        try:
+            from riskmonitor_multiagent import config as rm_config
+            out["model"] = rm_config.get_llm_model()
+        except Exception:
+            out["model"] = os.getenv("LLM_MODEL", "")
+    if not out.get("policy_version"):
+        try:
+            from riskmonitor_multiagent.governance.versions import get_policy_version
+            out["policy_version"] = get_policy_version()
+        except Exception:
+            out["policy_version"] = os.getenv("POLICY_VERSION", "")
+    if not out.get("prompt_version"):
+        out["prompt_version"] = os.getenv("PROMPT_VERSION", "orchestrator_prompt.v1")
+    return out
 
 
 def _has_evidence_refs(evidence: Any) -> bool:
@@ -26,7 +47,7 @@ def _has_evidence_refs(evidence: Any) -> bool:
 def _apply_env(config: dict[str, Any]) -> tuple[list[str], dict[str, str | None]]:
     mapping = {
         "policy_version": "POLICY_VERSION",
-        "model": "OPENROUTER_MODEL",
+        "model": "LLM_MODEL",
     }
     changed: list[str] = []
     before: dict[str, str | None] = {}
@@ -85,13 +106,18 @@ def _restore_env(changed: list[str], before: dict[str, str | None]) -> None:
 async def run_benchmark(
     cases: list[BenchmarkCase], *, run_tag: str, config: dict[str, Any], repeats: int = 1
 ) -> dict[str, Any]:
+    config = _resolve_config(config)
     changed, before = _apply_env(config)
     records: list[dict[str, Any]] = []
     started = time.monotonic()
     r = max(1, int(repeats))
     try:
         for rep in range(r):
-            for c in cases:
+            for idx, c in enumerate(cases):
+                if idx > 0:
+                    delay_s = float(os.getenv("EVAL_DELAY_BETWEEN_CASES_S", "0"))
+                    if delay_s > 0:
+                        await asyncio.sleep(delay_s)
                 out = await run_orchestrator_workflow(task=c.task)
                 result = out.get("result") if isinstance(out.get("result"), dict) else {}
                 quality = result.get("quality") if isinstance(result.get("quality"), dict) else {}
@@ -136,7 +162,7 @@ async def run_benchmark(
                     "approval": approval,
                     "quality": quality,
                     "errors": result.get("errors") if isinstance(result.get("errors"), list) else [],
-                    "tokens_total": 0,
+                    "tokens_total": int(result.get("tokens_total", 0) or 0),
                     "governance_blocked_count": governance_blocked,
                     "degraded_count": degraded_count,
                     "approval_required": bool(approval.get("required")),

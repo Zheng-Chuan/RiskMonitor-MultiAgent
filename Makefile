@@ -1,4 +1,4 @@
-.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-kb ingest-knowledge kb-query eval-run eval-compare eval-gate
+.PHONY: help install up down restart logs test test-db test-unit test-integration test-all clean clean-cache shell-db phpmyadmin build mcp-logs mcp-shell setup-mcp test-cov up-kb ingest-knowledge kb-query eval-run eval-compare eval-gate check-llm
 
 help:
 	@echo "RiskMonitor-MultiAgent Development Commands"
@@ -40,6 +40,7 @@ help:
 	@echo "make eval-run         - Run benchmark, usage: make eval-run RUN_TAG=run1 REPEATS=2"
 	@echo "make eval-compare     - Compare two runs, usage: make eval-compare BASE=run1 CAND=run2"
 	@echo "make eval-gate        - Apply quality gate, usage: make eval-gate RUN_TAG=run1"
+	@echo "make check-llm        - Verify LLM connection (.env: LLM_API_KEY)"
 
 install:
 	pip install -r requirements.txt
@@ -80,6 +81,9 @@ eval-compare:
 
 eval-gate:
 	python -m scripts.eval.quality_gate --run "$(if $(RUN_TAG),$(RUN_TAG),baseline)" --gate "$(if $(GATE),$(GATE),eval/gates/default.json)"
+
+check-llm:
+	python scripts/check_llm_connection.py
 
 setup-mcp:
 	@echo "=================================="

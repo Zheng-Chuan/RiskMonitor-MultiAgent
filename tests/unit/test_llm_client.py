@@ -16,11 +16,12 @@ if str(_SRC_ROOT) not in sys.path:
 
 
 @pytest.mark.asyncio
-async def test_openrouter_chat_completions_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    from riskmonitor_multiagent.llm.openrouter_client import OpenRouterClient, extract_first_text
+async def test_llm_chat_completions_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    from riskmonitor_multiagent.llm.llm_client import LlmClient
+    from riskmonitor_multiagent.llm.llm_client import extract_first_text
 
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-    monkeypatch.setenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct:free")
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "qwen3-8b")
 
     captured: dict[str, Any] = {}
 
@@ -41,7 +42,7 @@ async def test_openrouter_chat_completions_success(monkeypatch: pytest.MonkeyPat
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport) as http_client:
-        client = OpenRouterClient(http_client=http_client, base_url="https://openrouter.ai/api/v1")
+        client = LlmClient(http_client=http_client, base_url="https://api.example.com/v1")
         resp = await client.chat_completions(messages=[{"role": "user", "content": "hi"}])
 
     assert captured["url"].endswith("/chat/completions")
@@ -51,22 +52,21 @@ async def test_openrouter_chat_completions_success(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
-async def test_openrouter_chat_completions_non_2xx(monkeypatch: pytest.MonkeyPatch) -> None:
-    from riskmonitor_multiagent.llm.openrouter_client import OpenRouterClient, OpenRouterError
+async def test_llm_chat_completions_non_2xx(monkeypatch: pytest.MonkeyPatch) -> None:
+    from riskmonitor_multiagent.llm.llm_client import LLMError
+    from riskmonitor_multiagent.llm.llm_client import LlmClient
 
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-    monkeypatch.setenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct:free")
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "qwen3-8b")
 
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(429, text="rate limited")
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport) as http_client:
-        client = OpenRouterClient(http_client=http_client, base_url="https://openrouter.ai/api/v1")
-        with pytest.raises(OpenRouterError) as exc:
+        client = LlmClient(http_client=http_client, base_url="https://api.example.com/v1")
+        with pytest.raises(LLMError) as exc:
             await client.chat_completions(messages=[{"role": "user", "content": "hi"}])
 
     assert exc.value.code == "UPSTREAM_BAD_STATUS"
     assert exc.value.status_code == 429
-
-

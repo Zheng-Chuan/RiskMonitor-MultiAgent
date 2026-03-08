@@ -24,9 +24,8 @@ def save_audit_record(record: Dict[str, Any]) -> None:
         """
     )
     try:
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             conn.execute(sql, record)
-            conn.commit()
     except Exception as e:
         raise map_mysql_error(e, operation="save_audit_record") from e
 
@@ -49,9 +48,9 @@ def save_audit_records_batch(records: List[Dict[str, Any]]) -> None:
         """
     )
     try:
-        with engine.connect() as conn:
-            conn.execute(sql, records)
-            conn.commit()
+        with engine.begin() as conn:
+            for rec in records:
+                conn.execute(sql, rec)
     except Exception as e:
         raise map_mysql_error(e, operation="save_audit_records_batch") from e
 

@@ -19,8 +19,9 @@
 
 可选环境变量
 
-- OPENROUTER_API_KEY
-- OPENROUTER_BASE_URL
+- LLM_API_KEY
+- LLM_BASE_URL
+- LLM_MODEL
 - MCP_SERVER_NAME
 - MCP_TRANSPORT
 
@@ -30,6 +31,17 @@
 
 ```bash
 docker compose up -d mysql
+```
+
+若后续 `make test-db` 或集成测试报错 `Access denied for user 'admin'@'...'`，说明当前 MySQL 容器是用旧版 `.env` 初始化的，密码与现在不一致。可**重新初始化 MySQL 数据卷**（会清空库内数据）使密码与当前 `.env` 一致：
+
+```bash
+docker compose stop mysql
+docker compose rm -f mysql
+docker volume rm riskmonitor-multiagent_mysql_data 2>/dev/null || true
+docker compose up -d mysql
+# 等待约 10 秒后执行
+make test-db
 ```
 
 ### 2 安装依赖
