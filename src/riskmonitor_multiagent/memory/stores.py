@@ -104,59 +104,54 @@ class SqlMemoryStore:
             "tags_json": tags_json,
             "content_json": nd.get("content") if isinstance(nd.get("content"), dict) else {},
         }
-        def _write() -> None:
-            with self._engine.begin() as conn:
-                conn.execute(self._table.delete().where(self._table.c.entry_id == row["entry_id"]))
-                conn.execute(self._table.insert(), row)
-        await asyncio.to_thread(_write)
+        with self._engine.begin() as conn:
+            conn.execute(self._table.delete().where(self._table.c.entry_id == row["entry_id"]))
+            conn.execute(self._table.insert(), row)
         return nd
 
     async def list_recent(self, query: MemoryQuery) -> list[dict[str, Any]]:
         limit = max(1, int(query.limit))
         kinds = set(query.kinds) if isinstance(query.kinds, list) else None
 
-        def _read() -> list[dict[str, Any]]:
-            stmt = select(self._table).where(self._table.c.scope == query.scope)
-            if query.scope != "shared":
-                stmt = stmt.where(self._table.c.agent_id == query.agent_id)
-            if query.session_id is not None:
-                stmt = stmt.where(self._table.c.session_id == query.session_id)
-            if query.run_id is not None:
-                stmt = stmt.where(self._table.c.run_id == query.run_id)
-            if kinds is not None and len(kinds) > 0:
-                stmt = stmt.where(self._table.c.kind.in_(list(kinds)))
-            stmt = stmt.order_by(self._table.c.ts_ms.desc()).limit(limit)
-            with self._engine.begin() as conn:
-                rows = conn.execute(stmt).mappings().all()
-            out: list[dict[str, Any]] = []
-            for r in reversed(rows):
-                tags_json = r.get("tags_json")
-                tags = None
-                if isinstance(tags_json, str) and tags_json.strip():
-                    try:
-                        tj = json.loads(tags_json)
-                        tags = tj if isinstance(tj, list) else None
-                    except Exception:
-                        tags = None
-                out.append(
-                    normalize_memory_entry(
-                        {
-                            "schema_version": r.get("schema_version"),
-                            "entry_id": r.get("entry_id"),
-                            "ts_ms": int(r.get("ts_ms") or 0),
-                            "agent_id": r.get("agent_id"),
-                            "scope": r.get("scope"),
-                            "kind": r.get("kind"),
-                            "content": r.get("content_json") if isinstance(r.get("content_json"), dict) else {},
-                            "tags": tags,
-                            "session_id": r.get("session_id"),
-                            "run_id": r.get("run_id"),
-                        }
-                    )
+        stmt = select(self._table).where(self._table.c.scope == query.scope)
+        if query.scope != "shared":
+            stmt = stmt.where(self._table.c.agent_id == query.agent_id)
+        if query.session_id is not None:
+            stmt = stmt.where(self._table.c.session_id == query.session_id)
+        if query.run_id is not None:
+            stmt = stmt.where(self._table.c.run_id == query.run_id)
+        if kinds is not None and len(kinds) > 0:
+            stmt = stmt.where(self._table.c.kind.in_(list(kinds)))
+        stmt = stmt.order_by(self._table.c.ts_ms.desc()).limit(limit)
+        with self._engine.begin() as conn:
+            rows = conn.execute(stmt).mappings().all()
+        out: list[dict[str, Any]] = []
+        for r in reversed(rows):
+            tags_json = r.get("tags_json")
+            tags = None
+            if isinstance(tags_json, str) and tags_json.strip():
+                try:
+                    tj = json.loads(tags_json)
+                    tags = tj if isinstance(tj, list) else None
+                except Exception:
+                    tags = None
+            out.append(
+                normalize_memory_entry(
+                    {
+                        "schema_version": r.get("schema_version"),
+                        "entry_id": r.get("entry_id"),
+                        "ts_ms": int(r.get("ts_ms") or 0),
+                        "agent_id": r.get("agent_id"),
+                        "scope": r.get("scope"),
+                        "kind": r.get("kind"),
+                        "content": r.get("content_json") if isinstance(r.get("content_json"), dict) else {},
+                        "tags": tags,
+                        "session_id": r.get("session_id"),
+                        "run_id": r.get("run_id"),
+                    }
                 )
-            return out
-
-        return await asyncio.to_thread(_read)
+            )
+        return out
 
 
 class RedisMemoryStore:

@@ -67,16 +67,12 @@ def test_intent_output_multi_intent_is_sorted_and_explained():
 
 
 @pytest.mark.asyncio
-async def test_intent_agent_fallback_when_llm_disabled(monkeypatch):
+async def test_intent_agent_raises_when_llm_disabled(monkeypatch):
     monkeypatch.setenv("DISABLE_LLM", "1")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
     from riskmonitor_multiagent.agents.roles import IntentAgent
 
     task = {"task_id": "t1", "session_id": "s1", "source": "human", "payload": {"content": "请查询 TRADER-001 的头寸"}}
     agent = IntentAgent()
-    res = await agent.recognize(task=task, metadata={"source": "test"})
-    assert isinstance(res.output, dict)
-    assert res.output.get("schema_version") == "intent_output.v2"
-    assert isinstance(res.output.get("primary_intent_type"), str)
-    assert isinstance(res.output.get("intents"), list)
-    assert isinstance(res.output.get("permission_requirements"), dict)
-    assert res.output.get("degraded") is True
+    with pytest.raises(Exception):
+        await agent.recognize(task=task, metadata={"source": "test"})

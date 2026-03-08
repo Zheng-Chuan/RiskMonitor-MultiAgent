@@ -46,6 +46,11 @@ make eval-compare BASE=baseline CAND=candidate
 - `degraded_avg` 平均降级次数 越低越好
 - `tokens_total` 总 token 消耗 越低越好
 
+说明
+
+- 本项目要求主链路必须可用 LLM
+- 如果某次评测 `tokens_total` 为 0 通常表示 LLM 未实际调用 该结果不应作为有效实验数据
+
 ### 业务一致性
 
 - `breach_hit_consistency` breach 与 alerts 对齐一致性 越高越好

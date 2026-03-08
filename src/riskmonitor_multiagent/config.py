@@ -132,13 +132,8 @@ def get_openrouter_base_url() -> str:
 
 
 def get_openrouter_model() -> str:
-    """获取 OpenRouter 默认模型, 默认为免费模型 meta-llama/llama-3.3-70b-instruct:free."""
-    value = os.getenv("OPENROUTER_MODEL")
-    if value is None or not value.strip():
-        _try_load_repo_dotenv()
-        value = os.getenv("OPENROUTER_MODEL")
-    default_model = "meta-llama/llama-3.3-70b-instruct:free"
-    return (value or default_model).strip() or default_model
+    """获取 OpenRouter 默认模型, 固定为 DeepSeek 免费版本."""
+    return "deepseek/deepseek-r1-0528:free"
 
 
 def get_openrouter_http_referer() -> str:

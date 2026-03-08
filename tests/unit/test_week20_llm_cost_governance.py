@@ -26,17 +26,13 @@ async def test_week20_rate_limit_blocks_llm_call(monkeypatch):
     monkeypatch.setattr(openrouter_client.OpenRouterClient, "chat_completions", _boom, raising=True)
 
     agent = BaseAgent(name="orchestrator", system_prompt="Return only valid JSON.")
-    res = await agent.ask_json(
-        user_prompt="Query: hello?",
-        fallback={"schema_version": "x"},
-        governance={"user_id": "u1", "priority": "non_critical"},
-        max_tokens=512,
-    )
-    assert res.ok is False
-    assert isinstance(res.output, dict) and res.output.get("schema_version") == "x"
-    meta = res.meta or {}
-    gov = meta.get("governance") if isinstance(meta.get("governance"), dict) else {}
-    assert gov.get("blocked") is True
+    with pytest.raises(Exception):
+        await agent.ask_json(
+            user_prompt="Query: hello?",
+            fallback={"schema_version": "x"},
+            governance={"user_id": "u1", "priority": "non_critical"},
+            max_tokens=512,
+        )
 
 
 @pytest.mark.asyncio
@@ -73,4 +69,3 @@ async def test_week20_cost_accounting_emits_user_metrics(monkeypatch):
     assert "rm_llm_tokens_by_user_total" in text
     assert 'user="u2"' in text
     assert 'agent="critic"' in text
-

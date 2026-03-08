@@ -55,19 +55,14 @@ class BaseAgent:
         started = time.monotonic()
         model_label = (self._model or "").strip() or "default"
         try:
-            llm_disabled = os.getenv("DISABLE_LLM", "0").strip() not in {"0", "false", "False"}
             try:
-                api_key_missing = config.get_openrouter_api_key().strip() == ""
-            except Exception:
-                api_key_missing = True
-            if llm_disabled or api_key_missing:
-                inc_counter("rm_llm_skipped_total", labels={"agent": self._name, "model": model_label})
-                return AgentResult(
-                    ok=False,
-                    output=fallback,
-                    usage=None,
-                    meta={"agent": self._name, "model": model_label, "temperature": float(temperature), "max_tokens": int(max_tokens) if isinstance(max_tokens, int) else None, "prompt_version": self._prompt_version, "policy_version": self._policy_version},
-                )
+                api_key = config.get_openrouter_api_key().strip()
+            except Exception as e:
+                raise OpenRouterError(code="MISSING_API_KEY", message=str(e)) from e
+            if not api_key:
+                raise OpenRouterError(code="MISSING_API_KEY", message="OPENROUTER_API_KEY is empty")
+            if os.getenv("DISABLE_LLM", "0").strip() not in {"0", "false", "False"}:
+                raise OpenRouterError(code="LLM_DISABLED", message="DISABLE_LLM is set")
 
             g = dict(governance) if isinstance(governance, dict) else {}
             user_id = str(g.get("user_id") or os.getenv("RM_USER_ID", "") or "unknown")
@@ -76,9 +71,11 @@ class BaseAgent:
             governor = get_llm_cost_governor()
             allowed, gov_meta = governor.allow(agent=self._name, user_id=user_id, priority=priority, estimated_tokens=est)
             if not allowed:
-                inc_counter("rm_llm_circuit_break_total", labels={"agent": self._name, "model": model_label, "priority": str(gov_meta.get("priority") or "default")})
-                meta = {"agent": self._name, "model": model_label, "temperature": float(temperature), "max_tokens": int(max_tokens) if isinstance(max_tokens, int) else None, "prompt_version": self._prompt_version, "policy_version": self._policy_version, "governance": {"blocked": True, "user": user_id, "priority": str(gov_meta.get("priority") or "default"), "detail": gov_meta}}
-                return AgentResult(ok=False, output=fallback, usage=None, meta=meta)
+                inc_counter(
+                    "rm_llm_circuit_break_total",
+                    labels={"agent": self._name, "model": model_label, "priority": str(gov_meta.get("priority") or "default")},
+                )
+                raise OpenRouterError(code="GOVERNANCE_BLOCKED", message=str(gov_meta))
 
             client = self._client or OpenRouterClient()
             resp = await client.chat_completions(
@@ -116,28 +113,21 @@ class BaseAgent:
                         inc_counter("rm_llm_tokens_total", labels={"agent": self._name, "model": model_label, "type": metric}, value=v)
                         inc_counter("rm_llm_tokens_by_user_total", labels={"agent": self._name, "model": model_label, "type": metric, "user": user_id, "priority": str(gov_meta.get("priority") or priority)}, value=v)
             text = extract_first_text(resp).strip()
-            data = json.loads(text)
-            if isinstance(data, dict):
-                return AgentResult(ok=True, output=data, usage=usage if isinstance(usage, dict) else None, meta=meta)
-            return AgentResult(ok=False, output=fallback, usage=usage if isinstance(usage, dict) else None, meta=meta)
+            try:
+                data = json.loads(text)
+            except Exception as e:
+                raise OpenRouterError(code="BAD_LLM_OUTPUT", message="response is not valid JSON", cause=e) from e
+            if not isinstance(data, dict):
+                raise OpenRouterError(code="BAD_LLM_OUTPUT", message="response JSON is not an object")
+            return AgentResult(ok=True, output=data, usage=usage if isinstance(usage, dict) else None, meta=meta)
         except OpenRouterError as e:
             latency_ms = (time.monotonic() - started) * 1000.0
             observe_ms("rm_llm_call", float(latency_ms), labels={"agent": self._name, "model": model_label})
             inc_counter("rm_llm_errors_total", labels={"agent": self._name, "model": model_label, "code": e.code})
             logger.warning(f"Agent {self._name} OpenRouter error: {e}")
-            return AgentResult(
-                ok=False,
-                output=fallback,
-                usage=None,
-                meta={"agent": self._name, "model": model_label, "temperature": float(temperature), "max_tokens": int(max_tokens) if isinstance(max_tokens, int) else None, "prompt_version": self._prompt_version, "policy_version": self._policy_version},
-            )
+            raise
         except Exception:
             latency_ms = (time.monotonic() - started) * 1000.0
             observe_ms("rm_llm_call", float(latency_ms), labels={"agent": self._name, "model": model_label})
             inc_counter("rm_llm_errors_total", labels={"agent": self._name, "model": model_label, "code": "UNKNOWN"})
-            return AgentResult(
-                ok=False,
-                output=fallback,
-                usage=None,
-                meta={"agent": self._name, "model": model_label, "temperature": float(temperature), "max_tokens": int(max_tokens) if isinstance(max_tokens, int) else None, "prompt_version": self._prompt_version, "policy_version": self._policy_version},
-            )
+            raise
