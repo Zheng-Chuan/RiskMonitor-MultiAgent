@@ -8,11 +8,13 @@ from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _SRC_ROOT = _PROJECT_ROOT / "src"
-if str(_SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SRC_ROOT))
+# 评估流水线在仓库根 eval/，业务在 src/；两者解耦
+for p in (_PROJECT_ROOT, _SRC_ROOT):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
-from riskmonitor_multiagent.eval.case_schema import load_benchmark_cases
-from riskmonitor_multiagent.eval.runner import run_benchmark
+from eval.case_schema import load_benchmark_cases
+from eval.runner import run_benchmark
 
 
 def main() -> int:
@@ -27,7 +29,7 @@ def main() -> int:
     parser.add_argument("--repeats", type=int, default=1)
     args = parser.parse_args()
 
-    cases = load_benchmark_cases(args.bench)
+    cases = load_benchmark_cases(str(_PROJECT_ROOT / args.bench) if not Path(args.bench).is_absolute() else args.bench)
     config = {
         "model": args.model,
         "policy_version": args.policy_version,

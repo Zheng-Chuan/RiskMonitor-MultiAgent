@@ -41,4 +41,3 @@ def load_benchmark_cases(path: str) -> list[BenchmarkCase]:
     if not cases:
         raise ValueError("empty_benchmark_cases")
     return cases
-

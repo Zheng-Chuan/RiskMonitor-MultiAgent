@@ -3,10 +3,11 @@ from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _SRC_ROOT = _PROJECT_ROOT / "src"
-if str(_SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SRC_ROOT))
+for p in (_PROJECT_ROOT, _SRC_ROOT):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
-from riskmonitor_multiagent.eval.metrics import summarize_benchmark_records
+from eval.metrics import summarize_benchmark_records
 
 
 def test_summarize_benchmark_records_aggregates_core_metrics():

@@ -3,10 +3,11 @@ from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _SRC_ROOT = _PROJECT_ROOT / "src"
-if str(_SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SRC_ROOT))
+for p in (_PROJECT_ROOT, _SRC_ROOT):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
-from riskmonitor_multiagent.eval.gate import evaluate_quality_gate
+from eval.gate import evaluate_quality_gate
 
 
 def test_quality_gate_passes_when_metrics_meet_thresholds():
@@ -19,6 +20,10 @@ def test_quality_gate_passes_when_metrics_meet_thresholds():
             "latency_ms_p95": 1000.0,
             "tokens_total": 1000,
             "stability_ok_rate": 1.0,
+            # 协作/过程指标 (Collaboration & Process Metrics)
+            "ids_avg": 0.5,  # > min_ids_avg (0.3)
+            "upr_avg": 0.3,  # < max_upr_avg (0.5)
+            "milestone_achieved_rate_avg": 0.8,  # > min_milestone (0.75)
         }
     }
     out = evaluate_quality_gate(summary)

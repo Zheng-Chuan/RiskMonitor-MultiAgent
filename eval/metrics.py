@@ -38,6 +38,10 @@ def summarize_benchmark_records(records: list[dict[str, Any]]) -> dict[str, Any]
                 "governance_blocked_avg": 0.0,
                 "degraded_avg": 0.0,
                 "stability_ok_rate": 0.0,
+                # 协作/过程指标 (Collaboration & Process Metrics)
+                "ids_avg": 0.0,  # Information Diversity Score (越高越好)
+                "upr_avg": 1.0,  # Unnecessary Path Ratio (越低越好)
+                "milestone_achieved_rate_avg": 0.0,  # 里程碑达成率 (越高越好)
             },
         }
 
@@ -53,6 +57,13 @@ def summarize_benchmark_records(records: list[dict[str, Any]]) -> dict[str, Any]
     approvals = [1.0 if bool(r.get("approval_required")) else 0.0 for r in records]
     governance_blocked = [_safe_float(r.get("governance_blocked_count"), 0.0) for r in records]
     degraded = [_safe_float(r.get("degraded_count"), 0.0) for r in records]
+
+    # 协作/过程指标: IDS (越高越好，期望步骤间多样性)
+    ids_scores = [_safe_float(x.get("ids_score"), 0.0) for x in q]
+    # 协作/过程指标: UPR (越低越好，期望路径精简)
+    uprs = [_safe_float(x.get("upr"), 1.0) for x in q]
+    # 协作/过程指标: Milestone (越高越好，期望里程碑达成)
+    milestones = [_safe_float(x.get("milestone_achieved_rate"), 0.0) for x in q]
 
     case_ok: dict[str, list[bool]] = {}
     for r in records:
@@ -84,5 +95,9 @@ def summarize_benchmark_records(records: list[dict[str, Any]]) -> dict[str, Any]
             "governance_blocked_avg": round(float(sum(governance_blocked) / total), 6),
             "degraded_avg": round(float(sum(degraded) / total), 6),
             "stability_ok_rate": round(stability_ok_rate, 6),
+            # 协作/过程指标 (Collaboration & Process Metrics)
+            "ids_avg": round(float(sum(ids_scores) / total), 6),
+            "upr_avg": round(float(sum(uprs) / total), 6),
+            "milestone_achieved_rate_avg": round(float(sum(milestones) / total), 6),
         },
     }

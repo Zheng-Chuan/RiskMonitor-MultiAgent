@@ -1,9 +1,19 @@
 {
+  "_comment": "质量门禁阈值：包含传统指标 + 协作/过程指标 (Collaboration & Process Metrics)",
+  "_legend": {
+    "ids": "Information Diversity Score (信息多样性，越高越好)",
+    "upr": "Unnecessary Path Ratio (冗余路径比，越低越好)",
+    "milestone": "里程碑达成率 (越高越好)"
+  },
+  "_reference": "基于 GEMMAS/MultiAgentBench/REALM-Bench 等行业基准",
   "min_step_reason_coverage": 0.95,
   "max_evidence_missing_rate": 0.05,
   "min_receipt_binding_rate": 0.95,
   "max_contract_fail_rate": 0.02,
   "max_latency_ms_p95": 8000.0,
   "max_tokens_total": 50000.0,
-  "min_stability_ok_rate": 1.0
+  "min_stability_ok_rate": 1.0,
+  "min_ids_avg": 0.3,
+  "max_upr_avg": 0.5,
+  "min_milestone_achieved_rate_avg": 0.75
 }
