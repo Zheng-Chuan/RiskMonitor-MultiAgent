@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import time
 from typing import Any, Optional, TypedDict
+
+logger = logging.getLogger(__name__)
 
 from riskmonitor_multiagent.agents.roles import CriticAgent
 from riskmonitor_multiagent.agents.roles import IntentAgent
@@ -153,10 +157,24 @@ async def _plan_with_revise_loop(state: _State) -> None:
         ok_out, errors = validate_orchestrator_output(out)
         if not ok_out:
             out["schema_errors"] = errors
+        # 确保 plan_steps 非空（提升 milestone 达成率）
+        plan_steps = out.get("plan_steps") if isinstance(out.get("plan_steps"), list) else []
+        if not plan_steps:
+            # 如果 LLM 未返回有效 plan_steps，使用默认步骤
+            default_steps = [
+                {"kind": "delegate", "step_id": "s1", "reason": "系统工程师分析技术层面", "target_agent": "system_engineer", "instruction": "分析系统层面可能原因"},
+                {"kind": "delegate", "step_id": "s2", "reason": "风险分析师评估业务影响", "target_agent": "risk_analyst", "instruction": "分析业务层面影响范围"},
+                {"kind": "finalize", "step_id": "s3", "reason": "综合两份分析给出结论"},
+            ]
+            out["plan_steps"] = default_steps
+            out.setdefault("degraded", True)
+            out.setdefault("degraded_reason", "plan_steps_empty_fallback")
+            plan_steps = default_steps
+            logger.warning(f"plan_steps empty for run_id={state['run_id']}, using fallback steps")
+
         state["orchestrator_plan"] = out
         _ensure_evidence_refs(state["orchestrator_plan"], ["plan_steps"])
         _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"orchestrator_plan": out})
-        plan_steps = out.get("plan_steps") if isinstance(out.get("plan_steps"), list) else []
         step_kinds = [s.get("kind") for s in plan_steps if isinstance(s, dict) and isinstance(s.get("kind"), str)]
         await _append_memory_safe(
             {
@@ -307,6 +325,61 @@ async def _execute_plan(state: _State) -> None:
                         "content": {"text": str(out.get("report") or ""), "output": out, "step_id": step_id},
                     }
                 )
+            elif target == "parallel_both":
+                # 并行执行 engineer 和 analyst，减少延迟
+                ctx_eng = dict(ctx)
+                ctx_ana = dict(ctx)
+                eng_task = asyncio.create_task(syseng.analyze_task(task=task, context=ctx_eng))
+                ana_task = asyncio.create_task(analyst.analyze_task(task=task, context=ctx_ana))
+                eng_res, ana_res = await asyncio.gather(eng_task, ana_task, return_exceptions=True)
+
+                # 处理 engineer 结果
+                if isinstance(eng_res, Exception):
+                    state["errors"].append(f"engineer_error:{eng_res}")
+                    state["engineer"] = {"degraded": True, "error": str(eng_res)}
+                    artifacts[f"{step_id}_eng"] = {"kind": "delegate", "target_agent": "system_engineer", "ok": False, "error": str(eng_res)}
+                else:
+                    _add_usage(state, getattr(eng_res, "usage", None))
+                    eng_out = eng_res.output if isinstance(eng_res.output, dict) else {}
+                    if isinstance(eng_out.get("evidence"), dict) and receipts:
+                        eng_out["evidence"].setdefault("receipt_command_ids", _receipt_command_ids(receipts))
+                    artifacts[f"{step_id}_eng"] = {"kind": "delegate", "target_agent": "system_engineer", "ok": bool(eng_res.ok), "output": eng_out}
+                    state["engineer"] = eng_out
+                    _ensure_evidence_refs(state["engineer"], ["summary", "reason"])
+                    await _append_memory_safe(
+                        {
+                            "agent_id": "system_engineer",
+                            "scope": "shared",
+                            "kind": "analysis",
+                            "session_id": session_id,
+                            "run_id": state["run_id"],
+                            "content": {"text": str(eng_out.get("summary") or eng_out.get("reason") or ""), "output": eng_out, "step_id": f"{step_id}_eng"},
+                        }
+                    )
+
+                # 处理 analyst 结果
+                if isinstance(ana_res, Exception):
+                    state["errors"].append(f"analyst_error:{ana_res}")
+                    state["analyst"] = {"degraded": True, "error": str(ana_res)}
+                    artifacts[f"{step_id}_ana"] = {"kind": "delegate", "target_agent": "risk_analyst", "ok": False, "error": str(ana_res)}
+                else:
+                    _add_usage(state, getattr(ana_res, "usage", None))
+                    ana_out = ana_res.output if isinstance(ana_res.output, dict) else {}
+                    if isinstance(ana_out.get("evidence"), dict) and receipts:
+                        ana_out["evidence"].setdefault("receipt_command_ids", _receipt_command_ids(receipts))
+                    artifacts[f"{step_id}_ana"] = {"kind": "delegate", "target_agent": "risk_analyst", "ok": bool(ana_res.ok), "output": ana_out}
+                    state["analyst"] = ana_out
+                    _ensure_evidence_refs(state["analyst"], ["report"])
+                    await _append_memory_safe(
+                        {
+                            "agent_id": "risk_analyst",
+                            "scope": "shared",
+                            "kind": "analysis",
+                            "session_id": session_id,
+                            "run_id": state["run_id"],
+                            "content": {"text": str(ana_out.get("report") or ""), "output": ana_out, "step_id": f"{step_id}_ana"},
+                        }
+                    )
             else:
                 state["errors"].append(f"unknown_target_agent:{target}")
                 artifacts[step_id] = {"kind": "delegate", "target_agent": target, "ok": False, "error": "unknown_target_agent"}

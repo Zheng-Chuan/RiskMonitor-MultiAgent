@@ -164,6 +164,20 @@ def get_llm_app_title() -> str:
     return (value or "").strip()
 
 
+def get_llm_resolve_ip() -> str:
+    """
+    获取 LLM API 的固定 IP 地址（可选）.
+
+    用于绕过 DNS 解析问题（如 Cloudflare 某些节点故障时）.
+    格式: IP 地址，例如 "104.26.9.9"
+    """
+    value = os.getenv("LLM_RESOLVE_IP")
+    if value is None:
+        _try_load_repo_dotenv()
+        value = os.getenv("LLM_RESOLVE_IP")
+    return (value or "").strip()
+
+
 def get_knowledge_db_path() -> str:
     """获取知识库 SQLite 文件路径, 默认为 repo_root/data/knowledge.sqlite."""
     value = os.getenv("KNOWLEDGE_DB_PATH")

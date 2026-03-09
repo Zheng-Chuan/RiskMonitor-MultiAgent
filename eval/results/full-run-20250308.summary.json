@@ -1,0 +1,31 @@
+{
+  "total_cases": 30,
+  "unique_cases": 30,
+  "pass_rate": 0.766667,
+  "aggregates": {
+    "latency_ms_avg": 65438.773515,
+    "latency_ms_p95": 153588.707959,
+    "step_reason_coverage": 0.766667,
+    "evidence_missing_rate": 0.233333,
+    "receipt_binding_rate": 0.75,
+    "contract_fail_rate": 0.267619,
+    "explainability_score": 0.753929,
+    "tokens_total": 238326,
+    "approval_required_rate": 0.766667,
+    "governance_blocked_avg": 0.0,
+    "degraded_avg": 0.466667,
+    "stability_ok_rate": 1.0,
+    "ids_avg": 0.054545,
+    "upr_avg": 0.077778,
+    "milestone_achieved_rate_avg": 0.383333
+  },
+  "run_tag": "full-run-20250308",
+  "duration_ms": 2532304.584917,
+  "config": {
+    "policy_version": "policy.v1",
+    "prompt_version": "orchestrator_prompt.v1",
+    "model": "qwen3-8b",
+    "hitl_auto_approve": true,
+    "budget_profile": null
+  }
+}

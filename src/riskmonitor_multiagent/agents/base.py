@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 import asyncio
 from dataclasses import dataclass
@@ -16,6 +17,39 @@ from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
 from riskmonitor_multiagent.governance.llm_cost_governance import get_llm_cost_governor
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_llm_output(text: str) -> str:
+    """清理 LLM 输出，提取有效 JSON 内容.
+
+    处理常见问题:
+    - 去除 markdown 代码块标记 (```json ... ```)
+    - 去除前后的非 JSON 文本
+    - 提取第一个 { 到最后一个 } 之间的内容
+    """
+    text = text.strip()
+
+    # 移除 markdown 代码块
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+
+    # 尝试提取 JSON 对象
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        # 检查是否有嵌套结构，尝试匹配最外层
+        text = text[start:end + 1]
+
+    # 移除常见的 LLM 前缀/后缀文本
+    text = re.sub(r'^[^{]*', '', text)
+    text = re.sub(r'[^}]*$', '', text)
+
+    return text.strip()
 
 
 @dataclass(frozen=True)
@@ -118,11 +152,12 @@ class BaseAgent:
                             if isinstance(v, int) and v > 0:
                                 inc_counter("rm_llm_tokens_total", labels={"agent": self._name, "model": model_label, "type": metric}, value=v)
                                 inc_counter("rm_llm_tokens_by_user_total", labels={"agent": self._name, "model": model_label, "type": metric, "user": user_id, "priority": str(gov_meta.get("priority") or priority)}, value=v)
-                    text = extract_first_text(resp).strip()
+                    raw_text = extract_first_text(resp).strip()
+                    text = _clean_llm_output(raw_text)
                     try:
                         data = json.loads(text)
                     except Exception as e:
-                        raise LLMError(code="BAD_LLM_OUTPUT", message="response is not valid JSON", cause=e) from e
+                        raise LLMError(code="BAD_LLM_OUTPUT", message=f"response is not valid JSON: raw={raw_text[:200]}", cause=e) from e
                     if not isinstance(data, dict):
                         raise LLMError(code="BAD_LLM_OUTPUT", message="response JSON is not an object")
                     return AgentResult(ok=True, output=data, usage=usage if isinstance(usage, dict) else None, meta=meta)

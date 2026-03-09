@@ -4,6 +4,32 @@ from typing import Any
 
 from riskmonitor_multiagent.agents.base import AgentResult
 from riskmonitor_multiagent.agents.base import BaseAgent
+
+
+def _truncate_context(context: dict[str, Any] | None, max_chars: int = 1500) -> dict[str, Any] | None:
+    """截断 context 以减少 token 消耗.
+
+    Args:
+        context: 原始 context 字典
+        max_chars: 最大字符数限制
+
+    Returns:
+        截断后的 context 字典
+    """
+    if context is None:
+        return None
+    ctx_str = str(context)
+    if len(ctx_str) <= max_chars:
+        return context
+    # 截断策略：保留关键字段，截断长文本
+    truncated = dict(context)
+    for key in ["artifacts", "receipts", "plan"]:
+        if key in truncated:
+            val_str = str(truncated[key])
+            if len(val_str) > max_chars // 3:
+                # 保留前 N 个字符，添加省略标记
+                truncated[key] = val_str[:max_chars // 3] + "...[truncated]"
+    return truncated
 from riskmonitor_multiagent.contracts.agent_outputs import (
     RISK_ANALYST_OUTPUT_SCHEMA_VERSION,
     SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
@@ -72,17 +98,18 @@ class SystemEngineerAgent:
             "findings": {"source": source, "content": content[:200]},
             "recommendations": ["如需要更深入排查 请补充系统指标 日志 与时间范围"],
         }
+        ctx_truncated = _truncate_context(context, max_chars=1200)
         result = await self._agent.ask_json(
             user_prompt=(
                 "Input task:\n"
                 f"{task}\n\n"
                 "Context:\n"
-                f"{context}\n\n"
+                f"{ctx_truncated}\n\n"
                 "Act as a system engineer. Identify infra symptoms, likely causes, and safe next steps.\n"
                 "Use only evidence from task and context.\n"
             ),
             fallback=fallback,
-            max_tokens=max_tokens,
+            max_tokens=512,
         )
         out = normalize_system_engineer_output(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_system_engineer_output(out)
@@ -124,17 +151,18 @@ class RiskAnalystAgent:
             "confidence": 0.3,
             "evidence": {"fields": ["task.source", "task.payload.content"]},
         }
+        ctx_truncated = _truncate_context(context, max_chars=1200)
         result = await self._agent.ask_json(
             user_prompt=(
                 "Input task:\n"
                 f"{task}\n\n"
                 "Context:\n"
-                f"{context}\n\n"
+                f"{ctx_truncated}\n\n"
                 "Act as a risk analyst. Summarize business impact, key facts, and safe recommendations.\n"
                 "Use only evidence from task and context.\n"
             ),
             fallback=fallback,
-            max_tokens=max_tokens,
+            max_tokens=512,
         )
         out = normalize_risk_analyst_output(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_risk_analyst_output(out)
@@ -188,16 +216,17 @@ class IntentAgent:
             "degraded_reason": "llm_skipped",
             "degraded_scope": ["intent"],
         }
+        meta_truncated = _truncate_context(metadata, max_chars=800)
         result = await self._agent.ask_json(
             user_prompt=(
                 "Input task:\n"
                 f"{task}\n\n"
                 "Metadata:\n"
-                f"{metadata}\n\n"
+                f"{meta_truncated}\n\n"
                 "Extract primary_intent_type and a list of intents with slots and confidence.\n"
             ),
             fallback=fallback,
-            max_tokens=max_tokens,
+            max_tokens=320,  # Intent 任务较简单，减少 token
         )
         out = normalize_intent_output(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_intent_output(out)
@@ -265,19 +294,20 @@ class OrchestratorAgent:
             "degraded_reason": "llm_skipped",
             "degraded_scope": ["orchestrator"],
         }
+        ctx_truncated = _truncate_context(context, max_chars=1500)
         result = await self._agent.ask_json(
             user_prompt=(
                 "Input task:\n"
                 f"{task}\n\n"
                 "Context:\n"
-                f"{context}\n\n"
+                f"{ctx_truncated}\n\n"
                 f"Source={source}\n"
                 f"Content={content}\n\n"
                 "Produce intent, a plan, and if needed propose commands for other agents or tools.\n"
             ),
             fallback=fallback,
             governance={"user_id": user_id, "priority": priority},
-            max_tokens=max_tokens,
+            max_tokens=1024,  # Plan 阶段需要足够 tokens 输出完整 plan_steps
         )
         out = normalize_orchestrator_output(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_orchestrator_output(out)
@@ -335,24 +365,30 @@ class CriticAgent:
             "evidence": {"fields": ["task", "orchestrator"]},
             "run_summary": {"text": "critic 未生成 run_summary", "key_points": [], "receipt_command_ids": []},
         }
+        # Critic 输入较多，截断各组件
+        orch_truncated = _truncate_context(orchestrator, max_chars=800)
+        eng_truncated = _truncate_context(engineer, max_chars=600) if engineer else None
+        ana_truncated = _truncate_context(analyst, max_chars=600) if analyst else None
+        receipts_truncated = receipts[:5] if receipts else []  # 只取前 5 个 receipts
+
         result = await self._agent.ask_json(
             user_prompt=(
                 "Input task:\n"
                 f"{task}\n\n"
                 "Orchestrator output:\n"
-                f"{orchestrator}\n\n"
+                f"{orch_truncated}\n\n"
                 "System engineer output:\n"
-                f"{engineer}\n\n"
+                f"{eng_truncated}\n\n"
                 "Risk analyst output:\n"
-                f"{analyst}\n\n"
+                f"{ana_truncated}\n\n"
                 "Receipts:\n"
-                f"{receipts}\n\n"
+                f"{receipts_truncated}\n\n"
                 "Review risks: hallucination, missing evidence, unsafe side effects, overconfidence, data privacy.\n"
                 "Decide if human approval is required.\n"
             ),
             fallback=fallback,
             governance={"user_id": user_id, "priority": "default"},
-            max_tokens=max_tokens,
+            max_tokens=768,  # Critic 需要足够 tokens 输出完整 review
         )
         out = normalize_critic_review(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_critic_review(out)
