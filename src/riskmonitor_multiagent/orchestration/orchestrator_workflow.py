@@ -25,8 +25,7 @@ from riskmonitor_multiagent.contracts.agent_outputs import (
 )
 from riskmonitor_multiagent.contracts.intent_output import normalize_intent_output, validate_intent_output
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
-from riskmonitor_multiagent.orchestration.context_store import FileContextStore, new_run_id
-from riskmonitor_multiagent.memory.unified_memory import UnifiedMemory
+from riskmonitor_multiagent.memory import MemoryStore, get_memory_store, new_run_id
 from riskmonitor_multiagent.governance.versions import PROMPT_VERSION_INTENT, get_policy_version
 from riskmonitor_multiagent.orchestration.intent_heuristics import build_intent_metadata
 from riskmonitor_multiagent.orchestration.tool_executor import execute_agent_command, new_agent_command
@@ -98,8 +97,6 @@ class OrchestratorState(TypedDict):
     ]  # 下一个节点
 
 
-def _ctx_store() -> FileContextStore:
-    return FileContextStore(base_dir=os.getenv("CONTEXT_STORE_DIR"))
 
 
 def _event_id(task: dict[str, Any]) -> str:
@@ -129,23 +126,6 @@ def _is_auto_approved() -> bool:
     return os.getenv("HITL_AUTO_APPROVE", "1").strip() not in {"0", "false", "False"}
 
 
-_MEMORY = None
-_MEMORY_SIG = None
-
-
-def _memory() -> UnifiedMemory:
-    global _MEMORY, _MEMORY_SIG
-    sig = (
-        os.getenv("WORKING_MEMORY_BACKEND", "").strip(),
-        os.getenv("REDIS_URL", "").strip(),
-        os.getenv("LONG_TERM_MEMORY_DB_URL", "").strip(),
-        os.getenv("MEMORY_SQLITE_PATH", "").strip(),
-        os.getenv("CHROMA_PERSIST_DIR", "").strip(),
-    )
-    if _MEMORY is None or _MEMORY_SIG != sig:
-        _MEMORY = UnifiedMemory()
-        _MEMORY_SIG = sig
-    return _MEMORY
 
 
 def _max_plan_revisions() -> int:
@@ -164,10 +144,16 @@ def _max_exec_rounds() -> int:
         return 1
 
 
+async def _memory_store() -> MemoryStore:
+    """获取 MemoryStore 实例."""
+    return get_memory_store()
+
+
 async def _append_memory_safe(entry: dict[str, Any]) -> None:
+    """安全地添加记忆条目."""
     try:
-        mem = _memory()
-        await mem.append(entry)
+        mem = await _memory_store()
+        await mem.append(entry, scope=entry.get("scope", "shared"))
     except Exception:
         return
 
@@ -220,8 +206,8 @@ async def intent_node(state: OrchestratorState) -> Command:
     state["intent"] = intent_out
     _ensure_evidence_refs(state["intent"], ["primary_intent_type", "risk_level"])
 
-    store = _ctx_store()
-    store.upsert(run_id=run_id, event_id=_event_id(task), patch={"intent": intent_out})
+    mem = await _memory_store()
+    await mem.update_run_context(run_id, {"intent": intent_out})
 
     await _append_memory_safe({
         "agent_id": "intent",
@@ -295,7 +281,8 @@ async def plan_node(state: OrchestratorState) -> Command:
 
     state["orchestrator_plan"] = out
     _ensure_evidence_refs(state["orchestrator_plan"], ["plan_steps"])
-    _ctx_store().upsert(run_id=run_id, event_id=_event_id(task), patch={"orchestrator_plan": out})
+    mem = await _memory_store()
+    await mem.update_run_context(run_id, {"orchestrator_plan": out})
 
     step_kinds = [s.get("kind") for s in plan_steps if isinstance(s, dict) and isinstance(s.get("kind"), str)]
     await _append_memory_safe({
@@ -318,13 +305,15 @@ async def plan_node(state: OrchestratorState) -> Command:
         critic["schema_errors"] = errors_review
     state["critic_plan"] = critic
     _ensure_evidence_refs(state["critic_plan"], ["ok", "risk_level"])
-    _ctx_store().upsert(run_id=run_id, event_id=_event_id(task), patch={"critic_plan": critic})
+    mem = await _memory_store()
+    await mem.update_run_context(run_id, {"critic_plan": critic})
 
     require = bool(critic.get("require_human_approval") is True)
     approved = True if not require else _is_auto_approved()
     approval = {"required": require, "approved": bool(approved), "reason": "critic_required" if require else None}
     state["approval"] = approval
-    _ctx_store().upsert(run_id=run_id, event_id=_event_id(task), patch={"approval": approval})
+    mem = await _memory_store()
+    await mem.update_run_context(run_id, {"approval": approval})
 
     await _append_memory_safe({
         "agent_id": "critic",
@@ -395,11 +384,11 @@ async def execute_node(state: OrchestratorState) -> Command:
         state["receipts"] = receipts
         state["artifacts"] = artifacts
         state["pending_questions"] = pending_questions
-        _ctx_store().upsert(
-            run_id=run_id,
-            event_id=_event_id(task),
-            patch={"receipts": receipts, "artifacts": artifacts, "approval": state.get("approval"), "pending_questions": pending_questions},
-        )
+        mem = await _memory_store()
+        await mem.update_run_context(run_id, {
+            "receipts": receipts, "artifacts": artifacts,
+            "approval": state.get("approval"), "pending_questions": pending_questions,
+        })
         return Command(update=state, goto="finalize_node")
 
     # 执行 plan_steps
@@ -569,11 +558,12 @@ async def execute_node(state: OrchestratorState) -> Command:
     state["errors"] = errors
     state["exec_round"] = exec_round + 1
 
-    _ctx_store().upsert(
-        run_id=run_id,
-        event_id=_event_id(task),
-        patch={"engineer": state.get("engineer"), "analyst": state.get("analyst"), "artifacts": artifacts, "receipts": receipts, "approval": state.get("approval"), "pending_questions": pending_questions},
-    )
+    mem = await _memory_store()
+    await mem.update_run_context(run_id, {
+        "engineer": state.get("engineer"), "analyst": state.get("analyst"),
+        "artifacts": artifacts, "receipts": receipts,
+        "approval": state.get("approval"), "pending_questions": pending_questions,
+    })
 
     # 检查是否需要人工审批或已达到最大执行轮次
     if state.get("approval", {}).get("required") and not state.get("approval", {}).get("approved"):
@@ -623,7 +613,8 @@ async def finalize_node(state: OrchestratorState) -> Command:
         out["schema_errors"] = errors
     state["orchestrator_final"] = out
     _ensure_evidence_refs(state["orchestrator_final"], ["summary", "evidence"])
-    _ctx_store().upsert(run_id=run_id, event_id=_event_id(task), patch={"orchestrator_final": out})
+    mem = await _memory_store()
+    await mem.update_run_context(run_id, {"orchestrator_final": out})
     await _append_memory_safe({
         "agent_id": "orchestrator",
         "scope": "shared",
@@ -650,12 +641,13 @@ async def finalize_node(state: OrchestratorState) -> Command:
         c["schema_errors"] = errs
     state["critic_final"] = c
     _ensure_evidence_refs(state["critic_final"], ["ok", "run_summary"])
-    _ctx_store().upsert(run_id=run_id, event_id=_event_id(task), patch={"critic_final": c})
+    mem = await _memory_store()
+    await mem.update_run_context(run_id, {"critic_final": c})
     observe_ms("rm_pipeline_node", (time.monotonic() - started) * 1000.0, labels={"node": "critic_final"})
 
     # 保存 run_summary
     try:
-        mem = _memory()
+        mem = await _memory_store()
         summary = c.get("run_summary") if isinstance(c.get("run_summary"), dict) else {"text": c.get("summary") or ""}
         if not isinstance(summary, dict):
             summary = {}
@@ -852,7 +844,6 @@ def _build_final_output(state: OrchestratorState) -> dict[str, Any]:
         "errors": state.get("errors") or [],
         "tokens_total": state.get("tokens_accumulated", 0),
     }
-    _ctx_store().upsert(run_id=state["run_id"], event_id=_event_id(task), patch={"final_output": final_output})
     return final_output
 
 
@@ -921,9 +912,9 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
             "next_node": "intent_node",
         }
 
-        store = _ctx_store()
         event_id = _event_id(t)
-        store.upsert(run_id=run_id, event_id=event_id, patch={"task_snapshot": t})
+        mem = await _memory_store()
+        await mem.save_run_context(run_id, event_id, {"task_snapshot": t})
         session_id = str(t.get("session_id") or "default")
         payload = t.get("payload") if isinstance(t.get("payload"), dict) else {}
         content = payload.get("content") if isinstance(payload.get("content"), str) else ""
@@ -942,6 +933,14 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
 
         # 构建最终输出
         final_output = _build_final_output(final_state)
+        
+        # 保存到 MemoryStore
+        try:
+            mem = await _memory_store()
+            await mem.update_run_context(run_id, {"final_output": final_output})
+        except Exception:
+            pass  # 保存失败不影响返回结果
+        
         latency_ms = (time.monotonic() - start) * 1000.0
         observe_ms("rm_pipeline_total", float(latency_ms), labels={"workflow": "orchestrator_workflow"})
         return {"ok": True, "latency_ms": float(latency_ms), "result": final_output}

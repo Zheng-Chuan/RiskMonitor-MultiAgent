@@ -102,7 +102,7 @@ async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatc
     monkeypatch.setattr(llm_client.LlmClient, "chat_completions", _fake_chat, raising=True)
 
     from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
-    from riskmonitor_multiagent.memory.unified_memory import UnifiedMemory
+    from riskmonitor_multiagent.memory import get_memory_store
 
     task = {
         "task_id": "task_demo_1",
@@ -136,7 +136,7 @@ async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatc
     if approval.get("required") is True:
         assert approval.get("approved") is True
 
-    mem = UnifiedMemory()
+    mem = get_memory_store()
     recent = await mem.list_recent(
         agent_id="orchestrator",
         scope="shared",
@@ -209,7 +209,7 @@ async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_p
     monkeypatch.setattr(llm_client.LlmClient, "chat_completions", _fake_chat, raising=True)
 
     from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
-    from riskmonitor_multiagent.memory.unified_memory import UnifiedMemory
+    from riskmonitor_multiagent.memory import get_memory_store
 
     task = {
         "task_id": "task_demo_2",
@@ -229,7 +229,7 @@ async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_p
     quality = result.get("quality")
     assert isinstance(quality, dict)
 
-    mem = UnifiedMemory()
+    mem = get_memory_store()
     recent = await mem.list_recent(
         agent_id="orchestrator",
         scope="shared",
@@ -424,7 +424,7 @@ async def test_multi_intent_disambiguation_written_to_shared_memory(tmp_path, mo
     monkeypatch.setenv("MEMORY_SQLITE_PATH", str(tmp_path / "memory.sqlite"))
 
     from riskmonitor_multiagent.agents.base import AgentResult
-    from riskmonitor_multiagent.memory.unified_memory import UnifiedMemory
+    from riskmonitor_multiagent.memory import get_memory_store
     from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
     from riskmonitor_multiagent.llm import llm_client
 
@@ -496,7 +496,7 @@ async def test_multi_intent_disambiguation_written_to_shared_memory(tmp_path, mo
     i2 = ((out2.get("result") or {}).get("intent") or {}).get("intents")
     assert i1 == i2
 
-    mem = UnifiedMemory()
+    mem = get_memory_store()
     recent = await mem.list_recent(agent_id="intent", scope="shared", session_id="s_m", limit=20)
     kinds = [x.get("kind") for x in recent if isinstance(x, dict)]
     assert "intent_disambiguation" in kinds

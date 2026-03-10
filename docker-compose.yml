@@ -4,10 +4,10 @@ services:
     image: mysql:8.0
     container_name: riskmonitor-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
-      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-riskmonitor}
+      MYSQL_USER: ${MYSQL_USER:-admin}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change_me}
       MYSQL_ROOT_HOST: '%'
     ports:
       - "3307:3306"
@@ -24,13 +24,49 @@ services:
       --binlog_row_image=FULL
       --expire_logs_days=7
     healthcheck:
-      test: ["CMD", "sh", "-lc", "mysqladmin ping -h localhost -u \"$${MYSQL_USER}\" -p\"$${MYSQL_PASSWORD}\""]
+      test: ["CMD", "sh", "-lc", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - riskmonitor-network
     restart: unless-stopped
+
+  # Redis - 统一内存存储
+  redis:
+    image: redis:7-alpine
+    container_name: riskmonitor-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - riskmonitor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # PageIndex - 长期语义记忆 (假设服务)
+  # 注意: PageIndex 是一个假设的服务，需要根据实际部署情况配置
+  # 如果 PageIndex 是外部服务，请在 .env 中配置 PAGE_INDEX_URL
+  pageindex:
+    image: pageindex/pageindex:latest
+    container_name: riskmonitor-pageindex
+    environment:
+      PAGE_INDEX_API_KEY: ${PAGE_INDEX_API_KEY:-}
+      PAGE_INDEX_ENABLED: ${PAGE_INDEX_ENABLED:-false}
+    ports:
+      - "8080:8080"
+    volumes:
+      - pageindex_data:/data
+    networks:
+      - riskmonitor-network
+    restart: unless-stopped
+    profiles:
+      - longterm  # 可选启动
 
   # RiskMonitor MultiAgent MCP 服务
   mcp-server:
@@ -39,11 +75,21 @@ services:
       dockerfile: Dockerfile
     container_name: riskmonitor-multiagent
     environment:
+      # MySQL 配置
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
-      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
-      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-riskmonitor}
+      MYSQL_USER: ${MYSQL_USER:-admin}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change_me}
+      # Redis 配置 (统一内存)
+      REDIS_URL: redis://redis:6379/0
+      MEMORY_TTL_S: 86400
+      MEMORY_MAX_LEN: 2000
+      # PageIndex 配置 (可选)
+      PAGE_INDEX_ENABLED: ${PAGE_INDEX_ENABLED:-false}
+      PAGE_INDEX_URL: ${PAGE_INDEX_URL:-http://pageindex:8080}
+      PAGE_INDEX_API_KEY: ${PAGE_INDEX_API_KEY:-}
+      # 应用配置
       APP_ENV: production
       LOG_LEVEL: INFO
       MCP_TRANSPORT: streamable-http
@@ -52,13 +98,13 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
     networks:
       - riskmonitor-network
     restart: unless-stopped
-    stdin_open: true
-    tty: true
 
   # 测试运行器
   test-runner:
@@ -69,35 +115,39 @@ services:
     environment:
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
-      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
-      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-riskmonitor}
+      MYSQL_USER: ${MYSQL_USER:-admin}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change_me}
+      REDIS_URL: redis://redis:6379/0
       APP_ENV: test
       LOG_LEVEL: INFO
+      PAGE_INDEX_ENABLED: "false"
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - .:/app
     networks:
       - riskmonitor-network
     entrypoint: ["bash", "-lc"]
-    command: ["pytest -q"]
+    command: ["pytest tests/unit/ -v"]
     profiles:
       - dev
 
-  # phpMyAdmin(数据库管理界面 可选)
+  # phpMyAdmin (数据库管理界面，可选)
   phpmyadmin:
     image: phpmyadmin:latest
     container_name: riskmonitor-phpmyadmin
     environment:
       PMA_HOST: mysql
       PMA_PORT: 3306
-      PMA_USER: ${MYSQL_USER:?MYSQL_USER is required}
-      PMA_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      PMA_USER: ${MYSQL_USER:-admin}
+      PMA_PASSWORD: ${MYSQL_PASSWORD:-change_me}
       UPLOAD_LIMIT: 300M
     ports:
-      - "8080:80"
+      - "8081:80"
     depends_on:
       - mysql
     networks:
@@ -106,76 +156,12 @@ services:
     profiles:
       - tools
 
-  chroma:
-    image: chromadb/chroma:latest
-    container_name: riskmonitor-chroma
-    environment:
-      IS_PERSISTENT: "true"
-      PERSIST_DIRECTORY: /chroma/chroma
-    ports:
-      - "8001:8000"
-    volumes:
-      - chroma_data:/chroma/chroma
-    networks:
-      - riskmonitor-network
-    restart: unless-stopped
-    profiles:
-      - kb
-
-  redis:
-    image: redis:7-alpine
-    container_name: riskmonitor-redis
-    ports:
-      - "6379:6379"
-    networks:
-      - riskmonitor-network
-    restart: unless-stopped
-    profiles:
-      - memory
-
-  mongo:
-    image: mongo:7
-    container_name: riskmonitor-mongo
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - riskmonitor-network
-    restart: unless-stopped
-    profiles:
-      - memory
-
-  postgres:
-    image: postgres:16
-    container_name: riskmonitor-postgres
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-riskmonitor_memory}
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - riskmonitor-network
-    restart: unless-stopped
-    profiles:
-      - memory
-
 volumes:
   mysql_data:
     driver: local
-  chroma_data:
+  redis_data:
     driver: local
-  pg_data:
-    driver: local
-  mongo_data:
+  pageindex_data:
     driver: local
 
 networks:
