@@ -133,7 +133,12 @@ class LlmClient:
         client = self._http_client
         should_close = False
         if client is None:
-            timeout = aiohttp.ClientTimeout(total=self._timeout_s)
+            # 增加超时：连接5秒，总时间120秒（大模型响应需要更长时间）
+            timeout = aiohttp.ClientTimeout(
+                total=120.0,
+                connect=10.0,
+                sock_read=90.0,
+            )
             client = aiohttp.ClientSession(timeout=timeout)
             should_close = True
 

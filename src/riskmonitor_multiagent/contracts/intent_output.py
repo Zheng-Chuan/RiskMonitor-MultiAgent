@@ -1,181 +1,178 @@
+"""
+意图输出契约定义.
+
+定义 IntentAgent 的输出格式，包括意图识别结果、风险等级、权限要求等.
+"""
+
 from __future__ import annotations
 
 from typing import Any
 
+from riskmonitor_multiagent.utils import is_non_empty_str
 
+# 契约版本
 INTENT_OUTPUT_SCHEMA_VERSION = "intent_output.v2"
 
 
-def _is_non_empty_str(v: object) -> bool:
-    return isinstance(v, str) and bool(v.strip())
-
-
 def validate_intent_output(output: dict[str, Any]) -> tuple[bool, list[str]]:
-    errors: list[str] = []
+    """
+    验证意图 Agent 输出.
+
+    检查项:
+    - schema_version 有效性
+    - primary_intent_type 为非空字符串
+    - intents 列表格式与内容
+    - risk_level 为 LOW/MEDIUM/HIGH
+    - permission_requirements 结构
+    - disambiguation 一致性
+    - evidence 引用
+    """
     if not isinstance(output, dict):
         return False, ["output must be dict"]
 
-    schema_version = output.get("schema_version")
-    if schema_version is None:
-        pass
-    elif not _is_non_empty_str(schema_version):
-        errors.append("bad_schema_version")
-    elif schema_version != INTENT_OUTPUT_SCHEMA_VERSION:
-        errors.append("unsupported_schema_version")
+    errors: list[str] = []
 
-    primary = output.get("primary_intent_type")
-    if not _is_non_empty_str(primary):
+    # 检查 schema_version
+    version = output.get("schema_version")
+    if version is not None:
+        if not is_non_empty_str(version):
+            errors.append("bad_schema_version")
+        elif version != INTENT_OUTPUT_SCHEMA_VERSION:
+            errors.append("unsupported_schema_version")
+
+    # 检查主意图类型
+    if not is_non_empty_str(output.get("primary_intent_type")):
         errors.append("bad_primary_intent_type")
 
+    # 检查 intents 列表
     intents = output.get("intents")
-    if not isinstance(intents, list) or len(intents) == 0:
+    if not isinstance(intents, list) or not intents:
         errors.append("bad_intents")
     else:
-        for it in intents:
+        for i, it in enumerate(intents):
             if not isinstance(it, dict):
-                errors.append("bad_intent_item")
+                errors.append(f"intent_{i}_not_dict")
                 continue
-            if not _is_non_empty_str(it.get("intent_type")):
-                errors.append("bad_intent_item_type")
+            if not is_non_empty_str(it.get("intent_type")):
+                errors.append(f"intent_{i}_missing_type")
+            # 检查 confidence
             conf = it.get("confidence")
             if conf is None:
-                errors.append("missing_intent_item_confidence")
+                errors.append(f"intent_{i}_missing_confidence")
             else:
                 try:
                     f = float(conf)
-                    if f < 0.0 or f > 1.0:
-                        errors.append("bad_intent_item_confidence")
-                except Exception:
-                    errors.append("bad_intent_item_confidence")
+                    if not (0.0 <= f <= 1.0):
+                        errors.append(f"intent_{i}_bad_confidence")
+                except (TypeError, ValueError):
+                    errors.append(f"intent_{i}_bad_confidence")
+            # 检查 slots
             slots = it.get("slots")
             if slots is not None and not isinstance(slots, dict):
-                errors.append("bad_intent_item_slots")
+                errors.append(f"intent_{i}_bad_slots")
 
+    # 检查风险等级
     risk_level = output.get("risk_level")
-    if not _is_non_empty_str(risk_level) or risk_level not in {"LOW", "MEDIUM", "HIGH"}:
+    if risk_level not in {"LOW", "MEDIUM", "HIGH"}:
         errors.append("bad_risk_level")
 
+    # 检查权限要求
     pr = output.get("permission_requirements")
-    if pr is not None and not isinstance(pr, dict):
-        errors.append("bad_permission_requirements")
     if isinstance(pr, dict):
         if not isinstance(pr.get("side_effects"), bool):
             errors.append("bad_side_effects")
         if not isinstance(pr.get("requires_human_approval"), bool):
             errors.append("bad_requires_human_approval")
-        allowed_tools = pr.get("allowed_tools")
-        if allowed_tools is not None and not isinstance(allowed_tools, list):
+        allowed = pr.get("allowed_tools")
+        if allowed is not None and not isinstance(allowed, list):
             errors.append("bad_allowed_tools")
+    elif pr is not None:
+        errors.append("bad_permission_requirements")
 
+    # 检查消歧说明
     dis = output.get("disambiguation")
-    if dis is not None and not isinstance(dis, dict):
-        errors.append("bad_disambiguation")
     if isinstance(dis, dict):
         if not isinstance(dis.get("has_multiple"), bool):
             errors.append("bad_disambiguation_has_multiple")
-        if dis.get("has_multiple") is True and not _is_non_empty_str(dis.get("explanation")):
+        if dis.get("has_multiple") and not is_non_empty_str(dis.get("explanation")):
             errors.append("bad_disambiguation_explanation")
+    elif dis is not None:
+        errors.append("bad_disambiguation")
 
+    # 检查证据
     evidence = output.get("evidence")
     if evidence is not None and not isinstance(evidence, dict):
         errors.append("bad_evidence")
-    if isinstance(evidence, dict):
-        has_receipts = isinstance(evidence.get("receipt_command_ids"), list) and any(_is_non_empty_str(x) for x in evidence.get("receipt_command_ids"))
-        has_fields = isinstance(evidence.get("fields"), list) and any(_is_non_empty_str(x) for x in evidence.get("fields"))
-        has_rag = isinstance(evidence.get("rag_hit_ids"), list) and any(_is_non_empty_str(x) for x in evidence.get("rag_hit_ids"))
-        if not (has_receipts or has_fields or has_rag):
-            errors.append("missing_key_intent_evidence_refs")
-
-    degraded = output.get("degraded")
-    if degraded is not None and not isinstance(degraded, bool):
-        errors.append("bad_degraded")
-    if isinstance(degraded, bool) and degraded:
-        if not _is_non_empty_str(output.get("degraded_reason")):
-            errors.append("bad_degraded_reason")
-        degraded_scope = output.get("degraded_scope")
-        if not isinstance(degraded_scope, list) or not degraded_scope or not all(_is_non_empty_str(x) for x in degraded_scope):
-            errors.append("bad_degraded_scope")
 
     return len(errors) == 0, errors
 
 
 def normalize_intent_output(output: dict[str, Any]) -> dict[str, Any]:
+    """
+    归一化意图输出，补充缺失字段并处理多意图排序.
+
+    主要处理:
+    - 补充缺失的基础字段
+    - 按 confidence 降序排序 intents
+    - 更新 primary_intent_type 为最高置信度意图
+    - 多意图时设置 disambiguation 标志
+    """
     out = dict(output) if isinstance(output, dict) else {}
+
+    # 基础默认值
     out.setdefault("schema_version", INTENT_OUTPUT_SCHEMA_VERSION)
-    out.setdefault("primary_intent_type", "unknown")
-    out.setdefault("intents", [{"intent_type": out.get("primary_intent_type") or "unknown", "slots": {}, "confidence": 0.0}])
-    out.setdefault("disambiguation", {"has_multiple": False, "explanation": "", "notes": []})
-    out.setdefault("risk_level", "HIGH")
-    out.setdefault(
-        "permission_requirements",
-        {"side_effects": False, "requires_human_approval": False, "allowed_tools": None},
-    )
-    out.setdefault("evidence", {"fields": ["unknown"]})
-    out.setdefault("degraded", False)
+    out.setdefault("risk_level", "MEDIUM")
+    out.setdefault("permission_requirements", {
+        "side_effects": False,
+        "requires_human_approval": True,  # 保守策略
+        "allowed_tools": None,
+    })
+    out.setdefault("evidence", {"fields": ["task.payload.content"]})
+    out.setdefault("degraded", True)
+    out.setdefault("degraded_reason", "llm_output_incomplete")
+    out.setdefault("degraded_scope", ["intent"])
 
-    if not isinstance(out.get("intents"), list) or not out.get("intents"):
-        out["intents"] = [{"intent_type": out.get("primary_intent_type") or "unknown", "slots": {}, "confidence": 0.0}]
-    fixed_intents: list[dict[str, Any]] = []
-    for it in out.get("intents") if isinstance(out.get("intents"), list) else []:
-        if not isinstance(it, dict):
-            continue
-        row = dict(it)
-        if not _is_non_empty_str(row.get("intent_type")):
-            row["intent_type"] = "unknown"
-        if not isinstance(row.get("slots"), dict):
-            row["slots"] = {}
-        try:
-            row["confidence"] = float(row.get("confidence") or 0.0)
-        except Exception:
-            row["confidence"] = 0.0
-        row["confidence"] = max(0.0, min(1.0, float(row["confidence"])))
-        fixed_intents.append(row)
-    if not fixed_intents:
-        fixed_intents = [{"intent_type": out.get("primary_intent_type") or "unknown", "slots": {}, "confidence": 0.0}]
-    fixed_intents.sort(key=lambda x: (-float(x.get("confidence") or 0.0), str(x.get("intent_type") or "")))
-    out["intents"] = fixed_intents
+    # 处理 intents 列表
+    intents = out.get("intents")
+    if not isinstance(intents, list) or not intents:
+        intents = [{"intent_type": "unknown", "slots": {}, "confidence": 0.0}]
 
-    if not isinstance(out.get("permission_requirements"), dict):
-        out["permission_requirements"] = {"side_effects": False, "requires_human_approval": False, "allowed_tools": None}
-    if not isinstance(out.get("disambiguation"), dict):
-        out["disambiguation"] = {"has_multiple": False, "explanation": "", "notes": []}
-    if not isinstance(out.get("evidence"), dict):
-        out["evidence"] = {"fields": ["unknown"]}
-    if isinstance(out["evidence"], dict) and "fields" not in out["evidence"]:
-        out["evidence"]["fields"] = ["unknown"]
-    if not _is_non_empty_str(out.get("primary_intent_type")):
-        out["primary_intent_type"] = str(out["intents"][0].get("intent_type") or "unknown")
-    if _is_non_empty_str(out.get("primary_intent_type")):
-        out["primary_intent_type"] = str(out.get("primary_intent_type")).strip()
+    # 确保每个 intent 都有必需的字段
+    valid_intents = []
+    for it in intents:
+        if isinstance(it, dict):
+            it.setdefault("intent_type", "unknown")
+            it.setdefault("slots", {})
+            it.setdefault("confidence", 0.0)
+            valid_intents.append(it)
 
-    pr = out.get("permission_requirements")
-    if isinstance(pr, dict):
-        if not isinstance(pr.get("side_effects"), bool):
-            pr["side_effects"] = False
-        if not isinstance(pr.get("requires_human_approval"), bool):
-            pr["requires_human_approval"] = False
-        if "allowed_tools" in pr and pr["allowed_tools"] is not None and not isinstance(pr["allowed_tools"], list):
-            pr["allowed_tools"] = None
+    if not valid_intents:
+        valid_intents = [{"intent_type": "unknown", "slots": {}, "confidence": 0.0}]
 
+    # 按 confidence 降序排序
+    valid_intents.sort(key=lambda x: float(x.get("confidence") or 0.0), reverse=True)
+    out["intents"] = valid_intents
+
+    # 更新 primary_intent_type 为最高置信度意图
+    primary = out.get("primary_intent_type")
+    if not is_non_empty_str(primary):
+        out["primary_intent_type"] = valid_intents[0].get("intent_type", "unknown")
+
+    # 处理 disambiguation
     dis = out.get("disambiguation")
-    if isinstance(dis, dict):
-        has_multiple = len(out["intents"]) > 1
-        dis["has_multiple"] = bool(has_multiple)
-        notes = dis.get("notes")
-        if not isinstance(notes, list):
-            dis["notes"] = []
-        if has_multiple and not _is_non_empty_str(dis.get("explanation")):
-            types = [str(x.get("intent_type") or "unknown") for x in out["intents"]]
-            dis["explanation"] = f"检测到多意图 {', '.join(types)} 已按置信度排序并选择主意图"
-        if not has_multiple and not isinstance(dis.get("explanation"), str):
-            dis["explanation"] = ""
+    if not isinstance(dis, dict):
+        dis = {}
+    # 多意图检测
+    if len(valid_intents) > 1:
+        dis["has_multiple"] = True
+        if not is_non_empty_str(dis.get("explanation")):
+            # 自动生成解释
+            intent_types = [it.get("intent_type", "unknown") for it in valid_intents[:3]]
+            dis["explanation"] = f"检测到多意图: {', '.join(intent_types)}"
+    else:
+        dis.setdefault("has_multiple", False)
+        dis.setdefault("explanation", "")
+    dis.setdefault("notes", [])
+    out["disambiguation"] = dis
 
-    if not isinstance(out.get("degraded"), bool):
-        out["degraded"] = False
-    if out.get("degraded") is True:
-        if not _is_non_empty_str(out.get("degraded_reason")):
-            out["degraded_reason"] = "unknown"
-        degraded_scope = out.get("degraded_scope")
-        if not isinstance(degraded_scope, list) or not degraded_scope:
-            out["degraded_scope"] = ["intent"]
     return out

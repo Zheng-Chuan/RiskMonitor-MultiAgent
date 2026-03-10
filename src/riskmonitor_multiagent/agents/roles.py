@@ -1,64 +1,52 @@
+"""
+Agent 角色定义.
+
+定义项目中使用的 5 种 Agent 角色:
+- IntentAgent: 意图识别
+- OrchestratorAgent: 编排计划
+- CriticAgent: 计划评审
+- SystemEngineerAgent: 系统工程师分析
+- RiskAnalystAgent: 风险分析师评估
+"""
+
 from __future__ import annotations
 
 from typing import Any
 
-from riskmonitor_multiagent.agents.base import AgentResult
-from riskmonitor_multiagent.agents.base import BaseAgent
-
-
-def _truncate_context(context: dict[str, Any] | None, max_chars: int = 1500) -> dict[str, Any] | None:
-    """截断 context 以减少 token 消耗.
-
-    Args:
-        context: 原始 context 字典
-        max_chars: 最大字符数限制
-
-    Returns:
-        截断后的 context 字典
-    """
-    if context is None:
-        return None
-    ctx_str = str(context)
-    if len(ctx_str) <= max_chars:
-        return context
-    # 截断策略：保留关键字段，截断长文本
-    truncated = dict(context)
-    for key in ["artifacts", "receipts", "plan"]:
-        if key in truncated:
-            val_str = str(truncated[key])
-            if len(val_str) > max_chars // 3:
-                # 保留前 N 个字符，添加省略标记
-                truncated[key] = val_str[:max_chars // 3] + "...[truncated]"
-    return truncated
-from riskmonitor_multiagent.contracts.agent_outputs import (
+from riskmonitor_multiagent.agents.base import AgentResult, BaseAgent
+from riskmonitor_multiagent.contracts import (
+    INTENT_OUTPUT_SCHEMA_VERSION,
     RISK_ANALYST_OUTPUT_SCHEMA_VERSION,
     SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
     normalize_critic_review,
+    normalize_intent_output,
     normalize_orchestrator_output,
     normalize_risk_analyst_output,
     normalize_system_engineer_output,
     validate_critic_review,
+    validate_intent_output,
     validate_orchestrator_output,
     validate_risk_analyst_output,
     validate_system_engineer_output,
 )
-from riskmonitor_multiagent.contracts.intent_output import (
-    INTENT_OUTPUT_SCHEMA_VERSION,
-    normalize_intent_output,
-    validate_intent_output,
-)
 from riskmonitor_multiagent.governance.versions import (
-    PROMPT_VERSION_SYSTEM_ENGINEER,
-    PROMPT_VERSION_RISK_ANALYST,
+    PROMPT_VERSION_CRITIC,
     PROMPT_VERSION_INTENT,
     PROMPT_VERSION_ORCHESTRATOR,
-    PROMPT_VERSION_CRITIC,
+    PROMPT_VERSION_RISK_ANALYST,
+    PROMPT_VERSION_SYSTEM_ENGINEER,
     get_policy_version,
 )
-from riskmonitor_multiagent.orchestration.intent_heuristics import guess_risk_level, guess_side_effects
+from riskmonitor_multiagent.orchestration.intent_heuristics import (
+    guess_risk_level,
+    guess_side_effects,
+)
+from riskmonitor_multiagent.utils import truncate_context
 
 
 class SystemEngineerAgent:
+    """系统工程师 Agent，负责技术层面分析."""
+
     def __init__(self) -> None:
         self._agent = BaseAgent(
             name="system_engineer",
@@ -85,9 +73,11 @@ class SystemEngineerAgent:
         context: dict[str, Any] | None = None,
         max_tokens: int | None = 512,
     ) -> AgentResult:
+        """分析任务的技术层面."""
         payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
         source = task.get("source") if isinstance(task.get("source"), str) else ""
         content = payload.get("content") if isinstance(payload.get("content"), str) else ""
+
         fallback = {
             "schema_version": SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
             "system_issue": False,
@@ -98,7 +88,8 @@ class SystemEngineerAgent:
             "findings": {"source": source, "content": content[:200]},
             "recommendations": ["如需要更深入排查 请补充系统指标 日志 与时间范围"],
         }
-        ctx_truncated = _truncate_context(context, max_chars=1200)
+
+        ctx_truncated = truncate_context(context, max_chars=1200)
         result = await self._agent.ask_json(
             user_prompt=(
                 "Input task:\n"
@@ -111,12 +102,15 @@ class SystemEngineerAgent:
             fallback=fallback,
             max_tokens=512,
         )
+
         out = normalize_system_engineer_output(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_system_engineer_output(out)
         return AgentResult(ok=ok_out, output=out, usage=result.usage, meta=result.meta)
 
 
 class RiskAnalystAgent:
+    """风险分析师 Agent，负责业务层面评估."""
+
     def __init__(self) -> None:
         self._agent = BaseAgent(
             name="risk_analyst",
@@ -141,9 +135,11 @@ class RiskAnalystAgent:
         context: dict[str, Any] | None = None,
         max_tokens: int | None = 512,
     ) -> AgentResult:
+        """分析任务的业务影响."""
         payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
         source = task.get("source") if isinstance(task.get("source"), str) else ""
         content = payload.get("content") if isinstance(payload.get("content"), str) else ""
+
         fallback = {
             "schema_version": RISK_ANALYST_OUTPUT_SCHEMA_VERSION,
             "report": "已完成业务侧初步分析 并给出影响范围与建议下一步",
@@ -151,7 +147,8 @@ class RiskAnalystAgent:
             "confidence": 0.3,
             "evidence": {"fields": ["task.source", "task.payload.content"]},
         }
-        ctx_truncated = _truncate_context(context, max_chars=1200)
+
+        ctx_truncated = truncate_context(context, max_chars=1200)
         result = await self._agent.ask_json(
             user_prompt=(
                 "Input task:\n"
@@ -164,28 +161,34 @@ class RiskAnalystAgent:
             fallback=fallback,
             max_tokens=512,
         )
+
         out = normalize_risk_analyst_output(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_risk_analyst_output(out)
         return AgentResult(ok=ok_out, output=out, usage=result.usage, meta=result.meta)
 
 
 class IntentAgent:
+    """意图识别 Agent，提取任务意图."""
+
     def __init__(self) -> None:
         self._agent = BaseAgent(
             name="intent",
             system_prompt=(
                 "You are an intent extraction agent.\n"
                 "Return only valid JSON.\n"
-                "Keys: schema_version, primary_intent_type, intents, disambiguation, risk_level, permission_requirements, evidence, degraded, degraded_reason, degraded_scope.\n"
+                "Keys: schema_version, primary_intent_type, intents, disambiguation, "
+                "risk_level, permission_requirements, evidence, degraded, degraded_reason, degraded_scope.\n"
                 "schema_version must be intent_output.v2.\n"
                 "primary_intent_type must be a short snake_case string.\n"
                 "intents must be a non-empty list.\n"
                 "Each intents item must include: intent_type, slots, confidence.\n"
                 "risk_level must be one of LOW, MEDIUM, HIGH.\n"
-                "permission_requirements must include: side_effects(boolean), requires_human_approval(boolean), allowed_tools(list or null).\n"
+                "permission_requirements must include: side_effects(boolean), "
+                "requires_human_approval(boolean), allowed_tools(list or null).\n"
                 "disambiguation must include: has_multiple(boolean), explanation(string), notes(list).\n"
                 "evidence must include at least one of: fields, receipt_command_ids, rag_hit_ids.\n"
-                "If there are multiple possible intents, include multiple items in intents and explain the differences in disambiguation.explanation.\n"
+                "If there are multiple possible intents, include multiple items in intents "
+                "and explain the differences in disambiguation.explanation.\n"
                 "Use only evidence from task and provided metadata.\n"
             ),
             prompt_version=PROMPT_VERSION_INTENT,
@@ -199,24 +202,32 @@ class IntentAgent:
         metadata: dict[str, Any] | None = None,
         max_tokens: int | None = 384,
     ) -> AgentResult:
+        """识别任务意图."""
         payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
         content = payload.get("content") if isinstance(payload.get("content"), str) else ""
+
+        # 启发式规则预处理
         side_effects = guess_side_effects(text=content)
         risk_level = guess_risk_level(text=content, side_effects=side_effects)
-        primary_intent_type = "unknown"
+
         fallback = {
             "schema_version": INTENT_OUTPUT_SCHEMA_VERSION,
-            "primary_intent_type": primary_intent_type,
-            "intents": [{"intent_type": primary_intent_type, "slots": {}, "confidence": 0.2}],
+            "primary_intent_type": "unknown",
+            "intents": [{"intent_type": "unknown", "slots": {}, "confidence": 0.2}],
             "disambiguation": {"has_multiple": False, "explanation": "", "notes": []},
             "risk_level": risk_level,
-            "permission_requirements": {"side_effects": side_effects, "requires_human_approval": bool(side_effects), "allowed_tools": None},
+            "permission_requirements": {
+                "side_effects": side_effects,
+                "requires_human_approval": bool(side_effects),
+                "allowed_tools": None,
+            },
             "evidence": {"fields": ["task.payload.content"]},
             "degraded": True,
             "degraded_reason": "llm_skipped",
             "degraded_scope": ["intent"],
         }
-        meta_truncated = _truncate_context(metadata, max_chars=800)
+
+        meta_truncated = truncate_context(metadata, max_chars=800)
         result = await self._agent.ask_json(
             user_prompt=(
                 "Input task:\n"
@@ -228,20 +239,25 @@ class IntentAgent:
             fallback=fallback,
             max_tokens=320,  # Intent 任务较简单，减少 token
         )
+
         out = normalize_intent_output(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_intent_output(out)
         return AgentResult(ok=ok_out, output=out, usage=result.usage, meta=result.meta)
 
 
 class OrchestratorAgent:
+    """编排器 Agent，制定执行计划."""
+
     def __init__(self) -> None:
         self._agent = BaseAgent(
             name="orchestrator",
             system_prompt=(
                 "You are an orchestrator agent.\n"
-                "Your job is to understand human or system intent, produce a multi step plan, and optionally propose tool commands.\n"
+                "Your job is to understand human or system intent, produce a multi step plan, "
+                "and optionally propose tool commands.\n"
                 "Return only valid JSON.\n"
-                "Keys: schema_version, intent, plan_steps, commands, evidence, degraded, degraded_reason, degraded_scope.\n"
+                "Keys: schema_version, intent, plan_steps, commands, evidence, "
+                "degraded, degraded_reason, degraded_scope.\n"
                 "schema_version must be orchestrator_output.v1.\n"
                 "intent must be an object with keys: type, confidence, slots.\n"
                 "plan_steps must be a list of executable step objects.\n"
@@ -253,10 +269,10 @@ class OrchestratorAgent:
                 "If kind is ask_human, keys: question, options.\n"
                 "If kind is finalize, keys: instruction.\n"
                 "commands must be a list or null.\n"
-                "If commands is a list, each item must be an AgentCommand with schema_version=agent_command.v1.\n"
                 "evidence must be an object and must include at least one of: fields, receipt_command_ids, rag_hit_ids.\n"
                 "degraded must be boolean.\n"
-                "If degraded is true, degraded_reason must be a short string and degraded_scope must be a non empty list.\n"
+                "If degraded is true, degraded_reason must be a short string and "
+                "degraded_scope must be a non empty list.\n"
                 "Write Chinese text using only English punctuation.\n"
                 "Never invent tool outputs.\n"
             ),
@@ -271,22 +287,44 @@ class OrchestratorAgent:
         context: dict[str, Any] | None = None,
         max_tokens: int | None = 512,
     ) -> AgentResult:
+        """制定任务执行计划."""
         payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
         content = payload.get("content") if isinstance(payload.get("content"), str) else ""
         source = task.get("source") if isinstance(task.get("source"), str) else ""
         session_id = task.get("session_id")
         user_id = task.get("user_id")
+
         if not isinstance(user_id, str) or not user_id.strip():
             user_id = session_id if isinstance(session_id, str) and session_id.strip() else "unknown"
+
+        # 根据内容判断优先级
         text = content.strip()
         priority = "non_critical" if ("?" in text or "查询" in text or "query" in text.lower()) else "default"
+
         fallback = {
             "schema_version": "orchestrator_output.v1",
             "intent": {"type": "unknown", "confidence": 0.0, "slots": {}},
             "plan_steps": [
-                {"kind": "delegate", "step_id": "s1", "reason": "先确认系统侧是否存在可观测异常", "target_agent": "system_engineer", "instruction": "分析系统层面可能原因并给出证据"},
-                {"kind": "delegate", "step_id": "s2", "reason": "再评估业务影响避免只看技术视角", "target_agent": "risk_analyst", "instruction": "分析业务层面影响范围并给出证据"},
-                {"kind": "finalize", "step_id": "s3", "reason": "综合双视角输出可执行结论", "instruction": "基于两份分析做最终结论与下一步建议"},
+                {
+                    "kind": "delegate",
+                    "step_id": "s1",
+                    "reason": "先确认系统侧是否存在可观测异常",
+                    "target_agent": "system_engineer",
+                    "instruction": "分析系统层面可能原因并给出证据",
+                },
+                {
+                    "kind": "delegate",
+                    "step_id": "s2",
+                    "reason": "再评估业务影响避免只看技术视角",
+                    "target_agent": "risk_analyst",
+                    "instruction": "分析业务层面影响范围并给出证据",
+                },
+                {
+                    "kind": "finalize",
+                    "step_id": "s3",
+                    "reason": "综合双视角输出可执行结论",
+                    "instruction": "基于两份分析做最终结论与下一步建议",
+                },
             ],
             "commands": None,
             "evidence": {"fields": ["task.source", "task.payload.content"]},
@@ -294,7 +332,8 @@ class OrchestratorAgent:
             "degraded_reason": "llm_skipped",
             "degraded_scope": ["orchestrator"],
         }
-        ctx_truncated = _truncate_context(context, max_chars=1500)
+
+        ctx_truncated = truncate_context(context, max_chars=1500)
         result = await self._agent.ask_json(
             user_prompt=(
                 "Input task:\n"
@@ -307,14 +346,17 @@ class OrchestratorAgent:
             ),
             fallback=fallback,
             governance={"user_id": user_id, "priority": priority},
-            max_tokens=1024,  # Plan 阶段需要足够 tokens 输出完整 plan_steps
+            max_tokens=1024,  # Plan 阶段需要足够 tokens
         )
+
         out = normalize_orchestrator_output(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_orchestrator_output(out)
         return AgentResult(ok=ok_out, output=out, usage=result.usage, meta=result.meta)
 
 
 class CriticAgent:
+    """评审员 Agent，审查计划和输出."""
+
     def __init__(self) -> None:
         self._agent = BaseAgent(
             name="critic",
@@ -322,7 +364,8 @@ class CriticAgent:
                 "You are a critic agent.\n"
                 "Your job is to review orchestrator plans and specialist outputs for risks.\n"
                 "Return only valid JSON.\n"
-                "Keys: schema_version, ok, risk_level, issues, require_human_approval, suggested_fixes, evidence, run_summary.\n"
+                "Keys: schema_version, ok, risk_level, issues, require_human_approval, "
+                "suggested_fixes, evidence, run_summary.\n"
                 "schema_version must be critic_review.v1.\n"
                 "ok must be boolean.\n"
                 "risk_level must be one of LOW, MEDIUM, HIGH.\n"
@@ -349,10 +392,13 @@ class CriticAgent:
         receipts: list[dict[str, Any]] | None = None,
         max_tokens: int | None = 512,
     ) -> AgentResult:
+        """评审计划和输出."""
         session_id = task.get("session_id")
         user_id = task.get("user_id")
+
         if not isinstance(user_id, str) or not user_id.strip():
             user_id = session_id if isinstance(session_id, str) and session_id.strip() else "unknown"
+
         fallback = {
             "schema_version": "critic_review.v1",
             "ok": False,
@@ -365,11 +411,12 @@ class CriticAgent:
             "evidence": {"fields": ["task", "orchestrator"]},
             "run_summary": {"text": "critic 未生成 run_summary", "key_points": [], "receipt_command_ids": []},
         }
+
         # Critic 输入较多，截断各组件
-        orch_truncated = _truncate_context(orchestrator, max_chars=800)
-        eng_truncated = _truncate_context(engineer, max_chars=600) if engineer else None
-        ana_truncated = _truncate_context(analyst, max_chars=600) if analyst else None
-        receipts_truncated = receipts[:5] if receipts else []  # 只取前 5 个 receipts
+        orch_truncated = truncate_context(orchestrator, max_chars=800)
+        eng_truncated = truncate_context(engineer, max_chars=600) if engineer else None
+        ana_truncated = truncate_context(analyst, max_chars=600) if analyst else None
+        receipts_truncated = receipts[:5] if receipts else []  # 只取前 5 个
 
         result = await self._agent.ask_json(
             user_prompt=(
@@ -383,13 +430,15 @@ class CriticAgent:
                 f"{ana_truncated}\n\n"
                 "Receipts:\n"
                 f"{receipts_truncated}\n\n"
-                "Review risks: hallucination, missing evidence, unsafe side effects, overconfidence, data privacy.\n"
+                "Review risks: hallucination, missing evidence, unsafe side effects, "
+                "overconfidence, data privacy.\n"
                 "Decide if human approval is required.\n"
             ),
             fallback=fallback,
             governance={"user_id": user_id, "priority": "default"},
-            max_tokens=768,  # Critic 需要足够 tokens 输出完整 review
+            max_tokens=768,  # Critic 需要足够 tokens
         )
+
         out = normalize_critic_review(result.output if isinstance(result.output, dict) else {})
         ok_out, _ = validate_critic_review(out)
         return AgentResult(ok=ok_out, output=out, usage=result.usage, meta=result.meta)
