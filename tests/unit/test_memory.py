@@ -1,5 +1,7 @@
 import sys
 from pathlib import Path
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -59,163 +61,145 @@ def test_memory_entry_scope_must_be_private_or_shared():
 
 
 @pytest.mark.asyncio
-async def test_sql_memory_store_roundtrip(tmp_path):
-    from riskmonitor_multiagent.memory.stores import MemoryQuery, SqlMemoryStore
+async def test_memory_store_roundtrip_with_mock_redis():
+    """测试 MemoryStore 使用 mock Redis。"""
+    from riskmonitor_multiagent.memory import MemoryStore
 
-    url = f"sqlite:///{tmp_path / 'mem.sqlite'}"
-    store = SqlMemoryStore(url=url)
-    await store.append(
-        {
-            "agent_id": "risk_analyst",
-            "scope": "shared",
-            "kind": "analysis",
-            "session_id": "s1",
-            "run_id": "r1",
-            "content": {"text": "abc", "n": 1},
-            "tags": ["t1"],
-        }
+    # 模拟存储数据
+    _store_data = {}
+
+    # 创建 mock Redis
+    mock_redis = MagicMock()
+
+    # mock pipeline
+    mock_pipeline = MagicMock()
+
+    def mock_lpush(key, value):
+        if key not in _store_data:
+            _store_data[key] = []
+        _store_data[key].insert(0, value)
+        return mock_pipeline
+
+    def mock_ltrim(key, start, end):
+        if key in _store_data:
+            arr = _store_data[key]
+            _store_data[key] = arr[start:end+1]
+        return mock_pipeline
+
+    def mock_expire(key, ttl):
+        return mock_pipeline
+
+    mock_pipeline.lpush = mock_lpush
+    mock_pipeline.ltrim = mock_ltrim
+    mock_pipeline.expire = mock_expire
+    mock_pipeline.execute = AsyncMock(return_value=[True, True, True])
+
+    mock_redis.pipeline = MagicMock(return_value=mock_pipeline)
+
+    async def mock_lrange(key, start, end):
+        arr = _store_data.get(key, [])
+        return arr[start:end+1] if arr else []
+
+    mock_redis.lrange = mock_lrange
+    mock_redis.hset = AsyncMock(return_value=True)
+    mock_redis.hget = AsyncMock(return_value=None)
+    mock_redis.hkeys = AsyncMock(return_value=[])
+    mock_redis.ping = AsyncMock(return_value=True)
+    mock_redis.flushdb = AsyncMock(return_value=True)
+
+    store = MemoryStore()
+    store._redis = mock_redis
+
+    # 测试 append
+    entry = {
+        "agent_id": "risk_analyst",
+        "scope": "shared",
+        "kind": "analysis",
+        "session_id": "s1",
+        "run_id": "r1",
+        "content": {"text": "abc", "n": 1},
+        "tags": ["t1"],
+    }
+    result = await store.append(entry)
+    assert result.get("agent_id") == "risk_analyst"
+
+    # 验证数据已存储
+    assert "shared:memory" in _store_data
+
+    # 测试 list_recent
+    items = await store.list_recent(
+        agent_id="risk_analyst",
+        scope="shared",
+        session_id="s1",
+        run_id="r1",
+        limit=10,
     )
-    items = await store.list_recent(MemoryQuery(agent_id="risk_analyst", scope="shared", session_id="s1", run_id="r1", limit=10))
-    assert isinstance(items, list) and len(items) == 1
-    it = items[0]
-    assert it.get("agent_id") == "risk_analyst"
-    assert it.get("scope") == "shared"
-    assert it.get("kind") == "analysis"
-    assert it.get("session_id") == "s1"
-    assert it.get("run_id") == "r1"
-    assert isinstance(it.get("content"), dict)
+    assert isinstance(items, list)
+    assert len(items) == 1
+    assert items[0].get("agent_id") == "risk_analyst"
 
 
 @pytest.mark.asyncio
-async def test_redis_memory_store_private_shared_roundtrip(monkeypatch):
-    import sys
-    import types
+async def test_memory_store_run_context_with_mock_redis():
+    """测试 MemoryStore 的 run context 功能。"""
+    from riskmonitor_multiagent.memory import MemoryStore
 
-    class _FakePipeline:
-        def __init__(self, store):
-            self._store = store
-            self._ops = []
+    # 创建 mock Redis
+    mock_redis = MagicMock()
+    mock_redis.hset = AsyncMock(return_value=True)
+    mock_redis.hget = AsyncMock(return_value='{"run_id": "r1", "event_id": "e1", "data": {"key": "value"}}')
+    mock_redis.hkeys = AsyncMock(return_value=["r1"])
+    mock_redis.ping = AsyncMock(return_value=True)
 
-        def rpush(self, key, value):
-            self._ops.append(("rpush", key, value))
-            return self
+    store = MemoryStore()
+    store._redis = mock_redis
 
-        def ltrim(self, key, start, end):
-            self._ops.append(("ltrim", key, start, end))
-            return self
+    # 测试 save_run_context
+    await store.save_run_context(
+        run_id="r1",
+        event_id="e1",
+        data={"key": "value"},
+    )
+    mock_redis.hset.assert_called()
 
-        def expire(self, key, _ttl):
-            self._ops.append(("expire", key, _ttl))
-            return self
-
-        async def execute(self):
-            for op in self._ops:
-                if op[0] == "rpush":
-                    self._store.setdefault(op[1], []).append(op[2])
-                elif op[0] == "ltrim":
-                    key = op[1]
-                    arr = self._store.get(key, [])
-                    start = int(op[2])
-                    end = int(op[3])
-                    if start < 0:
-                        start = max(0, len(arr) + start)
-                    if end < 0:
-                        end = len(arr) + end
-                    self._store[key] = arr[start : end + 1]
-            return True
-
-    class _FakeRedisClient:
-        def __init__(self):
-            self._store = {}
-
-        def pipeline(self):
-            return _FakePipeline(self._store)
-
-        async def lrange(self, key, start, end):
-            arr = self._store.get(key, [])
-            s = int(start)
-            e = int(end)
-            if s < 0:
-                s = max(0, len(arr) + s)
-            if e < 0:
-                e = len(arr) + e
-            return arr[s : e + 1]
-
-    class _FakeRedisModule:
-        @staticmethod
-        def from_url(_url):
-            return _FakeRedisClient()
-
-    monkeypatch.setitem(sys.modules, "redis.asyncio", _FakeRedisModule)
-    monkeypatch.setitem(sys.modules, "redis", types.SimpleNamespace(asyncio=_FakeRedisModule))
-
-    from riskmonitor_multiagent.memory.stores import MemoryQuery, RedisMemoryStore
-
-    store = RedisMemoryStore(url="redis://fake", max_len=20, ttl_s=3600)
-    await store.append({"agent_id": "agent_a", "scope": "private", "kind": "analysis", "session_id": "s1", "content": {"text": "p1"}})
-    await store.append({"agent_id": "agent_b", "scope": "private", "kind": "analysis", "session_id": "s1", "content": {"text": "p2"}})
-    await store.append({"agent_id": "agent_a", "scope": "shared", "kind": "analysis", "session_id": "s1", "content": {"text": "sh1"}})
-
-    a_private = await store.list_recent(MemoryQuery(agent_id="agent_a", scope="private", session_id="s1", limit=10))
-    b_private = await store.list_recent(MemoryQuery(agent_id="agent_b", scope="private", session_id="s1", limit=10))
-    shared = await store.list_recent(MemoryQuery(agent_id="agent_a", scope="shared", session_id="s1", limit=10))
-
-    assert len(a_private) == 1 and a_private[0].get("content", {}).get("text") == "p1"
-    assert len(b_private) == 1 and b_private[0].get("content", {}).get("text") == "p2"
-    assert len(shared) == 1 and shared[0].get("content", {}).get("text") == "sh1"
+    # 测试 get_run_context
+    context = await store.get_run_context(run_id="r1")
+    assert context is not None
+    assert context.get("run_id") == "r1"
 
 
 @pytest.mark.asyncio
-async def test_mongo_run_summary_store_upsert_with_mock_client(monkeypatch):
-    import sys
-    import types
+async def test_memory_store_run_summary_with_mock_redis():
+    """测试 MemoryStore 的 run summary 功能。"""
+    from riskmonitor_multiagent.memory import MemoryStore
 
-    class _FakeCollection:
-        def __init__(self):
-            self._docs = {}
+    # 创建 mock Redis
+    mock_redis = MagicMock()
+    mock_redis.hset = AsyncMock(return_value=True)
+    mock_redis.hget = AsyncMock(return_value='{"text": "总结", "key_points": ["k1"], "receipt_command_ids": ["c1"]}')
+    mock_redis.ping = AsyncMock(return_value=True)
 
-        def replace_one(self, filt, doc, upsert=False):
-            if upsert and isinstance(filt, dict):
-                self._docs[str(filt.get("_id"))] = dict(doc)
+    store = MemoryStore()
+    store._redis = mock_redis
 
-        def find_one(self, filt):
-            return self._docs.get(str(filt.get("_id")))
-
-    class _FakeDB:
-        def __init__(self, coll):
-            self._coll = coll
-
-        def __getitem__(self, _name):
-            return self._coll
-
-    class _FakeClient:
-        def __init__(self, *_args, **_kwargs):
-            self._coll = _FakeCollection()
-
-        def __getitem__(self, _db):
-            return _FakeDB(self._coll)
-
-    fake_pymongo = types.SimpleNamespace(MongoClient=_FakeClient)
-    monkeypatch.setitem(sys.modules, "pymongo", fake_pymongo)
-
-    from riskmonitor_multiagent.memory.mongo_run_summary_store import MongoRunSummaryStore
-
-    store = MongoRunSummaryStore(url="mongodb://fake", db="riskmonitor", collection="run_summaries")
-    await store.upsert(
+    # 测试 upsert_run_summary
+    await store.upsert_run_summary(
         run_id="run_demo_1",
-        summary={"text": "总结", "key_points": ["k1"], "receipt_command_ids": ["c1"], "evidence": {"fields": ["task.payload.content"]}},
+        summary={"text": "总结", "key_points": ["k1"], "receipt_command_ids": ["c1"]},
     )
-    out = await store.get(run_id="run_demo_1")
-    assert isinstance(out, dict)
-    assert out.get("run_id") == "run_demo_1"
-    assert out.get("schema_version") == "run_summary.v1"
-    assert isinstance(out.get("evidence"), dict)
+    mock_redis.hset.assert_called()
+
+    # 测试 get_run_summary
+    summary = await store.get_run_summary(run_id="run_demo_1")
+    assert summary is not None
+    assert summary.get("text") == "总结"
 
 
-def test_unified_memory_semantic_disabled_by_default(monkeypatch, tmp_path):
-    monkeypatch.delenv("MEMORY_ENABLE_SEMANTIC_APPEND", raising=False)
-    monkeypatch.setenv("MEMORY_SQLITE_PATH", str(tmp_path / "memory.sqlite"))
-    from riskmonitor_multiagent.memory.unified_memory import UnifiedMemory
+def test_memory_store_semantic_disabled_by_default(monkeypatch):
+    """测试 MemoryStore 默认禁用语义搜索。"""
+    monkeypatch.delenv("PAGE_INDEX_ENABLED", raising=False)
+    from riskmonitor_multiagent.memory import MemoryStore
 
-    mem = UnifiedMemory()
-    assert getattr(mem, "_semantic", None) is None
+    store = MemoryStore()
+    # PageIndex 应该未初始化
+    assert store._page_index is None

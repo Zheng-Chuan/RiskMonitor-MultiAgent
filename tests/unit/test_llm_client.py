@@ -3,10 +3,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-import httpx
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -25,29 +24,35 @@ async def test_llm_chat_completions_success(monkeypatch: pytest.MonkeyPatch) -> 
 
     captured: dict[str, Any] = {}
 
-    async def handler(request: httpx.Request) -> httpx.Response:
-        captured["url"] = str(request.url)
-        captured["auth"] = request.headers.get("Authorization")
-        captured["content_type"] = request.headers.get("Content-Type")
+    # 创建 mock response
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.json = AsyncMock(return_value={
+        "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+    })
+    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_response.__aexit__ = AsyncMock(return_value=None)
 
-        payload = await request.aread()
-        captured["raw_body"] = payload.decode("utf-8")
+    # 创建 mock client session
+    mock_session = MagicMock()
+    mock_session.post = MagicMock(return_value=mock_response)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        return httpx.Response(
-            200,
-            json={
-                "choices": [{"message": {"role": "assistant", "content": "ok"}}],
-            },
-        )
+    # 捕获调用参数
+    def capture_post(url, **kwargs):
+        captured["url"] = url
+        captured["headers"] = kwargs.get("headers", {})
+        return mock_response
 
-    transport = httpx.MockTransport(handler)
-    async with httpx.AsyncClient(transport=transport) as http_client:
-        client = LlmClient(http_client=http_client, base_url="https://api.example.com/v1")
-        resp = await client.chat_completions(messages=[{"role": "user", "content": "hi"}])
+    mock_session.post = capture_post
+
+    client = LlmClient(http_client=mock_session, base_url="https://api.example.com/v1")
+    resp = await client.chat_completions(messages=[{"role": "user", "content": "hi"}])
 
     assert captured["url"].endswith("/chat/completions")
-    assert captured["auth"] == "Bearer test-key"
-    assert captured["content_type"] == "application/json"
+    assert captured["headers"].get("Authorization") == "Bearer test-key"
+    assert captured["headers"].get("Content-Type") == "application/json"
     assert extract_first_text(resp) == "ok"
 
 
@@ -59,14 +64,24 @@ async def test_llm_chat_completions_non_2xx(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("LLM_API_KEY", "test-key")
     monkeypatch.setenv("LLM_MODEL", "qwen3-8b")
 
-    async def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(429, text="rate limited")
+    # 创建 mock response (非 2xx 状态)
+    mock_response = MagicMock()
+    mock_response.status = 429
+    mock_response.text = AsyncMock(return_value="rate limited")
+    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_response.__aexit__ = AsyncMock(return_value=None)
 
-    transport = httpx.MockTransport(handler)
-    async with httpx.AsyncClient(transport=transport) as http_client:
-        client = LlmClient(http_client=http_client, base_url="https://api.example.com/v1")
-        with pytest.raises(LLMError) as exc:
-            await client.chat_completions(messages=[{"role": "user", "content": "hi"}])
+    # 创建 mock client session
+    mock_session = MagicMock()
+
+    def mock_post(url, **kwargs):
+        return mock_response
+
+    mock_session.post = mock_post
+
+    client = LlmClient(http_client=mock_session, base_url="https://api.example.com/v1")
+    with pytest.raises(LLMError) as exc:
+        await client.chat_completions(messages=[{"role": "user", "content": "hi"}])
 
     assert exc.value.code == "UPSTREAM_BAD_STATUS"
     assert exc.value.status_code == 429
