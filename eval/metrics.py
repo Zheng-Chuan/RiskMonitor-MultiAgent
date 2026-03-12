@@ -42,6 +42,17 @@ def summarize_benchmark_records(records: list[dict[str, Any]]) -> dict[str, Any]
                 "ids_avg": 0.0,  # Information Diversity Score (越高越好)
                 "upr_avg": 1.0,  # Unnecessary Path Ratio (越低越好)
                 "milestone_achieved_rate_avg": 0.0,  # 里程碑达成率 (越高越好)
+                # 新增 Agent System Metrics
+                "task_completion_score_avg": 0.0,  # 任务完成度评分 (越高越好)
+                "hallucination_score_avg": 0.0,  # 幻觉检测评分 (越高越好)
+                "tool_call_success_rate_avg": 0.0,  # 工具调用成功率 (越高越好)
+                "tool_call_count_avg": 0.0,  # 平均工具调用次数
+                "tool_efficiency_score_avg": 0.0,  # 工具效率综合得分 (越高越好)
+                "error_recovery_rate_avg": 0.0,  # 错误恢复率 (越高越好)
+                "plan_revision_count_avg": 0.0,  # Plan 修正次数 (越低越好)
+                "memory_usage_rate_avg": 0.0,  # 记忆使用比例 (越高越好)
+                "context_completeness_avg": 0.0,  # 上下文完整度 (越高越好)
+                "memory_efficiency_score_avg": 0.0,  # 记忆效能综合得分 (越高越好)
             },
         }
 
@@ -64,6 +75,18 @@ def summarize_benchmark_records(records: list[dict[str, Any]]) -> dict[str, Any]
     uprs = [_safe_float(x.get("upr"), 1.0) for x in q]
     # 协作/过程指标: Milestone (越高越好，期望里程碑达成)
     milestones = [_safe_float(x.get("milestone_achieved_rate"), 0.0) for x in q]
+
+    # 新增 Agent System Metrics
+    task_completion_scores = [_safe_float(x.get("task_completion_score"), 0.0) for x in q]
+    hallucination_scores = [_safe_float(x.get("hallucination_score"), 0.0) for x in q]
+    tool_call_success_rates = [_safe_float(r.get("tool_call_success_rate"), 0.0) for r in records]
+    tool_call_counts = [_safe_float(r.get("tool_call_count"), 0.0) for r in records]
+    tool_efficiency_scores = [_safe_float(x.get("tool_efficiency_score"), 0.0) for x in q]
+    error_recovery_rates = [_safe_float(r.get("error_recovery_rate"), 0.0) for r in records]
+    plan_revision_counts = [_safe_float(r.get("plan_revision_count"), 0.0) for r in records]
+    memory_usage_rates = [_safe_float(r.get("memory_usage_rate"), 0.0) for r in records]
+    context_completenesses = [_safe_float(r.get("context_completeness"), 0.0) for r in records]
+    memory_efficiency_scores = [_safe_float(x.get("memory_efficiency_score"), 0.0) for x in q]
 
     case_ok: dict[str, list[bool]] = {}
     for r in records:
@@ -99,5 +122,16 @@ def summarize_benchmark_records(records: list[dict[str, Any]]) -> dict[str, Any]
             "ids_avg": round(float(sum(ids_scores) / total), 6),
             "upr_avg": round(float(sum(uprs) / total), 6),
             "milestone_achieved_rate_avg": round(float(sum(milestones) / total), 6),
+            # 新增 Agent System Metrics
+            "task_completion_score_avg": round(float(sum(task_completion_scores) / total), 6),
+            "hallucination_score_avg": round(float(sum(hallucination_scores) / total), 6),
+            "tool_call_success_rate_avg": round(float(sum(tool_call_success_rates) / total), 6),
+            "tool_call_count_avg": round(float(sum(tool_call_counts) / total), 6),
+            "tool_efficiency_score_avg": round(float(sum(tool_efficiency_scores) / total), 6),
+            "error_recovery_rate_avg": round(float(sum(error_recovery_rates) / total), 6),
+            "plan_revision_count_avg": round(float(sum(plan_revision_counts) / total), 6),
+            "memory_usage_rate_avg": round(float(sum(memory_usage_rates) / total), 6),
+            "context_completeness_avg": round(float(sum(context_completenesses) / total), 6),
+            "memory_efficiency_score_avg": round(float(sum(memory_efficiency_scores) / total), 6),
         },
     }

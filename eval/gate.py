@@ -6,9 +6,10 @@ from typing import Any
 def default_gate_thresholds() -> dict[str, float]:
     """默认质量门禁阈值.
 
-    包含两大类指标:
+    包含三大类指标:
     1. 传统指标 (Task Quality): step_reason, evidence, contract, latency, tokens, stability
     2. 协作/过程指标 (Collaboration & Process): IDS, UPR, Milestone
+    3. Agent System Metrics: task_completion, hallucination, tool_efficiency, error_recovery, plan_revision, memory_efficiency
     """
     return {
         # --- 传统指标 ---
@@ -26,6 +27,21 @@ def default_gate_thresholds() -> dict[str, float]:
         "max_upr_avg": 0.5,
         # Milestone (里程碑达成率): 越高越好，期望关键节点完成
         "min_milestone_achieved_rate_avg": 0.75,
+        # --- 新增 Agent System Metrics ---
+        # Task Completion Score: 越高越好，期望任务高质量完成
+        "min_task_completion_score_avg": 0.7,
+        # Hallucination Score: 越高越好，期望输出可信无幻觉
+        "min_hallucination_score_avg": 0.8,
+        # Tool Call Success Rate: 越高越好，期望工具调用成功
+        "min_tool_call_success_rate_avg": 0.9,
+        # Tool Efficiency Score: 越高越好，期望工具使用高效
+        "min_tool_efficiency_score_avg": 0.7,
+        # Error Recovery Rate: 越高越好，期望系统能从错误中恢复
+        "min_error_recovery_rate_avg": 0.8,
+        # Plan Revision Count: 越低越好，期望一次规划成功
+        "max_plan_revision_count_avg": 1.0,
+        # Memory Efficiency Score: 越高越好，期望记忆系统高效
+        "min_memory_efficiency_score_avg": 0.6,
     }
 
 
@@ -55,6 +71,15 @@ def evaluate_quality_gate(summary: dict[str, Any], thresholds: dict[str, Any] | 
     upr_avg = float(agg.get("upr_avg") or 1.0)
     milestone_achieved_rate_avg = float(agg.get("milestone_achieved_rate_avg") or 0.0)
 
+    # --- 新增 Agent System Metrics 观测 ---
+    task_completion_score_avg = float(agg.get("task_completion_score_avg") or 0.0)
+    hallucination_score_avg = float(agg.get("hallucination_score_avg") or 0.0)
+    tool_call_success_rate_avg = float(agg.get("tool_call_success_rate_avg") or 0.0)
+    tool_efficiency_score_avg = float(agg.get("tool_efficiency_score_avg") or 0.0)
+    error_recovery_rate_avg = float(agg.get("error_recovery_rate_avg") or 0.0)
+    plan_revision_count_avg = float(agg.get("plan_revision_count_avg") or 0.0)
+    memory_efficiency_score_avg = float(agg.get("memory_efficiency_score_avg") or 0.0)
+
     # --- 传统指标门禁检查 ---
     if step_reason_coverage < float(t["min_step_reason_coverage"]):
         reasons.append("step_reason_coverage_below_threshold")
@@ -79,6 +104,22 @@ def evaluate_quality_gate(summary: dict[str, Any], thresholds: dict[str, Any] | 
     if milestone_achieved_rate_avg < float(t["min_milestone_achieved_rate_avg"]):
         reasons.append("milestone_achieved_rate_avg_below_threshold")
 
+    # --- 新增 Agent System Metrics 门禁检查 ---
+    if task_completion_score_avg < float(t["min_task_completion_score_avg"]):
+        reasons.append("task_completion_score_avg_below_threshold")
+    if hallucination_score_avg < float(t["min_hallucination_score_avg"]):
+        reasons.append("hallucination_score_avg_below_threshold")
+    if tool_call_success_rate_avg < float(t["min_tool_call_success_rate_avg"]):
+        reasons.append("tool_call_success_rate_avg_below_threshold")
+    if tool_efficiency_score_avg < float(t["min_tool_efficiency_score_avg"]):
+        reasons.append("tool_efficiency_score_avg_below_threshold")
+    if error_recovery_rate_avg < float(t["min_error_recovery_rate_avg"]):
+        reasons.append("error_recovery_rate_avg_below_threshold")
+    if plan_revision_count_avg > float(t["max_plan_revision_count_avg"]):
+        reasons.append("plan_revision_count_avg_above_threshold")
+    if memory_efficiency_score_avg < float(t["min_memory_efficiency_score_avg"]):
+        reasons.append("memory_efficiency_score_avg_below_threshold")
+
     return {
         "passed": len(reasons) == 0,
         "reasons": reasons,
@@ -95,6 +136,14 @@ def evaluate_quality_gate(summary: dict[str, Any], thresholds: dict[str, Any] | 
             "ids_avg": ids_avg,
             "upr_avg": upr_avg,
             "milestone_achieved_rate_avg": milestone_achieved_rate_avg,
+            # 新增 Agent System Metrics
+            "task_completion_score_avg": task_completion_score_avg,
+            "hallucination_score_avg": hallucination_score_avg,
+            "tool_call_success_rate_avg": tool_call_success_rate_avg,
+            "tool_efficiency_score_avg": tool_efficiency_score_avg,
+            "error_recovery_rate_avg": error_recovery_rate_avg,
+            "plan_revision_count_avg": plan_revision_count_avg,
+            "memory_efficiency_score_avg": memory_efficiency_score_avg,
         },
         "thresholds": t,
     }

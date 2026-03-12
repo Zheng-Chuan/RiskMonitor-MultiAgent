@@ -7,6 +7,14 @@
 - IDS (Information Diversity Score): 步骤间输出的语义差异度（高=协作好）
 - UPR (Unnecessary Path Ratio): 冗余路径占比（低=效率高）
 - Milestone (milestone_achieved_rate): 关键里程碑达成率
+
+新增指标（Agent System Metrics）:
+- Task Completion Score: 任务完成质量评分
+- Hallucination Score: 幻觉检测评分（基于证据一致性）
+- Tool Usage Efficiency: 工具使用效率
+- Error Recovery Rate: 错误恢复率
+- Plan Revision Count: Plan 修正次数
+- Memory System Efficiency: 记忆系统效能（Redis命中率等）
 """
 
 from __future__ import annotations
@@ -123,6 +131,207 @@ def _compute_milestone_rate(result: dict[str, Any]) -> float:
     return round(achieved / len(milestones), 6) if milestones else 0.0
 
 
+def _compute_task_completion_score(result: dict[str, Any], task: dict[str, Any]) -> float:
+    """计算任务完成度评分 (Task Completion Score).
+
+    基于以下维度：
+    1. 输出完整性 (是否有有效结论)
+    2. 意图匹配度 (输出是否回应了任务)
+    3. 质量指标 (schema 合规、证据完整)
+
+    范围 [0, 1]，越高越好。
+    """
+    scores: list[float] = []
+
+    # 1. 输出完整性
+    final = result.get("orchestrator_final") or result.get("critic_final")
+    if isinstance(final, dict):
+        has_output = bool(final.get("output") or final.get("conclusion") or final.get("summary"))
+        scores.append(1.0 if has_output else 0.0)
+    else:
+        scores.append(0.0)
+
+    # 2. 质量指标综合
+    quality = result.get("quality") if isinstance(result.get("quality"), dict) else {}
+    q_scores = [
+        float(quality.get("step_reason_coverage") or 0.0),
+        float(quality.get("receipt_binding_rate") or 0.0),
+        1.0 - float(quality.get("evidence_missing_rate") or 1.0),
+        1.0 - float(quality.get("contract_fail_rate") or 1.0),
+    ]
+    scores.append(sum(q_scores) / len(q_scores) if q_scores else 0.0)
+
+    # 3. 里程碑达成加权
+    milestone_rate = _compute_milestone_rate(result)
+    scores.append(milestone_rate)
+
+    return round(sum(scores) / len(scores), 6) if scores else 0.0
+
+
+def _compute_hallucination_score(result: dict[str, Any]) -> float:
+    """计算幻觉检测评分 (Hallucination Score).
+
+    基于以下信号：
+    1. 证据引用完整性 (evidence_missing_rate 越低越好)
+    2. 契约合规性 (contract_fail_rate 越低越好)
+    3. Receipt 绑定一致性 (receipt_binding_rate 越高越好)
+
+    范围 [0, 1]，越高表示幻觉越少（越可信）。
+    """
+    quality = result.get("quality") if isinstance(result.get("quality"), dict) else {}
+
+    # 证据完整性得分
+    evidence_score = 1.0 - float(quality.get("evidence_missing_rate") or 1.0)
+
+    # 契约合规得分
+    contract_score = 1.0 - float(quality.get("contract_fail_rate") or 1.0)
+
+    # Receipt 绑定得分
+    binding_score = float(quality.get("receipt_binding_rate") or 0.0)
+
+    # 综合得分
+    return round((evidence_score + contract_score + binding_score) / 3.0, 6)
+
+
+def _compute_tool_usage_efficiency(result: dict[str, Any]) -> dict[str, float]:
+    """计算工具使用效率指标.
+
+    Returns:
+        - tool_call_success_rate: 工具调用成功率
+        - tool_call_count: 工具调用次数
+        - tool_efficiency_score: 综合效率得分（成功率高且次数适中得分高）
+    """
+    receipts = result.get("receipts") if isinstance(result.get("receipts"), list) else []
+
+    if not receipts:
+        return {
+            "tool_call_success_rate": 0.0,
+            "tool_call_count": 0.0,
+            "tool_efficiency_score": 0.0,
+        }
+
+    total_calls = len(receipts)
+    successful_calls = sum(
+        1 for r in receipts
+        if isinstance(r, dict) and r.get("ok") is True
+    )
+
+    success_rate = successful_calls / total_calls if total_calls > 0 else 0.0
+
+    # 效率得分：成功率高得分高，但调用次数过多会略微扣分（避免滥用）
+    # 理想调用次数为 1-3 次
+    optimal_range = (1, 3)
+    count_penalty = 0.0
+    if total_calls < optimal_range[0]:
+        count_penalty = 0.05  # 调用太少，可能没有充分利用工具
+    elif total_calls > optimal_range[1]:
+        count_penalty = min(0.2, (total_calls - optimal_range[1]) * 0.05)  # 调用过多
+
+    efficiency_score = max(0.0, success_rate - count_penalty)
+
+    return {
+        "tool_call_success_rate": round(success_rate, 6),
+        "tool_call_count": float(total_calls),
+        "tool_efficiency_score": round(efficiency_score, 6),
+    }
+
+
+def _compute_error_recovery_rate(result: dict[str, Any]) -> float:
+    """计算错误恢复率 (Error Recovery Rate).
+
+    基于以下信号：
+    1. 最终是否成功 (ok)
+    2. 过程中是否有错误但最终恢复
+    3. 降级模式触发但任务仍完成
+
+    范围 [0, 1]，越高表示错误恢复能力越强。
+    """
+    # 最终成功 = 完美恢复
+    if result.get("ok") is True:
+        return 1.0
+
+    # 有错误但最终有输出（部分恢复）
+    errors = result.get("errors") if isinstance(result.get("errors"), list) else []
+    has_errors = len(errors) > 0
+
+    final = result.get("orchestrator_final") or result.get("critic_final")
+    has_partial_output = isinstance(final, dict) and bool(final.get("output"))
+
+    if has_errors and has_partial_output:
+        return 0.5  # 部分恢复
+
+    return 0.0  # 完全失败
+
+
+def _compute_plan_revision_count(result: dict[str, Any]) -> float:
+    """计算 Plan 修正次数 (Plan Revision Count).
+
+    基于 Critic 评审后重新规划的次数信号。
+    从 orchestrator_plan 和 critic_plan 的差异推断。
+
+    返回实际修正次数的 float 表示。
+    """
+    # 检查是否有 Critic 要求重新规划的信号
+    critic_plan = result.get("critic_plan")
+    orchestrator_plan = result.get("orchestrator_plan")
+
+    if not isinstance(critic_plan, dict) or not isinstance(orchestrator_plan, dict):
+        return 0.0
+
+    # 如果 Critic 提出了 issues 或 suggested_fixes，视为需要修正
+    critic_ok = critic_plan.get("ok") is True
+    has_issues = bool(critic_plan.get("issues"))
+    has_suggestions = bool(critic_plan.get("suggested_fixes"))
+
+    if not critic_ok or has_issues or has_suggestions:
+        return 1.0  # 至少修正一次
+
+    return 0.0
+
+
+def _compute_memory_system_efficiency(result: dict[str, Any]) -> dict[str, float]:
+    """计算记忆系统效能指标.
+
+    基于以下维度：
+    1. 短期记忆使用（是否有记忆条目）
+    2. 上下文完整性（run_context 是否保存）
+    3. 跨会话一致性（如果有 session_id）
+
+    Returns:
+        - memory_usage_rate: 记忆使用比例
+        - context_completeness: 上下文完整度
+        - memory_efficiency_score: 综合效能得分
+    """
+    # 短期记忆使用
+    artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), dict) else {}
+    has_artifacts = len(artifacts) > 0
+
+    # 上下文完整性检查
+    run_id = result.get("run_id")
+    has_run_context = bool(run_id)
+
+    # 记忆使用比例（基于 artifacts 数量 vs 预期步骤数）
+    expected_steps = 4  # intent, plan, execution, finalize
+    actual_steps = len([a for a in artifacts.values() if isinstance(a, dict)])
+    memory_usage_rate = min(1.0, actual_steps / expected_steps) if expected_steps > 0 else 0.0
+
+    # 上下文完整度
+    context_completeness = 0.0
+    if has_run_context:
+        context_completeness += 0.5
+    if has_artifacts:
+        context_completeness += 0.5
+
+    # 综合效能得分
+    efficiency_score = (memory_usage_rate + context_completeness) / 2.0
+
+    return {
+        "memory_usage_rate": round(memory_usage_rate, 6),
+        "context_completeness": round(context_completeness, 6),
+        "memory_efficiency_score": round(efficiency_score, 6),
+    }
+
+
 def workflow_output_to_eval_record(
     out: dict[str, Any],
     *,
@@ -136,6 +345,7 @@ def workflow_output_to_eval_record(
     receipts = result.get("receipts") if isinstance(result.get("receipts"), list) else []
     artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), dict) else {}
     approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
+    task = result.get("task") if isinstance(result.get("task"), dict) else {}
 
     governance_blocked = sum(
         1
@@ -173,11 +383,27 @@ def workflow_output_to_eval_record(
     upr = _compute_upr(result)  # 冗余路径比，越低越好
     milestone_rate = _compute_milestone_rate(result)  # 里程碑达成率，越高越好
 
+    # 计算新增指标 (Agent System Metrics)
+    task_completion_score = _compute_task_completion_score(result, task)
+    hallucination_score = _compute_hallucination_score(result)
+    tool_efficiency = _compute_tool_usage_efficiency(result)
+    error_recovery_rate = _compute_error_recovery_rate(result)
+    plan_revision_count = _compute_plan_revision_count(result)
+    memory_efficiency = _compute_memory_system_efficiency(result)
+
     # 把协作/过程指标也写入 quality，便于 metrics.py 统一汇总
     quality_with_collab = dict(quality) if isinstance(quality, dict) else {}
     quality_with_collab["ids_score"] = ids_score
     quality_with_collab["upr"] = upr
     quality_with_collab["milestone_achieved_rate"] = milestone_rate
+
+    # 新增指标写入 quality
+    quality_with_collab["task_completion_score"] = task_completion_score
+    quality_with_collab["hallucination_score"] = hallucination_score
+    quality_with_collab["tool_efficiency_score"] = tool_efficiency["tool_efficiency_score"]
+    quality_with_collab["error_recovery_rate"] = error_recovery_rate
+    quality_with_collab["plan_revision_count"] = plan_revision_count
+    quality_with_collab["memory_efficiency_score"] = memory_efficiency["memory_efficiency_score"]
 
     return {
         "run_tag": "",  # 由 runner 填写
@@ -200,6 +426,17 @@ def workflow_output_to_eval_record(
         "ids_score": ids_score,
         "upr": upr,
         "milestone_achieved_rate": milestone_rate,
+        # 新增 Agent System Metrics（顶层直接访问）
+        "task_completion_score": task_completion_score,
+        "hallucination_score": hallucination_score,
+        "tool_call_success_rate": tool_efficiency["tool_call_success_rate"],
+        "tool_call_count": tool_efficiency["tool_call_count"],
+        "tool_efficiency_score": tool_efficiency["tool_efficiency_score"],
+        "error_recovery_rate": error_recovery_rate,
+        "plan_revision_count": plan_revision_count,
+        "memory_usage_rate": memory_efficiency["memory_usage_rate"],
+        "context_completeness": memory_efficiency["context_completeness"],
+        "memory_efficiency_score": memory_efficiency["memory_efficiency_score"],
         "config": {
             "policy_version": config.get("policy_version"),
             "prompt_version": config.get("prompt_version"),

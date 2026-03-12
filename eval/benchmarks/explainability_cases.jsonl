@@ -28,3 +28,13 @@
 {"case_id":"exp_case_028","tags":["business","breach"],"task":{"task_id":"eval_task_028","session_id":"eval_session","source":"human","payload":{"content":"检查全市场敞口是否越限 越限的给出证据与处置建议"}}}
 {"case_id":"exp_case_029","tags":["explainability","approval"],"task":{"task_id":"eval_task_029","session_id":"eval_session","source":"human","payload":{"content":"在需要写告警时先解释原因再请求人工批准后执行"}}}
 {"case_id":"exp_case_030","tags":["read_only","query"],"task":{"task_id":"eval_task_030","session_id":"eval_session","source":"human","payload":{"content":"汇总全系统头寸总数、总 delta 及按 desk 分布"}}}
+{"case_id":"exp_case_031","tags":["tool_usage","multi_tool"],"task":{"task_id":"eval_task_031","session_id":"eval_session","source":"human","payload":{"content":"先查询 TRADER-001 的头寸 再检查这些头寸是否有越限 最后生成 summary"}}}
+{"case_id":"exp_case_032","tags":["memory","context"],"task":{"task_id":"eval_task_032","session_id":"eval_session","source":"human","payload":{"content":"基于之前的分析结果 给出下一步操作建议"}}}
+{"case_id":"exp_case_033","tags":["error_recovery","fault_tolerance"],"task":{"task_id":"eval_task_033","session_id":"eval_session","source":"human","payload":{"content":"尝试查询不存在的 trader_id 的持仓 系统应优雅处理错误"}}}
+{"case_id":"exp_case_034","tags":["multi_intent","disambiguation"],"task":{"task_id":"eval_task_034","session_id":"eval_session","source":"human","payload":{"content":"查询头寸并写入告警 或者只查询不写入"}}}
+{"case_id":"exp_case_035","tags":["complex_plan","reasoning"],"task":{"task_id":"eval_task_035","session_id":"eval_session","source":"human","payload":{"content":"分析 Equity 台敞口 对比昨日数据 识别异常变化 给出原因分析"}}}
+{"case_id":"exp_case_036","tags":["concurrency","stress"],"task":{"task_id":"eval_task_036","session_id":"eval_session","source":"human","payload":{"content":"快速查询多个 desk 的头寸状态"}}}
+{"case_id":"exp_case_037","tags":["hallucination","fact_check"],"task":{"task_id":"eval_task_037","session_id":"eval_session","source":"human","payload":{"content":"列出所有不存在的 desk 的持仓"}}}
+{"case_id":"exp_case_038","tags":["collaboration","multi_agent"],"task":{"task_id":"eval_task_038","session_id":"eval_session","source":"human","payload":{"content":"综合技术视角和业务流程视角分析当前风险状况"}}}
+{"case_id":"exp_case_039","tags":["edge_case","boundary"],"task":{"task_id":"eval_task_039","session_id":"eval_session","source":"human","payload":{"content":"查询 delta 恰好等于阈值的头寸"}}}
+{"case_id":"exp_case_040","tags":["optimization","efficiency"],"task":{"task_id":"eval_task_040","session_id":"eval_session","source":"human","payload":{"content":"用最少的查询次数获取所有 desk 的敞口汇总"}}}
