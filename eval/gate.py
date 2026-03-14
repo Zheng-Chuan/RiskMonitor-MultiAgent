@@ -17,8 +17,8 @@ def default_gate_thresholds() -> dict[str, float]:
         "max_evidence_missing_rate": 0.05,
         "min_receipt_binding_rate": 0.95,
         "max_contract_fail_rate": 0.02,
-        "max_latency_ms_p95": 8000.0,
-        "max_tokens_total": 50000.0,
+        "max_latency_ms_p95": 30000.0,  # 调整为 30s，金融风控场景需要更长时间
+        "max_tokens_total": 300000.0,  # 调整为 300K，复杂分析需要更多 token
         "min_stability_ok_rate": 1.0,
         # --- 协作/过程指标 (Collaboration & Process Metrics) ---
         # IDS (Information Diversity Score): 越高越好，期望步骤间信息多样

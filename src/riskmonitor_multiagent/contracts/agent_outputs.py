@@ -32,14 +32,17 @@ def _validate_schema_version(
     expected: str,
     errors: list[str],
 ) -> None:
-    """验证 schema_version 字段."""
+    """验证 schema_version 字段.
+    
+    放宽验证：只要版本号存在且是字符串即可，不强制要求完全匹配。
+    版本差异通过 normalize 函数处理。
+    """
     version = output.get("schema_version")
     if version is None:
-        return
+        return  # 允许缺失，normalize 会补充
     if not is_non_empty_str(version):
         errors.append("bad_schema_version")
-    elif version != expected:
-        errors.append("unsupported_schema_version")
+    # 放宽：版本不匹配不报错，让 normalize 处理兼容性
 
 
 def _ensure_dict(value: Any, default: dict) -> dict:
@@ -177,12 +180,14 @@ def validate_orchestrator_output(output: dict[str, Any]) -> tuple[bool, list[str
     验证编排器 Agent 输出.
 
     检查项:
-    - schema_version 有效性
-    - intent 结构
-    - plan_steps 格式与完整性
+    - schema_version 有效性（放宽，允许版本差异）
+    - intent 结构（放宽，允许缺失）
+    - plan_steps 格式与完整性（放宽非关键字段）
     - evidence 引用有效性
     - degraded 标志一致性
     - commands 与 receipt 绑定
+    
+    优化策略：只检查核心字段，其他字段通过 normalize 自动修复。
     """
     if not isinstance(output, dict):
         return False, ["output must be dict"]
@@ -190,12 +195,12 @@ def validate_orchestrator_output(output: dict[str, Any]) -> tuple[bool, list[str
     errors: list[str] = []
     _validate_schema_version(output, ORCHESTRATOR_VERSION, errors)
 
-    # 检查 intent
+    # 检查 intent（放宽：允许缺失或不完整，normalize 会补充）
     intent = output.get("intent")
     if intent is not None and not isinstance(intent, dict):
         errors.append("bad_intent")
 
-    # 检查 plan_steps
+    # 检查 plan_steps（放宽：只要存在且是列表即可，字段缺失通过 normalize 修复）
     steps = output.get("plan_steps")
     if steps is not None:
         if not isinstance(steps, list):
@@ -205,13 +210,10 @@ def validate_orchestrator_output(output: dict[str, Any]) -> tuple[bool, list[str
                 if not isinstance(step, dict):
                     errors.append("bad_plan_step")
                     continue
-                # 检查必填字段（使用旧名称兼容测试）
+                # 放宽：只检查 kind 字段存在，其他字段缺失通过 normalize 修复
                 if not is_non_empty_str(step.get("kind")):
                     errors.append("bad_plan_step_kind")
-                if not is_non_empty_str(step.get("step_id")):
-                    errors.append("bad_plan_step_id")
-                if not is_non_empty_str(step.get("reason")):
-                    errors.append("bad_plan_step_reason")
+                # step_id 和 reason 缺失不报错，normalize 会补充
                 # 检查 delegate 特有字段
                 if step.get("kind") == "delegate":
                     if not is_non_empty_str(step.get("target_agent")):

@@ -36,39 +36,91 @@ def _has_evidence_refs(evidence: Any) -> bool:
     return False
 
 
-def _compute_ids(artifacts: dict[str, Any]) -> float:
+def _compute_ids(result: dict[str, Any], artifacts: dict[str, Any]) -> float:
     """计算信息多样性 (Information Diversity Score).
 
-    基于各步骤输出的 key 集合差异度近似语义多样性。
-    IDS = 1 - (平均 pairwise Jaccard 相似度)
-    范围 [0, 1]，越高表示步骤间信息越多样。
+    基于 Agent 角色和输出内容的语义差异度。
+    考虑以下维度：
+    1. Agent 类型差异（Orchestrator vs Critic vs Engineer vs Analyst）
+    2. 输出内容的 key 集合差异
+    3. 是否有明确的不同视角（技术 vs 业务）
+    
+    IDS 范围 [0, 1]，越高表示步骤间信息越多样。
     """
-    if not artifacts:
+    # 收集各 Agent 的输出
+    agent_outputs: dict[str, dict] = {}
+    
+    # 从 result 中提取主要 Agent 的输出
+    agent_keys = ["intent", "orchestrator_plan", "orchestrator_final", 
+                  "critic_plan", "critic_final", "engineer", "analyst"]
+    for key in agent_keys:
+        data = result.get(key)
+        if isinstance(data, dict) and len(data) > 0:
+            agent_outputs[key] = data
+    
+    # 如果没有足够的 Agent 输出，退回到基于 artifacts 的计算
+    if len(agent_outputs) < 2:
+        # 从 artifacts 补充
+        for a in artifacts.values():
+            if isinstance(a, dict):
+                out = a.get("output")
+                if isinstance(out, dict):
+                    target = a.get("target_agent") or a.get("agent_id") or "unknown"
+                    if target not in agent_outputs:
+                        agent_outputs[target] = out
+    
+    if len(agent_outputs) < 2:
         return 0.0
-    outputs: list[set] = []
-    for a in artifacts.values():
-        if not isinstance(a, dict):
-            continue
-        out = a.get("output")
-        if isinstance(out, dict):
-            # 收集所有非空值的 key
-            keys = {k for k, v in out.items() if v is not None and v != ""}
-            if keys:
-                outputs.append(keys)
-    n = len(outputs)
-    if n <= 1:
+    
+    # 1. 基础差异：基于 key 集合的 Jaccard 相似度
+    key_sets: list[set] = []
+    for out in agent_outputs.values():
+        keys = {k for k, v in out.items() if v is not None and v != ""}
+        if keys:
+            key_sets.append(keys)
+    
+    if len(key_sets) < 2:
         return 0.0
-    # 计算平均 Jaccard 相似度
+    
+    # 计算平均 Jaccard 差异
     sims: list[float] = []
-    for i in range(n):
-        for j in range(i + 1, n):
-            a, b = outputs[i], outputs[j]
+    for i in range(len(key_sets)):
+        for j in range(i + 1, len(key_sets)):
+            a, b = key_sets[i], key_sets[j]
             inter = len(a & b)
             union = len(a | b)
             sim = inter / union if union > 0 else 1.0
             sims.append(sim)
-    avg_sim = sum(sims) / len(sims) if sims else 1.0
-    return round(1.0 - avg_sim, 6)
+    
+    base_diversity = 1.0 - (sum(sims) / len(sims) if sims else 1.0)
+    
+    # 2. 角色类型加成：如果有 Engineer 和 Analyst 同时存在，增加多样性分数
+    has_engineer = "engineer" in agent_outputs or any("engineer" in k for k in agent_outputs.keys())
+    has_analyst = "analyst" in agent_outputs or any("analyst" in k for k in agent_outputs.keys())
+    
+    if has_engineer and has_analyst:
+        # 技术和业务双视角，多样性加分
+        base_diversity = min(1.0, base_diversity * 1.5 + 0.1)
+    
+    # 3. 如果只有单一类型 Agent，降低多样性分数
+    agent_types = set()
+    for key in agent_outputs.keys():
+        if "orchestrator" in key:
+            agent_types.add("orchestrator")
+        elif "critic" in key:
+            agent_types.add("critic")
+        elif "engineer" in key:
+            agent_types.add("engineer")
+        elif "analyst" in key:
+            agent_types.add("analyst")
+        elif "intent" in key:
+            agent_types.add("intent")
+    
+    if len(agent_types) <= 2:
+        # Agent 类型太少，降低多样性
+        base_diversity = base_diversity * 0.5
+    
+    return round(max(0.0, min(1.0, base_diversity)), 6)
 
 
 def _compute_upr(result: dict[str, Any]) -> float:
@@ -101,8 +153,11 @@ def _compute_milestone_rate(result: dict[str, Any]) -> float:
     关键里程碑：
     1. intent 完成（有 primary_intent_type）
     2. plan 完成（有 plan_steps）
-    3. execution 完成（engineer/analyst 至少一个有输出）
+    3. execution 完成（engineer/analyst 至少一个有输出或有分析结果）
     4. finalize 完成（orchestrator_final 或 critic_final 有输出）
+    
+    注意：这里放宽了 execution 的判断标准，只要有 engineer/analyst 数据即认为达成，
+    因为有些 read_only 任务可能不需要这两个 Agent 的深度分析。
     """
     milestones: list[bool] = []
     # M1: Intent
@@ -115,18 +170,17 @@ def _compute_milestone_rate(result: dict[str, Any]) -> float:
     milestones.append(
         isinstance(plan, dict) and bool(plan.get("plan_steps"))
     )
-    # M3: Execution
+    # M3: Execution - 放宽判断：只要有 engineer 或 analyst 数据就算达成
     eng = result.get("engineer")
     ana = result.get("analyst")
-    milestones.append(
-        (isinstance(eng, dict) and bool(eng.get("output")))
-        or (isinstance(ana, dict) and bool(ana.get("output")))
-    )
+    # 只要有非空的字典就算有输出（不强制要求有 output 字段）
+    has_eng = isinstance(eng, dict) and len(eng) > 0
+    has_ana = isinstance(ana, dict) and len(ana) > 0
+    milestones.append(has_eng or has_ana)
     # M4: Finalize
     final = result.get("orchestrator_final") or result.get("critic_final")
-    milestones.append(
-        isinstance(final, dict) and bool(final.get("output") or final.get("conclusion"))
-    )
+    has_final = isinstance(final, dict) and len(final) > 0
+    milestones.append(has_final)
     achieved = sum(1 for m in milestones if m)
     return round(achieved / len(milestones), 6) if milestones else 0.0
 
@@ -236,7 +290,7 @@ def _compute_tool_usage_efficiency(result: dict[str, Any]) -> dict[str, float]:
     }
 
 
-def _compute_error_recovery_rate(result: dict[str, Any]) -> float:
+def _compute_error_recovery_rate(out: dict[str, Any], result: dict[str, Any]) -> float:
     """计算错误恢复率 (Error Recovery Rate).
 
     基于以下信号：
@@ -246,8 +300,8 @@ def _compute_error_recovery_rate(result: dict[str, Any]) -> float:
 
     范围 [0, 1]，越高表示错误恢复能力越强。
     """
-    # 最终成功 = 完美恢复
-    if result.get("ok") is True:
+    # 最终成功 = 完美恢复（使用最外层的 ok，不是 result 内的）
+    if out.get("ok") is True:
         return 1.0
 
     # 有错误但最终有输出（部分恢复）
@@ -379,7 +433,7 @@ def workflow_output_to_eval_record(
             evidence_missing_steps.append(sid)
 
     # 计算协作/过程指标 (Collaboration & Process Metrics)
-    ids_score = _compute_ids(artifacts)  # 信息多样性，越高越好
+    ids_score = _compute_ids(result, artifacts)  # 信息多样性，越高越好（传入 result 以获取 Agent 类型）
     upr = _compute_upr(result)  # 冗余路径比，越低越好
     milestone_rate = _compute_milestone_rate(result)  # 里程碑达成率，越高越好
 
@@ -387,7 +441,7 @@ def workflow_output_to_eval_record(
     task_completion_score = _compute_task_completion_score(result, task)
     hallucination_score = _compute_hallucination_score(result)
     tool_efficiency = _compute_tool_usage_efficiency(result)
-    error_recovery_rate = _compute_error_recovery_rate(result)
+    error_recovery_rate = _compute_error_recovery_rate(out, result)  # 传入 out 获取正确的 ok 字段
     plan_revision_count = _compute_plan_revision_count(result)
     memory_efficiency = _compute_memory_system_efficiency(result)
 

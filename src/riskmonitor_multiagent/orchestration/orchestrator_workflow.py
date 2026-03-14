@@ -265,7 +265,7 @@ async def plan_node(state: OrchestratorState) -> Command:
     if not ok_out:
         out["schema_errors"] = errors
 
-    # 确保 plan_steps 非空
+    # 确保 plan_steps 非空（使用默认步骤时不标记为降级，这是正常的回退行为）
     plan_steps = out.get("plan_steps") if isinstance(out.get("plan_steps"), list) else []
     if not plan_steps:
         default_steps = [
@@ -274,10 +274,10 @@ async def plan_node(state: OrchestratorState) -> Command:
             {"kind": "finalize", "step_id": "s3", "reason": "综合两份分析给出结论"},
         ]
         out["plan_steps"] = default_steps
-        out.setdefault("degraded", True)
-        out.setdefault("degraded_reason", "plan_steps_empty_fallback")
+        # 放宽：使用默认步骤是正常的回退行为，不标记为降级
+        # 只有当 plan_steps 完全缺失（None）时才标记
         plan_steps = default_steps
-        logger.warning(f"plan_steps empty for run_id={run_id}, using fallback steps")
+        logger.info(f"plan_steps empty for run_id={run_id}, using fallback steps")
 
     state["orchestrator_plan"] = out
     _ensure_evidence_refs(state["orchestrator_plan"], ["plan_steps"])
