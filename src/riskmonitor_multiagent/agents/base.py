@@ -21,6 +21,7 @@ from typing import Any
 from riskmonitor_multiagent import config
 from riskmonitor_multiagent.governance.llm_cost_governance import get_llm_cost_governor
 from riskmonitor_multiagent.llm import LLMError, LlmClient, extract_first_text
+from riskmonitor_multiagent.llm.output_repair import extract_json_from_text, fix_common_json_issues
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
 from riskmonitor_multiagent.utils import clean_llm_output
 
@@ -253,18 +254,34 @@ class BaseAgent:
                         "type": metric, "user": user_id, "priority": priority,
                     }, value=v)
 
-        # 提取文本并解析 JSON
+        # 提取文本并解析 JSON（带自动修复）
         raw_text = extract_first_text(resp).strip()
         clean_text = clean_llm_output(raw_text)
 
         try:
+            # 1. 尝试直接解析
             data = json.loads(clean_text)
-        except json.JSONDecodeError as e:
-            raise LLMError(
-                code="BAD_LLM_OUTPUT",
-                message=f"response is not valid JSON: raw={raw_text[:200]}",
-                cause=e,
-            ) from e
+        except json.JSONDecodeError:
+            # 2. 尝试从文本中提取 JSON
+            json_str = extract_json_from_text(clean_text)
+            if json_str is None:
+                raise LLMError(
+                    code="BAD_LLM_OUTPUT",
+                    message=f"response is not valid JSON and no JSON found: raw={raw_text[:200]}",
+                )
+            try:
+                data = json.loads(json_str)
+            except json.JSONDecodeError:
+                # 3. 尝试修复常见问题
+                fixed_json = fix_common_json_issues(json_str)
+                try:
+                    data = json.loads(fixed_json)
+                except json.JSONDecodeError as e:
+                    raise LLMError(
+                        code="BAD_LLM_OUTPUT",
+                        message=f"response is not valid JSON even after repair: raw={raw_text[:200]}",
+                        cause=e,
+                    ) from e
 
         if not isinstance(data, dict):
             raise LLMError(code="BAD_LLM_OUTPUT", message="response JSON is not an object")

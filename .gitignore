@@ -57,10 +57,10 @@ reports/
 # Runtime data
 data/
 
-# Evaluation results (generated)
-eval/results/*.jsonl
-eval/results/*.json
+# Evaluation results (keep .gitkeep, ignore nothing else)
+eval/results/.gitkeep
 
 # Package manager lock files
 uv.lock
 poetry.lock
+.cursor/

@@ -33,6 +33,13 @@ def test_quality_gate_passes_when_metrics_meet_thresholds():
             "error_recovery_rate_avg": 0.9,  # > min (0.8)
             "plan_revision_count_avg": 0.5,  # < max (1.0)
             "memory_efficiency_score_avg": 0.7,  # > min (0.6)
+            # --- 新增 P0/P1 指标 (基于学术界 & 工业界最佳实践) ---
+            "plan_execution_align_rate_avg": 0.9,  # > min (0.8)
+            "tool_selection_accuracy_avg": 0.9,  # > min (0.8)
+            "collaboration_efficiency_avg": 0.7,  # > min (0.5)
+            "role_specialization_avg": 0.8,  # > min (0.5)
+            "factuality_score_avg": 0.9,  # > min (0.7)
+            "tool_result_utilization_avg": 0.9,  # > min (0.7)
         }
     }
     out = evaluate_quality_gate(summary)
@@ -58,6 +65,13 @@ def test_quality_gate_blocks_on_evidence_missing():
             "error_recovery_rate_avg": 0.9,
             "plan_revision_count_avg": 0.5,
             "memory_efficiency_score_avg": 0.7,
+            # --- 新增 P0/P1 指标 (基于学术界 & 工业界最佳实践) ---
+            "plan_execution_align_rate_avg": 0.9,
+            "tool_selection_accuracy_avg": 0.9,
+            "collaboration_efficiency_avg": 0.7,
+            "role_specialization_avg": 0.8,
+            "factuality_score_avg": 0.9,
+            "tool_result_utilization_avg": 0.9,
         }
     }
     out = evaluate_quality_gate(summary)

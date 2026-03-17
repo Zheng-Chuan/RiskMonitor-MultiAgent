@@ -275,6 +275,23 @@ class OrchestratorAgent:
                 "degraded_scope must be a non empty list.\n"
                 "Write Chinese text using only English punctuation.\n"
                 "Never invent tool outputs.\n"
+                "\n"
+                "Available tools (tool_name):\n"
+                "- query_all_positions: Query all positions\n"
+                "- query_positions_by_trader: Query positions by trader_id\n"
+                "- query_positions_by_desk: Query positions by desk name\n"
+                "- calculate_total_delta: Calculate total delta across all positions\n"
+                "- monitor_desk_exposure: Monitor desk exposure and build alerts\n"
+                "- submit_alerts: Write alerts to database (side effect, requires approval)\n"
+                "- get_service_metrics: Get service metrics summary\n"
+                "- search_similar_alerts: Search similar alerts in Chroma\n"
+                "- collect_metrics: Collect service metrics (system_engineer only)\n"
+                "- mysql_health: MySQL health check (system_engineer only)\n"
+                "- chroma_health: Chroma health check (system_engineer only)\n"
+                "- kafka_lag: Kafka lag estimate (system_engineer only)\n"
+                "- write_alert: Write alert record to database (manager only, requires approval)\n"
+                "\n"
+                "Note: For tool_call steps, set tool_name to one of the above and params as a dict of tool arguments.\n"
             ),
             prompt_version=PROMPT_VERSION_ORCHESTRATOR,
             policy_version=get_policy_version(),

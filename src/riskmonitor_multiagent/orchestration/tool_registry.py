@@ -31,7 +31,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
     "query_all_positions": ToolMeta(
         action="query_all_positions",
         capability="read_only",
-        owner="mcp_tools",
+        owner="risk_analyst",
         description="query all positions",
         risk_level="low",
         default_timeout_ms=2000,
@@ -39,7 +39,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
     "query_positions_by_trader": ToolMeta(
         action="query_positions_by_trader",
         capability="read_only",
-        owner="mcp_tools",
+        owner="risk_analyst",
         description="query positions by trader",
         risk_level="low",
         default_timeout_ms=2000,
@@ -47,7 +47,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
     "calculate_total_delta": ToolMeta(
         action="calculate_total_delta",
         capability="read_only",
-        owner="mcp_tools",
+        owner="risk_analyst",
         description="calculate total delta",
         risk_level="low",
         default_timeout_ms=2000,
@@ -55,7 +55,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
     "monitor_desk_exposure": ToolMeta(
         action="monitor_desk_exposure",
         capability="read_only",
-        owner="mcp_tools",
+        owner="risk_analyst",
         description="monitor desk exposure and build alerts",
         risk_level="low",
         default_timeout_ms=3000,
@@ -63,7 +63,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
     "get_service_metrics": ToolMeta(
         action="get_service_metrics",
         capability="read_only",
-        owner="mcp_tools",
+        owner="system_engineer",
         description="get service metrics summary",
         risk_level="low",
         default_timeout_ms=1000,
@@ -71,7 +71,7 @@ _TOOL_REGISTRY: dict[str, ToolMeta] = {
     "submit_alerts": ToolMeta(
         action="submit_alerts",
         capability="side_effect",
-        owner="mcp_tools",
+        owner="manager",
         description="write alerts to database",
         risk_level="high",
         default_timeout_ms=3000,

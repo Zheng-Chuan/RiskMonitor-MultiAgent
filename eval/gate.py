@@ -42,6 +42,19 @@ def default_gate_thresholds() -> dict[str, float]:
         "max_plan_revision_count_avg": 1.0,
         # Memory Efficiency Score: 越高越好，期望记忆系统高效
         "min_memory_efficiency_score_avg": 0.6,
+        # --- 新增 P0/P1 指标 (基于学术界 & 工业界最佳实践) ---
+        # Plan Execution Alignment Rate: 越高越好，期望计划与执行一致 (PlanBench)
+        "min_plan_execution_align_rate_avg": 0.8,
+        # Tool Selection Accuracy: 越高越好，期望工具选择准确 (GAIA)
+        "min_tool_selection_accuracy_avg": 0.8,
+        # Collaboration Efficiency: 越高越好，期望 Agent 协作高效 (MultiAgentBench)
+        "min_collaboration_efficiency_avg": 0.5,
+        # Role Specialization: 越高越好，期望 Agent 角色专业化 (Industry)
+        "min_role_specialization_avg": 0.5,
+        # Factuality Score: 越高越好，期望事实准确 (GAIA)
+        "min_factuality_score_avg": 0.7,
+        # Tool Result Utilization: 越高越好，期望工具结果被充分利用
+        "min_tool_result_utilization_avg": 0.7,
     }
 
 
@@ -79,6 +92,14 @@ def evaluate_quality_gate(summary: dict[str, Any], thresholds: dict[str, Any] | 
     error_recovery_rate_avg = float(agg.get("error_recovery_rate_avg") or 0.0)
     plan_revision_count_avg = float(agg.get("plan_revision_count_avg") or 0.0)
     memory_efficiency_score_avg = float(agg.get("memory_efficiency_score_avg") or 0.0)
+
+    # --- 新增 P0/P1 指标观测 (基于学术界 & 工业界最佳实践) ---
+    plan_execution_align_rate_avg = float(agg.get("plan_execution_align_rate_avg") or 0.0)
+    tool_selection_accuracy_avg = float(agg.get("tool_selection_accuracy_avg") or 0.0)
+    collaboration_efficiency_avg = float(agg.get("collaboration_efficiency_avg") or 0.0)
+    role_specialization_avg = float(agg.get("role_specialization_avg") or 0.0)
+    factuality_score_avg = float(agg.get("factuality_score_avg") or 0.0)
+    tool_result_utilization_avg = float(agg.get("tool_result_utilization_avg") or 0.0)
 
     # --- 传统指标门禁检查 ---
     if step_reason_coverage < float(t["min_step_reason_coverage"]):
@@ -120,6 +141,20 @@ def evaluate_quality_gate(summary: dict[str, Any], thresholds: dict[str, Any] | 
     if memory_efficiency_score_avg < float(t["min_memory_efficiency_score_avg"]):
         reasons.append("memory_efficiency_score_avg_below_threshold")
 
+    # --- 新增 P0/P1 指标门禁检查 (基于学术界 & 工业界最佳实践) ---
+    if plan_execution_align_rate_avg < float(t["min_plan_execution_align_rate_avg"]):
+        reasons.append("plan_execution_align_rate_avg_below_threshold")
+    if tool_selection_accuracy_avg < float(t["min_tool_selection_accuracy_avg"]):
+        reasons.append("tool_selection_accuracy_avg_below_threshold")
+    if collaboration_efficiency_avg < float(t["min_collaboration_efficiency_avg"]):
+        reasons.append("collaboration_efficiency_avg_below_threshold")
+    if role_specialization_avg < float(t["min_role_specialization_avg"]):
+        reasons.append("role_specialization_avg_below_threshold")
+    if factuality_score_avg < float(t["min_factuality_score_avg"]):
+        reasons.append("factuality_score_avg_below_threshold")
+    if tool_result_utilization_avg < float(t["min_tool_result_utilization_avg"]):
+        reasons.append("tool_result_utilization_avg_below_threshold")
+
     return {
         "passed": len(reasons) == 0,
         "reasons": reasons,
@@ -144,6 +179,13 @@ def evaluate_quality_gate(summary: dict[str, Any], thresholds: dict[str, Any] | 
             "error_recovery_rate_avg": error_recovery_rate_avg,
             "plan_revision_count_avg": plan_revision_count_avg,
             "memory_efficiency_score_avg": memory_efficiency_score_avg,
+            # --- 新增 P0/P1 指标 ---
+            "plan_execution_align_rate_avg": plan_execution_align_rate_avg,
+            "tool_selection_accuracy_avg": tool_selection_accuracy_avg,
+            "collaboration_efficiency_avg": collaboration_efficiency_avg,
+            "role_specialization_avg": role_specialization_avg,
+            "factuality_score_avg": factuality_score_avg,
+            "tool_result_utilization_avg": tool_result_utilization_avg,
         },
         "thresholds": t,
     }

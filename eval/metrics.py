@@ -53,6 +53,13 @@ def summarize_benchmark_records(records: list[dict[str, Any]]) -> dict[str, Any]
                 "memory_usage_rate_avg": 0.0,  # 记忆使用比例 (越高越好)
                 "context_completeness_avg": 0.0,  # 上下文完整度 (越高越好)
                 "memory_efficiency_score_avg": 0.0,  # 记忆效能综合得分 (越高越好)
+                # --- 新增 P0/P1 指标 (基于学术界 & 工业界最佳实践) ---
+                "plan_execution_align_rate_avg": 0.0,  # P0: 计划执行一致性 (PlanBench)
+                "tool_selection_accuracy_avg": 0.0,  # P0: 工具选择准确率 (GAIA)
+                "collaboration_efficiency_avg": 0.0,  # P0: 协作效率 (MultiAgentBench)
+                "role_specialization_avg": 0.0,  # P1: 角色专业化程度 (Industry)
+                "factuality_score_avg": 0.0,  # P1: 事实准确性 (GAIA)
+                "tool_result_utilization_avg": 0.0,  # 工具结果利用率
             },
         }
 
@@ -87,6 +94,14 @@ def summarize_benchmark_records(records: list[dict[str, Any]]) -> dict[str, Any]
     memory_usage_rates = [_safe_float(r.get("memory_usage_rate"), 0.0) for r in records]
     context_completenesses = [_safe_float(r.get("context_completeness"), 0.0) for r in records]
     memory_efficiency_scores = [_safe_float(x.get("memory_efficiency_score"), 0.0) for x in q]
+
+    # --- 新增 P0/P1 指标 (基于学术界 & 工业界最佳实践) ---
+    plan_execution_align_rates = [_safe_float(x.get("plan_execution_align_rate"), 0.0) for x in q]
+    tool_selection_accuracies = [_safe_float(x.get("tool_selection_accuracy"), 0.0) for x in q]
+    collaboration_efficiencies = [_safe_float(x.get("collaboration_efficiency"), 0.0) for x in q]
+    role_specializations = [_safe_float(x.get("role_specialization"), 0.0) for x in q]
+    factuality_scores = [_safe_float(x.get("factuality_score"), 0.0) for x in q]
+    tool_result_utilizations = [_safe_float(x.get("tool_result_utilization"), 0.0) for x in q]
 
     case_ok: dict[str, list[bool]] = {}
     for r in records:
@@ -133,5 +148,12 @@ def summarize_benchmark_records(records: list[dict[str, Any]]) -> dict[str, Any]
             "memory_usage_rate_avg": round(float(sum(memory_usage_rates) / total), 6),
             "context_completeness_avg": round(float(sum(context_completenesses) / total), 6),
             "memory_efficiency_score_avg": round(float(sum(memory_efficiency_scores) / total), 6),
+            # --- 新增 P0/P1 指标 (基于学术界 & 工业界最佳实践) ---
+            "plan_execution_align_rate_avg": round(float(sum(plan_execution_align_rates) / total), 6),
+            "tool_selection_accuracy_avg": round(float(sum(tool_selection_accuracies) / total), 6),
+            "collaboration_efficiency_avg": round(float(sum(collaboration_efficiencies) / total), 6),
+            "role_specialization_avg": round(float(sum(role_specializations) / total), 6),
+            "factuality_score_avg": round(float(sum(factuality_scores) / total), 6),
+            "tool_result_utilization_avg": round(float(sum(tool_result_utilizations) / total), 6),
         },
     }

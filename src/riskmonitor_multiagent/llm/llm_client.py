@@ -17,6 +17,7 @@ from typing import Any, Optional
 import aiohttp
 
 from riskmonitor_multiagent import config
+from riskmonitor_multiagent.llm.cache import get_llm_cache
 
 
 @dataclass
@@ -93,6 +94,7 @@ class LlmClient:
         model: Optional[str] = None,
         temperature: float = 0.2,
         max_tokens: Optional[int] = None,
+        use_cache: bool = True,
     ) -> dict[str, Any]:
         """
         调用 Chat Completions.
@@ -102,6 +104,7 @@ class LlmClient:
             model: 可选, 覆盖默认模型
             temperature: 采样温度
             max_tokens: 可选, 最大输出 tokens
+            use_cache: 是否使用缓存
 
         返回:
             原始响应 JSON(dict)
@@ -112,6 +115,18 @@ class LlmClient:
         used_model = (model or config.get_llm_model()).strip()
         if not used_model:
             raise LLMError(code="INVALID_CONFIG", message="LLM_MODEL 为空")
+
+        # 先查缓存
+        if use_cache and temperature == 0.0:
+            cache = get_llm_cache()
+            cached_response = cache.get(
+                messages=messages,
+                model=used_model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            if cached_response is not None:
+                return cached_response
 
         payload: dict[str, Any] = {
             "model": used_model,
@@ -179,6 +194,18 @@ class LlmClient:
                                 message="响应 JSON 不是对象",
                                 status_code=int(resp.status),
                             )
+                        
+                        # 写入缓存（只缓存 temperature=0 的确定性请求）
+                        if use_cache and temperature == 0.0:
+                            cache = get_llm_cache()
+                            cache.set(
+                                messages=messages,
+                                model=used_model,
+                                temperature=temperature,
+                                max_tokens=max_tokens,
+                                response=data,
+                            )
+                        
                         return data
 
                 except LLMError as e:

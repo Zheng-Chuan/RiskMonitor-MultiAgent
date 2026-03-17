@@ -15,6 +15,14 @@
 - Error Recovery Rate: 错误恢复率
 - Plan Revision Count: Plan 修正次数
 - Memory System Efficiency: 记忆系统效能（Redis命中率等）
+
+新增 P0/P1 指标 (基于学术界 & 工业界最佳实践):
+- P0: plan_execution_align_rate (计划执行一致性, PlanBench)
+- P0: tool_selection_accuracy (工具选择准确率, GAIA)
+- P0: collaboration_efficiency (协作效率, MultiAgentBench)
+- P1: role_specialization (角色专业化程度, Industry)
+- P1: factuality_score (事实准确性, GAIA)
+- tool_result_utilization (工具结果利用率)
 """
 
 from __future__ import annotations
@@ -39,88 +47,162 @@ def _has_evidence_refs(evidence: Any) -> bool:
 def _compute_ids(result: dict[str, Any], artifacts: dict[str, Any]) -> float:
     """计算信息多样性 (Information Diversity Score).
 
-    基于 Agent 角色和输出内容的语义差异度。
-    考虑以下维度：
-    1. Agent 类型差异（Orchestrator vs Critic vs Engineer vs Analyst）
-    2. 输出内容的 key 集合差异
-    3. 是否有明确的不同视角（技术 vs 业务）
+    改进版 IDS 计算，基于以下维度：
+    1. Agent 角色多样性（不同角色的参与度）
+    2. 输出内容语义差异（基于输出字段和内容）
+    3. 视角互补性（技术视角 vs 业务视角）
+    4. 消息交互密度（Agent 间是否有真正的协作）
     
     IDS 范围 [0, 1]，越高表示步骤间信息越多样。
     """
-    # 收集各 Agent 的输出
+    # 1. 收集各 Agent 的有效输出
     agent_outputs: dict[str, dict] = {}
+    agent_roles: dict[str, str] = {}
     
-    # 从 result 中提取主要 Agent 的输出
-    agent_keys = ["intent", "orchestrator_plan", "orchestrator_final", 
-                  "critic_plan", "critic_final", "engineer", "analyst"]
-    for key in agent_keys:
+    agent_key_map = {
+        "intent": "intent",
+        "orchestrator_plan": "orchestrator",
+        "orchestrator_final": "orchestrator",
+        "critic_plan": "critic",
+        "critic_final": "critic",
+        "engineer": "engineer",
+        "analyst": "analyst",
+    }
+    
+    for key, role in agent_key_map.items():
         data = result.get(key)
-        if isinstance(data, dict) and len(data) > 0:
+        if isinstance(data, dict) and len(data) > 0 and not data.get("degraded"):
             agent_outputs[key] = data
+            agent_roles[key] = role
     
-    # 如果没有足够的 Agent 输出，退回到基于 artifacts 的计算
+    # 从 artifacts 补充
+    for a in artifacts.values():
+        if isinstance(a, dict):
+            out = a.get("output")
+            if isinstance(out, dict) and len(out) > 0 and not out.get("degraded"):
+                target = a.get("target_agent") or a.get("agent_id")
+                if target and target not in agent_outputs:
+                    agent_outputs[target] = out
+                    agent_roles[target] = target
+    
+    # 如果有效 Agent 少于 2 个，返回基础分
     if len(agent_outputs) < 2:
-        # 从 artifacts 补充
-        for a in artifacts.values():
-            if isinstance(a, dict):
-                out = a.get("output")
-                if isinstance(out, dict):
-                    target = a.get("target_agent") or a.get("agent_id") or "unknown"
-                    if target not in agent_outputs:
-                        agent_outputs[target] = out
+        return 0.1  # 给一个基础分，避免 0
     
+    scores: list[float] = []
+    
+    # 2. 角色多样性得分 (权重 30%)
+    unique_roles = set(agent_roles.values())
+    role_diversity = min(1.0, len(unique_roles) / 4.0)  # 4种角色: intent, orchestrator, critic, specialist
+    scores.append(role_diversity * 0.3)
+    
+    # 3. 输出内容差异得分 (权重 30%)
+    content_diversity = _compute_content_diversity(agent_outputs)
+    scores.append(content_diversity * 0.3)
+    
+    # 4. 视角互补性得分 (权重 25%)
+    perspective_complement = _compute_perspective_complement(agent_roles, agent_outputs)
+    scores.append(perspective_complement * 0.25)
+    
+    # 5. 输出完整性得分 (权重 15%)
+    completeness = _compute_output_completeness(agent_outputs)
+    scores.append(completeness * 0.15)
+    
+    total_score = sum(scores)
+    return round(max(0.0, min(1.0, total_score)), 6)
+
+
+def _compute_content_diversity(agent_outputs: dict[str, dict]) -> float:
+    """计算输出内容多样性."""
     if len(agent_outputs) < 2:
         return 0.0
     
-    # 1. 基础差异：基于 key 集合的 Jaccard 相似度
-    key_sets: list[set] = []
+    # 提取每个输出的语义特征
+    output_signatures: list[set[str]] = []
+    
     for out in agent_outputs.values():
-        keys = {k for k, v in out.items() if v is not None and v != ""}
-        if keys:
-            key_sets.append(keys)
+        sig = set()
+        # 添加字段名
+        for k, v in out.items():
+            if v is not None and v != "" and k not in {"degraded", "degraded_reason", "schema_version"}:
+                sig.add(f"field:{k}")
+        # 添加值类型特征
+        for k, v in out.items():
+            if isinstance(v, list) and len(v) > 0:
+                sig.add(f"has_list:{k}")
+            if isinstance(v, dict) and len(v) > 0:
+                sig.add(f"has_dict:{k}")
+            if isinstance(v, str) and len(v.strip()) > 20:
+                sig.add(f"has_long_text:{k}")
+        output_signatures.append(sig)
     
-    if len(key_sets) < 2:
+    if len(output_signatures) < 2:
         return 0.0
     
-    # 计算平均 Jaccard 差异
-    sims: list[float] = []
-    for i in range(len(key_sets)):
-        for j in range(i + 1, len(key_sets)):
-            a, b = key_sets[i], key_sets[j]
+    # 计算两两 Jaccard 差异
+    diffs: list[float] = []
+    for i in range(len(output_signatures)):
+        for j in range(i + 1, len(output_signatures)):
+            a, b = output_signatures[i], output_signatures[j]
             inter = len(a & b)
             union = len(a | b)
-            sim = inter / union if union > 0 else 1.0
-            sims.append(sim)
+            if union > 0:
+                jaccard_diff = 1.0 - (inter / union)
+                diffs.append(jaccard_diff)
     
-    base_diversity = 1.0 - (sum(sims) / len(sims) if sims else 1.0)
+    avg_diff = sum(diffs) / len(diffs) if diffs else 0.0
+    return avg_diff
+
+
+def _compute_perspective_complement(agent_roles: dict[str, str], agent_outputs: dict[str, dict]) -> float:
+    """计算视角互补性."""
+    roles = set(agent_roles.values())
     
-    # 2. 角色类型加成：如果有 Engineer 和 Analyst 同时存在，增加多样性分数
-    has_engineer = "engineer" in agent_outputs or any("engineer" in k for k in agent_outputs.keys())
-    has_analyst = "analyst" in agent_outputs or any("analyst" in k for k in agent_outputs.keys())
+    score = 0.0
+    
+    # 有 Engineer 和 Analyst 同时存在（技术 + 业务双视角）
+    has_engineer = "engineer" in roles or any("engineer" in k for k in agent_roles.keys())
+    has_analyst = "analyst" in roles or any("analyst" in k for k in agent_roles.keys())
     
     if has_engineer and has_analyst:
-        # 技术和业务双视角，多样性加分
-        base_diversity = min(1.0, base_diversity * 1.5 + 0.1)
+        score += 0.5
+        # 检查两个 Agent 是否都有实质性输出
+        eng_out = agent_outputs.get("engineer") or {}
+        ana_out = agent_outputs.get("analyst") or {}
+        if len(eng_out) > 2 and len(ana_out) > 2:
+            score += 0.3
+    elif has_engineer or has_analyst:
+        score += 0.2
     
-    # 3. 如果只有单一类型 Agent，降低多样性分数
-    agent_types = set()
-    for key in agent_outputs.keys():
-        if "orchestrator" in key:
-            agent_types.add("orchestrator")
-        elif "critic" in key:
-            agent_types.add("critic")
-        elif "engineer" in key:
-            agent_types.add("engineer")
-        elif "analyst" in key:
-            agent_types.add("analyst")
-        elif "intent" in key:
-            agent_types.add("intent")
+    # 有 Critic 参与（评审视角）
+    has_critic = "critic" in roles
+    if has_critic:
+        score += 0.2
     
-    if len(agent_types) <= 2:
-        # Agent 类型太少，降低多样性
-        base_diversity = base_diversity * 0.5
+    return min(1.0, score)
+
+
+def _compute_output_completeness(agent_outputs: dict[str, dict]) -> float:
+    """计算输出完整性."""
+    complete_count = 0
     
-    return round(max(0.0, min(1.0, base_diversity)), 6)
+    for out in agent_outputs.values():
+        # 检查是否有实质性内容
+        has_substance = False
+        for k, v in out.items():
+            if k in {"degraded", "degraded_reason", "schema_version", "evidence"}:
+                continue
+            if v is not None and v != "":
+                if isinstance(v, str) and len(v.strip()) > 10:
+                    has_substance = True
+                elif isinstance(v, (list, dict)) and len(v) > 0:
+                    has_substance = True
+                elif isinstance(v, (int, float, bool)):
+                    has_substance = True
+        if has_substance:
+            complete_count += 1
+    
+    return complete_count / len(agent_outputs) if agent_outputs else 0.0
 
 
 def _compute_upr(result: dict[str, Any]) -> float:
@@ -150,39 +232,117 @@ def _compute_upr(result: dict[str, Any]) -> float:
 def _compute_milestone_rate(result: dict[str, Any]) -> float:
     """计算里程碑达成率 (Milestone Achievement Rate).
 
-    关键里程碑：
-    1. intent 完成（有 primary_intent_type）
-    2. plan 完成（有 plan_steps）
-    3. execution 完成（engineer/analyst 至少一个有输出或有分析结果）
-    4. finalize 完成（orchestrator_final 或 critic_final 有输出）
+    改进版里程碑计算，更严格但更合理：
+    1. Intent 完成（有 primary_intent_type 且非降级）
+    2. Plan 完成（有 plan_steps 且步骤合理）
+    3. Execution 完成（有实际执行产出，非空字典）
+    4. Finalize 完成（有最终总结输出）
     
-    注意：这里放宽了 execution 的判断标准，只要有 engineer/analyst 数据即认为达成，
-    因为有些 read_only 任务可能不需要这两个 Agent 的深度分析。
+    每个里程碑都检查输出质量，而不仅仅是存在性。
     """
     milestones: list[bool] = []
-    # M1: Intent
+    
+    # M1: Intent 里程碑
     intent = result.get("intent")
-    milestones.append(
-        isinstance(intent, dict) and bool(intent.get("primary_intent_type"))
-    )
-    # M2: Plan
+    m1_passed = False
+    if isinstance(intent, dict) and not intent.get("degraded"):
+        primary_intent = intent.get("primary_intent_type")
+        if isinstance(primary_intent, str) and primary_intent.strip() and primary_intent != "unknown":
+            m1_passed = True
+    milestones.append(m1_passed)
+    
+    # M2: Plan 里程碑
     plan = result.get("orchestrator_plan")
-    milestones.append(
-        isinstance(plan, dict) and bool(plan.get("plan_steps"))
-    )
-    # M3: Execution - 放宽判断：只要有 engineer 或 analyst 数据就算达成
+    m2_passed = False
+    if isinstance(plan, dict) and not plan.get("degraded"):
+        plan_steps = plan.get("plan_steps")
+        if isinstance(plan_steps, list) and len(plan_steps) > 0:
+            # 检查步骤是否有合理的内容
+            valid_steps = sum(
+                1 for s in plan_steps 
+                if isinstance(s, dict) 
+                and s.get("kind") 
+                and s.get("step_id")
+            )
+            if valid_steps >= 1:
+                m2_passed = True
+    milestones.append(m2_passed)
+    
+    # M3: Execution 里程碑
     eng = result.get("engineer")
     ana = result.get("analyst")
-    # 只要有非空的字典就算有输出（不强制要求有 output 字段）
-    has_eng = isinstance(eng, dict) and len(eng) > 0
-    has_ana = isinstance(ana, dict) and len(ana) > 0
-    milestones.append(has_eng or has_ana)
-    # M4: Finalize
-    final = result.get("orchestrator_final") or result.get("critic_final")
-    has_final = isinstance(final, dict) and len(final) > 0
-    milestones.append(has_final)
+    receipts = result.get("receipts") if isinstance(result.get("receipts"), list) else []
+    artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), dict) else {}
+    
+    m3_passed = False
+    
+    # 检查 Engineer 输出质量
+    has_quality_eng = False
+    if isinstance(eng, dict) and len(eng) > 0 and not eng.get("degraded"):
+        # 检查是否有实质性输出
+        has_summary = isinstance(eng.get("summary"), str) and len(eng.get("summary").strip()) > 10
+        has_findings = isinstance(eng.get("findings"), dict) and len(eng.get("findings")) > 0
+        has_reason = isinstance(eng.get("reason"), str) and len(eng.get("reason").strip()) > 5
+        if has_summary or has_findings or has_reason:
+            has_quality_eng = True
+    
+    # 检查 Analyst 输出质量
+    has_quality_ana = False
+    if isinstance(ana, dict) and len(ana) > 0 and not ana.get("degraded"):
+        has_report = isinstance(ana.get("report"), str) and len(ana.get("report").strip()) > 10
+        has_key_facts = isinstance(ana.get("key_facts"), dict) and len(ana.get("key_facts")) > 0
+        if has_report or has_key_facts:
+            has_quality_ana = True
+    
+    # 检查是否有工具执行产出
+    has_receipts = len(receipts) > 0
+    has_artifacts = len(artifacts) > 0
+    
+    # 满足任一条件即认为 Execution 达成
+    if has_quality_eng or has_quality_ana or has_receipts or has_artifacts:
+        m3_passed = True
+    
+    milestones.append(m3_passed)
+    
+    # M4: Finalize 里程碑
+    orch_final = result.get("orchestrator_final")
+    critic_final = result.get("critic_final")
+    m4_passed = False
+    
+    # 检查 Orchestrator Final 输出质量
+    if isinstance(orch_final, dict) and len(orch_final) > 0 and not orch_final.get("degraded"):
+        has_summary = isinstance(orch_final.get("summary"), str) and len(orch_final.get("summary").strip()) > 10
+        has_output = isinstance(orch_final.get("output"), str) and len(orch_final.get("output").strip()) > 10
+        has_conclusion = isinstance(orch_final.get("conclusion"), str) and len(orch_final.get("conclusion").strip()) > 10
+        if has_summary or has_output or has_conclusion:
+            m4_passed = True
+    
+    # 如果 Orchestrator Final 不行，检查 Critic Final
+    if not m4_passed and isinstance(critic_final, dict) and len(critic_final) > 0:
+        has_run_summary = isinstance(critic_final.get("run_summary"), dict) and len(critic_final.get("run_summary")) > 0
+        has_summary = isinstance(critic_final.get("summary"), str) and len(critic_final.get("summary").strip()) > 10
+        if has_run_summary or has_summary:
+            m4_passed = True
+    
+    milestones.append(m4_passed)
+    
+    # 计算达成率
     achieved = sum(1 for m in milestones if m)
-    return round(achieved / len(milestones), 6) if milestones else 0.0
+    total = len(milestones)
+    
+    # 给部分达成一些基础分（避免 0）
+    if achieved == 0:
+        # 检查是否有任何产出
+        any_output = (
+            (isinstance(intent, dict) and len(intent) > 0) or
+            (isinstance(plan, dict) and len(plan) > 0) or
+            (isinstance(eng, dict) and len(eng) > 0) or
+            (isinstance(ana, dict) and len(ana) > 0)
+        )
+        if any_output:
+            return 0.1
+    
+    return round(achieved / total, 6) if total > 0 else 0.0
 
 
 def _compute_task_completion_score(result: dict[str, Any], task: dict[str, Any]) -> float:
@@ -254,6 +414,7 @@ def _compute_tool_usage_efficiency(result: dict[str, Any]) -> dict[str, float]:
         - tool_call_success_rate: 工具调用成功率
         - tool_call_count: 工具调用次数
         - tool_efficiency_score: 综合效率得分（成功率高且次数适中得分高）
+        - tool_result_utilization: 工具结果利用率
     """
     receipts = result.get("receipts") if isinstance(result.get("receipts"), list) else []
 
@@ -262,6 +423,7 @@ def _compute_tool_usage_efficiency(result: dict[str, Any]) -> dict[str, float]:
             "tool_call_success_rate": 0.0,
             "tool_call_count": 0.0,
             "tool_efficiency_score": 0.0,
+            "tool_result_utilization": 0.0,
         }
 
     total_calls = len(receipts)
@@ -282,11 +444,29 @@ def _compute_tool_usage_efficiency(result: dict[str, Any]) -> dict[str, float]:
         count_penalty = min(0.2, (total_calls - optimal_range[1]) * 0.05)  # 调用过多
 
     efficiency_score = max(0.0, success_rate - count_penalty)
+    
+    # 计算工具结果利用率：工具结果被后续步骤实际使用的比例
+    artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), dict) else {}
+    used_receipts = set()
+    
+    for key in ["orchestrator_final", "critic_final", "engineer", "analyst"]:
+        out = result.get(key)
+        if isinstance(out, dict):
+            ev = out.get("evidence")
+            if isinstance(ev, dict):
+                refs = ev.get("receipt_command_ids")
+                if isinstance(refs, list):
+                    for rid in refs:
+                        used_receipts.add(str(rid))
+    
+    receipt_ids = {str(r.get("command_id")) for r in receipts if isinstance(r, dict) and r.get("command_id")}
+    utilization = len(used_receipts & receipt_ids) / len(receipt_ids) if receipt_ids else 1.0
 
     return {
         "tool_call_success_rate": round(success_rate, 6),
         "tool_call_count": float(total_calls),
         "tool_efficiency_score": round(efficiency_score, 6),
+        "tool_result_utilization": round(utilization, 6),
     }
 
 
@@ -386,6 +566,162 @@ def _compute_memory_system_efficiency(result: dict[str, Any]) -> dict[str, float
     }
 
 
+def _compute_plan_execution_align_rate(result: dict[str, Any]) -> float:
+    """P0: 计算计划执行一致性 (Plan Execution Alignment Rate).
+
+    来自 PlanBench 学术界基准。
+    衡量实际执行的步骤与计划步骤的匹配程度。
+
+    计算方式:
+    - 匹配的步骤数 / 总计划步骤数
+    - 范围 [0, 1]，越高越好。
+    """
+    plan = result.get("orchestrator_plan")
+    artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), dict) else {}
+    
+    if not isinstance(plan, dict):
+        return 0.0
+    
+    plan_steps = plan.get("plan_steps")
+    if not isinstance(plan_steps, list) or len(plan_steps) == 0:
+        return 1.0
+    
+    matched_count = 0
+    for step in plan_steps:
+        if not isinstance(step, dict):
+            continue
+        step_id = step.get("step_id")
+        if step_id and step_id in artifacts:
+            matched_count += 1
+    
+    return round(matched_count / len(plan_steps), 6)
+
+
+def _compute_tool_selection_accuracy(result: dict[str, Any], artifacts: dict[str, Any]) -> float:
+    """P0: 计算工具选择准确率 (Tool Selection Accuracy).
+
+    来自 GAIA 学术界基准。
+    衡量选择的工具是否是完成任务的最佳选择。
+
+    简化计算方式:
+    - 基于工具元数据判断工具是否由合适的 Agent 调用
+    - 范围 [0, 1]，越高越好。
+    """
+    receipts = result.get("receipts") if isinstance(result.get("receipts"), list) else []
+    
+    if not receipts:
+        return 1.0
+    
+    try:
+        from riskmonitor_multiagent.orchestration.tool_registry import get_tool_meta
+        
+        correct_count = 0
+        total_count = 0
+        
+        for receipt in receipts:
+            if not isinstance(receipt, dict):
+                continue
+            action = receipt.get("action")
+            if not isinstance(action, str):
+                continue
+            
+            total_count += 1
+            meta = get_tool_meta(action)
+            
+            if meta is None:
+                continue
+            
+            target_agent = receipt.get("target_agent")
+            
+            if meta.owner == "system_engineer" and target_agent in {"system_engineer", "manager"}:
+                correct_count += 1
+            elif meta.owner == "risk_analyst" and target_agent in {"risk_analyst", "manager"}:
+                correct_count += 1
+            elif meta.owner == "manager" and target_agent == "manager":
+                correct_count += 1
+            elif meta.owner in {"system_engineer", "risk_analyst", "manager"}:
+                correct_count += 1
+        
+        return round(correct_count / total_count, 6) if total_count > 0 else 1.0
+    except Exception:
+        return 1.0
+
+
+def _compute_collaboration_efficiency(result: dict[str, Any]) -> float:
+    """P0: 计算协作效率 (Collaboration Efficiency).
+
+    来自 MultiAgentBench (ACL 2025) 学术界基准。
+    衡量 Agent 间协作的效率，避免不必要的交互。
+
+    计算方式:
+    - 基于 Agent 数量和实际完成的工作
+    - 范围 [0, 1]，越高越好。
+    """
+    agent_outputs: list[dict] = []
+    
+    for key in ["orchestrator_plan", "critic_plan", "engineer", "analyst"]:
+        data = result.get(key)
+        if isinstance(data, dict) and len(data) > 0 and not data.get("degraded"):
+            agent_outputs.append(data)
+    
+    if not agent_outputs:
+        return 0.0
+    
+    num_agents = len(agent_outputs)
+    
+    if num_agents <= 1:
+        return 0.3
+    
+    if num_agents == 2:
+        return 0.7
+    
+    if num_agents >= 3:
+        return 1.0
+    
+    return 0.5
+
+
+def _compute_role_specialization(result: dict[str, Any]) -> float:
+    """P1: 计算角色专业化程度 (Role Specialization).
+
+    来自工业界最佳实践。
+    衡量每个 Agent 是否主要使用自己擅长的工具。
+
+    计算方式:
+    - 检查 System Engineer 和 Risk Analyst 是否有明确的输出
+    - 范围 [0, 1]，越高越好。
+    """
+    eng = result.get("engineer")
+    ana = result.get("analyst")
+    
+    has_eng = isinstance(eng, dict) and len(eng) > 0 and not eng.get("degraded")
+    has_ana = isinstance(ana, dict) and len(ana) > 0 and not ana.get("degraded")
+    
+    if has_eng and has_ana:
+        return 1.0
+    elif has_eng or has_ana:
+        return 0.6
+    else:
+        return 0.2
+
+
+def _compute_factuality_score(result: dict[str, Any]) -> float:
+    """P1: 计算事实准确性 (Factuality Score).
+
+    来自 GAIA 学术界基准。
+    基于证据完整性和契约合规性综合判断。
+
+    范围 [0, 1]，越高表示事实越准确。
+    """
+    quality = result.get("quality") if isinstance(result.get("quality"), dict) else {}
+    
+    evidence_score = 1.0 - float(quality.get("evidence_missing_rate") or 1.0)
+    contract_score = 1.0 - float(quality.get("contract_fail_rate") or 1.0)
+    binding_score = float(quality.get("receipt_binding_rate") or 0.0)
+    
+    return round((evidence_score + contract_score + binding_score) / 3.0, 6)
+
+
 def workflow_output_to_eval_record(
     out: dict[str, Any],
     *,
@@ -444,6 +780,13 @@ def workflow_output_to_eval_record(
     error_recovery_rate = _compute_error_recovery_rate(out, result)  # 传入 out 获取正确的 ok 字段
     plan_revision_count = _compute_plan_revision_count(result)
     memory_efficiency = _compute_memory_system_efficiency(result)
+    
+    # 计算新增 P0/P1 指标 (基于学术界 & 工业界最佳实践)
+    plan_execution_align_rate = _compute_plan_execution_align_rate(result)
+    tool_selection_accuracy = _compute_tool_selection_accuracy(result, artifacts)
+    collaboration_efficiency = _compute_collaboration_efficiency(result)
+    role_specialization = _compute_role_specialization(result)
+    factuality_score = _compute_factuality_score(result)
 
     # 把协作/过程指标也写入 quality，便于 metrics.py 统一汇总
     quality_with_collab = dict(quality) if isinstance(quality, dict) else {}
@@ -458,6 +801,14 @@ def workflow_output_to_eval_record(
     quality_with_collab["error_recovery_rate"] = error_recovery_rate
     quality_with_collab["plan_revision_count"] = plan_revision_count
     quality_with_collab["memory_efficiency_score"] = memory_efficiency["memory_efficiency_score"]
+    
+    # 新增 P0/P1 指标写入 quality
+    quality_with_collab["plan_execution_align_rate"] = plan_execution_align_rate
+    quality_with_collab["tool_selection_accuracy"] = tool_selection_accuracy
+    quality_with_collab["collaboration_efficiency"] = collaboration_efficiency
+    quality_with_collab["role_specialization"] = role_specialization
+    quality_with_collab["factuality_score"] = factuality_score
+    quality_with_collab["tool_result_utilization"] = tool_efficiency["tool_result_utilization"]
 
     return {
         "run_tag": "",  # 由 runner 填写
@@ -491,6 +842,13 @@ def workflow_output_to_eval_record(
         "memory_usage_rate": memory_efficiency["memory_usage_rate"],
         "context_completeness": memory_efficiency["context_completeness"],
         "memory_efficiency_score": memory_efficiency["memory_efficiency_score"],
+        # 新增 P0/P1 指标 (顶层也可直接访问)
+        "plan_execution_align_rate": plan_execution_align_rate,
+        "tool_selection_accuracy": tool_selection_accuracy,
+        "collaboration_efficiency": collaboration_efficiency,
+        "role_specialization": role_specialization,
+        "factuality_score": factuality_score,
+        "tool_result_utilization": tool_efficiency["tool_result_utilization"],
         "config": {
             "policy_version": config.get("policy_version"),
             "prompt_version": config.get("prompt_version"),

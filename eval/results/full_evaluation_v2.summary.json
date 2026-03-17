@@ -1,0 +1,51 @@
+{
+  "total_cases": 40,
+  "unique_cases": 40,
+  "pass_rate": 0.9,
+  "aggregates": {
+    "latency_ms_avg": 144483.035729,
+    "latency_ms_p95": 417997.249125,
+    "step_reason_coverage": 0.9,
+    "evidence_missing_rate": 0.1,
+    "receipt_binding_rate": 0.9,
+    "contract_fail_rate": 0.125,
+    "explainability_score": 0.89375,
+    "tokens_total": 260075,
+    "approval_required_rate": 0.7,
+    "governance_blocked_avg": 0.0,
+    "degraded_avg": 0.775,
+    "stability_ok_rate": 1.0,
+    "ids_avg": 0.578811,
+    "upr_avg": 0.129167,
+    "milestone_achieved_rate_avg": 0.68125,
+    "task_completion_score_avg": 0.385417,
+    "hallucination_score_avg": 0.333333,
+    "tool_call_success_rate_avg": 0.01875,
+    "tool_call_count_avg": 3.8,
+    "tool_efficiency_score_avg": 0.01375,
+    "error_recovery_rate_avg": 0.9,
+    "plan_revision_count_avg": 0.675,
+    "memory_usage_rate_avg": 0.54375,
+    "context_completeness_avg": 0.7625,
+    "memory_efficiency_score_avg": 0.653125,
+    "plan_execution_align_rate_avg": 0.625,
+    "tool_selection_accuracy_avg": 1.0,
+    "collaboration_efficiency_avg": 0.5175,
+    "role_specialization_avg": 0.21,
+    "factuality_score_avg": 0.333333,
+    "tool_result_utilization_avg": 0.625
+  },
+  "run_tag": "full_evaluation_v2",
+  "duration_ms": 6355932.310375,
+  "config": {
+    "policy_version": "policy.v1",
+    "prompt_version": "orchestrator_prompt.v1",
+    "model": "qwen3-8b",
+    "hitl_auto_approve": true,
+    "budget_profile": ""
+  },
+  "stats": {
+    "success_count": 36,
+    "failure_count": 4
+  }
+}

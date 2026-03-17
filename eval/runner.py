@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 import time
 from typing import Any
 
@@ -12,6 +13,49 @@ from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orche
 
 from eval.case_schema import BenchmarkCase
 from eval.metrics import summarize_benchmark_records
+
+
+def _print_progress(
+    current: int,
+    total: int,
+    repeat_index: int,
+    total_repeats: int,
+    case_id: str,
+    tags: list[str],
+    elapsed_s: float,
+) -> None:
+    """打印进度信息."""
+    percentage = (current / total) * 100
+    case_tag_str = ", ".join(tags) if tags else ""
+    tag_display = f" [{case_tag_str}]" if case_tag_str else ""
+    
+    bar_length = 40
+    filled_length = int(bar_length * current // total)
+    bar = "█" * filled_length + "░" * (bar_length - filled_length)
+    
+    if total_repeats > 1:
+        repeat_info = f" (Repeat {repeat_index + 1}/{total_repeats})"
+    else:
+        repeat_info = ""
+    
+    sys.stdout.write("\r" + " " * 120 + "\r")
+    sys.stdout.flush()
+    
+    line = (
+        f"\r[{bar}] {percentage:5.1f}% | "
+        f"{current}/{total} | "
+        f"Case: {case_id}{tag_display}{repeat_info} | "
+        f"Elapsed: {elapsed_s:.1f}s"
+    )
+    sys.stdout.write(line)
+    sys.stdout.flush()
+
+
+def _log(message: str, level: str = "INFO") -> None:
+    """带时间戳的日志输出."""
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    sys.stdout.write(f"\n[{timestamp}] [{level}] {message}\n")
+    sys.stdout.flush()
 
 
 def _resolve_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -94,23 +138,79 @@ async def run_benchmark(
     records: list[dict[str, Any]] = []
     started = time.monotonic()
     r = max(1, int(repeats))
+    
+    total_cases = len(cases)
+    total_runs = total_cases * r
+    
+    _log("=" * 80, "INFO")
+    _log(f"开始评估运行: {run_tag}", "INFO")
+    _log(f"配置: model={config.get('model')}, policy={config.get('policy_version')}", "INFO")
+    _log(f"测试用例数: {total_cases}, 重复次数: {r}, 总运行数: {total_runs}", "INFO")
+    _log("=" * 80, "INFO")
+    
+    success_count = 0
+    failure_count = 0
+    
     try:
         for rep in range(r):
+            if r > 1:
+                _log(f"开始第 {rep + 1}/{r} 轮重复", "INFO")
+            
             for idx, c in enumerate(cases):
+                current_run = rep * total_cases + idx + 1
+                elapsed_s = time.monotonic() - started
+                
+                _print_progress(
+                    current=idx + 1,
+                    total=total_cases,
+                    repeat_index=rep,
+                    total_repeats=r,
+                    case_id=c.case_id,
+                    tags=c.tags,
+                    elapsed_s=elapsed_s,
+                )
+                
                 if idx > 0:
                     delay_s = float(os.getenv("EVAL_DELAY_BETWEEN_CASES_S", "0"))
                     if delay_s > 0:
                         await asyncio.sleep(delay_s)
-                out = await run_orchestrator_workflow(task=c.task)
-                record = workflow_output_to_eval_record(
-                    out, case_id=c.case_id, tags=c.tags, config=config
-                )
-                record["run_tag"] = run_tag
-                record["repeat_index"] = rep
-                records.append(record)
+                
+                try:
+                    out = await run_orchestrator_workflow(task=c.task)
+                    record = workflow_output_to_eval_record(
+                        out, case_id=c.case_id, tags=c.tags, config=config
+                    )
+                    record["run_tag"] = run_tag
+                    record["repeat_index"] = rep
+                    records.append(record)
+                    
+                    if record.get("ok"):
+                        success_count += 1
+                    else:
+                        failure_count += 1
+                        _log(f"Case {c.case_id} 失败", "WARN")
+                        
+                except Exception as e:
+                    _log(f"Case {c.case_id} 执行异常: {e}", "ERROR")
+                    failure_count += 1
+                    error_record = {
+                        "run_tag": run_tag,
+                        "case_id": c.case_id,
+                        "repeat_index": rep,
+                        "tags": c.tags,
+                        "ok": False,
+                        "latency_ms": 0.0,
+                        "errors": [str(e)],
+                        "tokens_total": 0,
+                        "config": config,
+                    }
+                    records.append(error_record)
+    
     finally:
         _restore_env(changed, before)
-
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+    
     summary = summarize_benchmark_records(records)
     summary["run_tag"] = run_tag
     summary["duration_ms"] = round((time.monotonic() - started) * 1000.0, 6)
@@ -121,4 +221,15 @@ async def run_benchmark(
         "hitl_auto_approve": config.get("hitl_auto_approve"),
         "budget_profile": config.get("budget_profile"),
     }
+    summary["stats"] = {
+        "success_count": success_count,
+        "failure_count": failure_count,
+    }
+    
+    _log("=" * 80, "INFO")
+    _log(f"评估完成!", "INFO")
+    _log(f"成功: {success_count}, 失败: {failure_count}", "INFO")
+    _log(f"总耗时: {(time.monotonic() - started):.1f}s", "INFO")
+    _log("=" * 80, "INFO")
+    
     return {"records": records, "summary": summary}
