@@ -8,7 +8,7 @@ import sys
 import time
 from typing import Any
 
-from riskmonitor_multiagent.orchestration.eval_adapter import workflow_output_to_eval_record
+from riskmonitor_multiagent.orchestration.multiagent_eval_adapter import multiagent_output_to_eval_record
 from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
 
 from eval.case_schema import BenchmarkCase
@@ -177,9 +177,9 @@ async def run_benchmark(
                 
                 try:
                     out = await run_orchestrator_workflow(task=c.task)
-                    record = workflow_output_to_eval_record(
-                        out, case_id=c.case_id, tags=c.tags, config=config
-                    )
+                    record = multiagent_output_to_eval_record(
+                    out, case_id=c.case_id, tags=c.tags, config=config
+                )
                     record["run_tag"] = run_tag
                     record["repeat_index"] = rep
                     records.append(record)

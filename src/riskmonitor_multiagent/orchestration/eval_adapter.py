@@ -30,18 +30,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-
-def _has_evidence_refs(evidence: Any) -> bool:
-    if not isinstance(evidence, dict):
-        return False
-    for v in (
-        evidence.get("fields"),
-        evidence.get("receipt_command_ids"),
-        evidence.get("rag_hit_ids"),
-    ):
-        if isinstance(v, list) and any(isinstance(x, str) and x.strip() for x in v):
-            return True
-    return False
+from riskmonitor_multiagent.utils.validation import has_evidence_refs
 
 
 def _compute_ids(result: dict[str, Any], artifacts: dict[str, Any]) -> float:
@@ -765,7 +754,7 @@ def workflow_output_to_eval_record(
         if not isinstance(step_output, dict):
             continue
         ev = step_output.get("evidence")
-        if isinstance(ev, dict) and not _has_evidence_refs(ev):
+        if isinstance(ev, dict) and not has_evidence_refs(ev):
             evidence_missing_steps.append(sid)
 
     # 计算协作/过程指标 (Collaboration & Process Metrics)

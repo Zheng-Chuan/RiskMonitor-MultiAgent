@@ -43,6 +43,11 @@ _logger = logging.getLogger("riskmonitor")
 _state: dict[str, bool] = {"is_configured": False}
 
 
+def get_logger(name: str) -> logging.Logger:
+    """获取命名 logger."""
+    return logging.getLogger(name)
+
+
 def configure_logging() -> None:
     """
     配置全局日志系统.

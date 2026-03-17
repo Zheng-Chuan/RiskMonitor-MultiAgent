@@ -163,8 +163,30 @@ INSERT IGNORE INTO positions (position_id, trader_id, desk, security_id, quantit
 ('POS-2024-012', 'TRADER-006', 'Fixed Income', 'EUR5Y-IRS-20250630', 30000000, 150000.0, '2024-10-29', 'EUR'),
 ('POS-2024-013', 'TRADER-007', 'Commodities', 'WTI-FUT-20250228', 1000, 50000.0, '2024-10-30', 'USD'),
 ('POS-2024-014', 'TRADER-007', 'Commodities', 'GOLD-FUT-20250331', 500, 100000.0, '2024-10-31', 'USD'),
-('POS-2024-015', 'TRADER-008', 'Credit Trading', 'JPM-CDS-20250630', 10000000, 50000.0, '2024-10-31', 'USD')
-;
+('POS-2024-015', 'TRADER-008', 'Credit Trading', 'JPM-CDS-20250630', 10000000, 50000.0, '2024-10-31', 'USD'),
+-- Equities desk (for test cases)
+('POS-2025-001', 'TRADER-001', 'Equities', 'AAPL-CALL-175-20250331', 1500, 950.0, '2025-01-15', 'USD'),
+('POS-2025-002', 'TRADER-001', 'Equities', 'GOOGL-PUT-140-20250630', -800, -480.0, '2025-01-16', 'USD'),
+('POS-2025-003', 'TRADER-002', 'Equities', 'MSFT-CALL-420-20250331', 1200, 720.0, '2025-01-17', 'USD'),
+('POS-2025-004', 'TRADER-002', 'Equities', 'TSLA-PUT-250-20250228', -1500, -900.0, '2025-01-18', 'USD'),
+-- Rates desk (for test cases)
+('POS-2025-010', 'TRADER-004', 'Rates', 'EURUSD-FWD-20250331', 12000000, 60000.0, '2025-01-20', 'EUR'),
+('POS-2025-011', 'TRADER-004', 'Rates', 'GBPUSD-CALL-1.30-20250228', 6000000, 150000.0, '2025-01-21', 'GBP'),
+('POS-2025-012', 'TRADER-005', 'Rates', 'USDJPY-PUT-150-20250331', -10000000, -50000.0, '2025-01-22', 'JPY'),
+-- Credit desk (for test cases)
+('POS-2025-020', 'TRADER-008', 'Credit', 'JPM-CDS-20250630', 12000000, 60000.0, '2025-01-25', 'USD'),
+('POS-2025-021', 'TRADER-008', 'Credit', 'GS-CDS-20250331', 8000000, 40000.0, '2025-01-26', 'USD');
+
+-- 插入告警历史数据（用于测试用例）
+INSERT IGNORE INTO alerts (alert_id, request_id, alert_type, severity, desk, trader_id, metric_name, metric_value, threshold_value, breach_amount, message, acknowledged, created_at) VALUES
+('ALERT-2025-001', 'REQ-001', 'delta_breach', 'HIGH', 'Equities', 'TRADER-001', 'delta_exposure', 950.0, 800.0, 150.0, 'Equities desk delta exposure exceeds threshold', FALSE, '2025-03-10 09:00:00'),
+('ALERT-2025-002', 'REQ-002', 'delta_breach', 'MEDIUM', 'Equities', 'TRADER-002', 'delta_exposure', 720.0, 600.0, 120.0, 'Equities desk delta exposure approaches threshold', FALSE, '2025-03-11 10:30:00'),
+('ALERT-2025-003', 'REQ-003', 'delta_breach', 'LOW', 'Rates', 'TRADER-004', 'delta_exposure', 60000.0, 75000.0, -15000.0, 'Rates desk delta within limit', FALSE, '2025-03-12 14:00:00'),
+('ALERT-2025-004', 'REQ-004', 'delta_breach', 'HIGH', 'Equities', 'TRADER-001', 'delta_exposure', 900.0, 800.0, 100.0, 'Equities desk delta breach again', FALSE, '2025-03-13 08:45:00'),
+('ALERT-2025-005', 'REQ-005', 'delta_breach', 'HIGH', 'Equities', 'TRADER-002', 'delta_exposure', 850.0, 600.0, 250.0, 'Equities desk delta breach continues', FALSE, '2025-03-14 11:20:00'),
+('ALERT-2025-006', 'REQ-006', 'delta_breach', 'MEDIUM', 'Credit', 'TRADER-008', 'delta_exposure', 60000.0, 70000.0, -10000.0, 'Credit desk delta within limit', FALSE, '2025-03-15 16:30:00'),
+('ALERT-2025-007', 'REQ-007', 'delta_breach', 'HIGH', 'Equities', 'TRADER-001', 'delta_exposure', 980.0, 800.0, 180.0, 'Equities desk delta breach persists', FALSE, '2025-03-16 09:15:00');
+
 
 GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'admin'@'%';
 FLUSH PRIVILEGES;

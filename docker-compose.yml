@@ -49,6 +49,25 @@ services:
       timeout: 3s
       retries: 5
 
+  # Chroma - 向量数据库（用于知识检索）
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: riskmonitor-chroma
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - riskmonitor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - knowledge  # 可选启动
+
   # PageIndex - 长期语义记忆 (假设服务)
   # 注意: PageIndex 是一个假设的服务，需要根据实际部署情况配置
   # 如果 PageIndex 是外部服务，请在 .env 中配置 PAGE_INDEX_URL
@@ -160,6 +179,8 @@ volumes:
   mysql_data:
     driver: local
   redis_data:
+    driver: local
+  chroma_data:
     driver: local
   pageindex_data:
     driver: local

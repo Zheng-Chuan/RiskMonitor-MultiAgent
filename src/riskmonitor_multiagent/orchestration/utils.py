@@ -8,31 +8,7 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
-
-def _has_evidence_refs(output: Any) -> bool:
-    """
-    检查输出是否有 evidence 引用.
-
-    Args:
-        output: Agent 输出字典
-
-    Returns:
-        是否包含 evidence 引用
-    """
-    if not isinstance(output, dict):
-        return False
-
-    evidence = output.get("evidence")
-    if isinstance(evidence, dict):
-        return len(evidence) > 0
-
-    # 兜底：检查任何可能的 evidence 相关字段
-    for k, v in output.items():
-        if k in ("receipt_ids", "receipt_command_ids", "receipts"):
-            if isinstance(v, list) and len(v) > 0:
-                return True
-
-    return False
+from riskmonitor_multiagent.utils.validation import has_evidence_refs
 
 
 def _ensure_evidence_refs(output: Any, primary_keys: Optional[list[str]] = None) -> None:

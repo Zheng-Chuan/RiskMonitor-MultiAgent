@@ -1,190 +1,314 @@
-"""Agent 间消息总线.
+"""
+消息总线实现.
 
-实现 Agent 之间的异步消息传递，使用纯内存存储。
-
-功能：
-- 发布/订阅模式
-- 点对点消息
-- 消息回溯
+实现多 Agent 之间的通信基础设施，支持发送、接收、订阅消息.
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
+import uuid
+from collections import defaultdict
 from typing import Any, Callable, Optional
-from uuid import uuid4
 
-logger = logging.getLogger(__name__)
+from riskmonitor_multiagent.contracts.message import (
+    MessageType,
+    normalize_message,
+    validate_message,
+)
+from riskmonitor_multiagent.services.logging_service import get_logger
+from riskmonitor_multiagent.utils.time import now_ms
 
-
-class MessageType(Enum):
-    """消息类型."""
-    OBSERVATION = "observation"
-    QUESTION = "question"
-    ANSWER = "answer"
-    PROPOSAL = "proposal"
-    CRITIQUE = "critique"
-    REVISION = "revision"
-    SUMMARY = "summary"
-    COMMAND = "command"
-    RECEIPT = "receipt"
-
-
-@dataclass
-class AgentMessage:
-    """Agent 消息."""
-    message_id: str = field(default_factory=lambda: str(uuid4()))
-    timestamp: float = field(default_factory=lambda: datetime.now().timestamp())
-    from_agent: str
-    to_agent: Optional[str] = None
-    message_type: MessageType
-    content: dict[str, Any] = field(default_factory=dict)
-    in_reply_to: Optional[str] = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "message_id": self.message_id,
-            "timestamp": self.timestamp,
-            "from_agent": self.from_agent,
-            "to_agent": self.to_agent,
-            "message_type": self.message_type.value,
-            "content": self.content,
-            "in_reply_to": self.in_reply_to,
-            "metadata": self.metadata,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "AgentMessage":
-        return cls(
-            message_id=data["message_id"],
-            timestamp=data["timestamp"],
-            from_agent=data["from_agent"],
-            to_agent=data.get("to_agent"),
-            message_type=MessageType(data["message_type"]),
-            content=data.get("content", {}),
-            in_reply_to=data.get("in_reply_to"),
-            metadata=data.get("metadata", {}),
-        )
+logger = get_logger(__name__)
 
 
 class MessageBus:
-    """Agent 消息总线（纯内存实现）."""
+    """
+    消息总线.
 
-    def __init__(self) -> None:
-        self._messages: list[AgentMessage] = []
-        self._subscribers: dict[str, list[Callable[[AgentMessage], None]]] = {}
+    负责 Agent 之间的消息传递，支持：
+    - 发送消息（点对点、广播）
+    - 订阅消息
+    - 查询消息历史
+    """
+
+    def __init__(self):
+        self._messages: list[dict[str, Any]] = []
+        self._subscribers: dict[str, list[Callable]] = defaultdict(list)
+        self._broadcast_subscribers: list[Callable] = []
         self._lock = asyncio.Lock()
 
-    async def publish(
+    async def send(
         self,
-        from_agent: str,
         message_type: MessageType,
+        from_agent: str,
         content: dict[str, Any],
         to_agent: Optional[str] = None,
         in_reply_to: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
-    ) -> AgentMessage:
-        """发布消息."""
-        msg = AgentMessage(
+    ) -> dict[str, Any]:
+        """
+        发送消息.
+
+        Args:
+            message_type: 消息类型
+            from_agent: 发送者 Agent ID
+            content: 消息内容
+            to_agent: 接收者 Agent ID（None 表示广播）
+            in_reply_to: 回复的消息 ID
+
+        Returns:
+            发送的消息
+        """
+        message = {
+            "message_id": str(uuid.uuid4()),
+            "message_type": message_type.value,
+            "from_agent": from_agent,
+            "to_agent": to_agent,
+            "content": content,
+            "timestamp_ms": now_ms(),
+            "in_reply_to": in_reply_to,
+        }
+
+        # 归一化和验证
+        message = normalize_message(message)
+        is_valid, errors = validate_message(message)
+        if not is_valid:
+            logger.error(f"Message validation failed: {errors}")
+            message["degraded"] = True
+            message["degraded_reason"] = f"validation_failed: {errors}"
+
+        async with self._lock:
+            self._messages.append(message)
+
+        # 通知订阅者
+        await self._notify_subscribers(message)
+
+        logger.debug(f"Message sent: {message['message_id']} from {from_agent} to {to_agent or 'broadcast'}")
+        return message
+
+    async def send_request(
+        self,
+        from_agent: str,
+        to_agent: str,
+        content: dict[str, Any],
+    ) -> dict[str, Any]:
+        """发送请求消息."""
+        return await self.send(
+            message_type=MessageType.REQUEST,
             from_agent=from_agent,
             to_agent=to_agent,
-            message_type=message_type,
             content=content,
-            in_reply_to=in_reply_to,
-            metadata=metadata or {},
         )
 
-        async with self._lock:
-            self._messages.append(msg)
-
-        await self._notify_subscribers(msg)
-        logger.debug(f"Message published: {msg.message_id} from={from_agent} type={message_type.value}")
-        return msg
-
-    async def _notify_subscribers(self, msg: AgentMessage) -> None:
-        """通知订阅者."""
-        subscribers = []
-        async with self._lock:
-            if msg.to_agent and msg.to_agent in self._subscribers:
-                subscribers.extend(self._subscribers[msg.to_agent])
-            if "*" in self._subscribers:
-                subscribers.extend(self._subscribers["*"])
-
-        for callback in subscribers:
-            try:
-                if asyncio.iscoroutinefunction(callback):
-                    await callback(msg)
-                else:
-                    callback(msg)
-            except Exception as e:
-                logger.error(f"Subscriber callback failed: {e}")
-
-    def subscribe(self, agent_id: str, callback: Callable[[AgentMessage], None]) -> None:
-        """订阅消息."""
-        if agent_id not in self._subscribers:
-            self._subscribers[agent_id] = []
-        self._subscribers[agent_id].append(callback)
-
-    def unsubscribe(self, agent_id: str, callback: Callable[[AgentMessage], None]) -> None:
-        """取消订阅."""
-        if agent_id in self._subscribers:
-            self._subscribers[agent_id] = [
-                cb for cb in self._subscribers[agent_id] if cb != callback
-            ]
-
-    async def get_messages(
+    async def send_response(
         self,
-        from_agent: Optional[str] = None,
+        from_agent: str,
+        to_agent: str,
+        content: dict[str, Any],
+        in_reply_to: str,
+    ) -> dict[str, Any]:
+        """发送响应消息."""
+        return await self.send(
+            message_type=MessageType.RESPONSE,
+            from_agent=from_agent,
+            to_agent=to_agent,
+            content=content,
+            in_reply_to=in_reply_to,
+        )
+
+    async def broadcast(
+        self,
+        from_agent: str,
+        content: dict[str, Any],
+    ) -> dict[str, Any]:
+        """发送广播消息."""
+        return await self.send(
+            message_type=MessageType.BROADCAST,
+            from_agent=from_agent,
+            to_agent=None,
+            content=content,
+        )
+
+    async def send_interrupt(
+        self,
+        from_agent: str,
+        reason: str,
         to_agent: Optional[str] = None,
-        message_type: Optional[MessageType] = None,
-        since_timestamp: Optional[float] = None,
+    ) -> dict[str, Any]:
+        """发送中断消息."""
+        return await self.send(
+            message_type=MessageType.INTERRUPT,
+            from_agent=from_agent,
+            to_agent=to_agent,
+            content={"reason": reason},
+        )
+
+    async def send_feedback(
+        self,
+        from_agent: str,
+        to_agent: str,
+        feedback: str,
+        in_reply_to: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """发送反馈消息."""
+        return await self.send(
+            message_type=MessageType.FEEDBACK,
+            from_agent=from_agent,
+            to_agent=to_agent,
+            content={"feedback": feedback},
+            in_reply_to=in_reply_to,
+        )
+
+    async def send_tool_call(
+        self,
+        from_agent: str,
+        tool_name: str,
+        tool_params: dict[str, Any],
+        to_agent: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """发送工具调用请求."""
+        return await self.send(
+            message_type=MessageType.TOOL_CALL,
+            from_agent=from_agent,
+            to_agent=to_agent,
+            content={"tool_name": tool_name, "tool_params": tool_params},
+        )
+
+    async def send_tool_result(
+        self,
+        from_agent: str,
+        to_agent: str,
+        tool_name: str,
+        result: Any,
+        success: bool = True,
+        error: Optional[str] = None,
+        in_reply_to: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """发送工具调用结果."""
+        return await self.send(
+            message_type=MessageType.TOOL_RESULT,
+            from_agent=from_agent,
+            to_agent=to_agent,
+            content={
+                "tool_name": tool_name,
+                "result": result,
+                "success": success,
+                "error": error,
+            },
+            in_reply_to=in_reply_to,
+        )
+
+    def subscribe(
+        self,
+        agent_id: str,
+        callback: Callable[[dict[str, Any]], Any],
+    ) -> None:
+        """
+        订阅发给特定 Agent 的消息.
+
+        Args:
+            agent_id: Agent ID
+            callback: 消息到达时的回调函数
+        """
+        self._subscribers[agent_id].append(callback)
+        logger.debug(f"Subscribed: {agent_id}")
+
+    def subscribe_broadcast(
+        self,
+        callback: Callable[[dict[str, Any]], Any],
+    ) -> None:
+        """
+        订阅广播消息.
+
+        Args:
+            callback: 消息到达时的回调函数
+        """
+        self._broadcast_subscribers.append(callback)
+        logger.debug("Subscribed to broadcast")
+
+    def get_messages_for_agent(
+        self,
+        agent_id: str,
         limit: Optional[int] = None,
-    ) -> list[AgentMessage]:
-        """获取消息历史."""
-        async with self._lock:
-            messages = list(self._messages)
+    ) -> list[dict[str, Any]]:
+        """
+        获取发给特定 Agent 的消息历史.
 
-        if since_timestamp is not None:
-            messages = [m for m in messages if m.timestamp >= since_timestamp]
-        if from_agent is not None:
-            messages = [m for m in messages if m.from_agent == from_agent]
-        if to_agent is not None:
-            messages = [m for m in messages if m.to_agent in (to_agent, None)]
-        if message_type is not None:
-            messages = [m for m in messages if m.message_type == message_type]
+        Args:
+            agent_id: Agent ID
+            limit: 最大返回数量
 
-        if limit is not None:
+        Returns:
+            消息列表
+        """
+        messages = [
+            m for m in self._messages
+            if m.get("to_agent") == agent_id or m.get("to_agent") is None
+        ]
+        if limit:
             messages = messages[-limit:]
-
         return messages
 
-    async def get_conversation(self, message_id: str) -> list[AgentMessage]:
-        """获取对话线程（消息及其回复）."""
-        async with self._lock:
-            messages = list(self._messages)
+    def get_message_history(
+        self,
+        limit: Optional[int] = None,
+    ) -> list[dict[str, Any]]:
+        """
+        获取所有消息历史.
 
-        result: list[AgentMessage] = []
-        queue = [message_id]
+        Args:
+            limit: 最大返回数量
 
-        while queue:
-            current_id = queue.pop(0)
-            msg = next((m for m in messages if m.message_id == current_id), None)
-            if msg and msg not in result:
-                result.append(msg)
-                replies = [m.message_id for m in messages if m.in_reply_to == current_id]
-                queue.extend(replies)
+        Returns:
+            消息列表
+        """
+        messages = list(self._messages)
+        if limit:
+            messages = messages[-limit:]
+        return messages
 
-        return sorted(result, key=lambda m: m.timestamp)
+    def get_message_by_id(
+        self,
+        message_id: str,
+    ) -> Optional[dict[str, Any]]:
+        """
+        根据 ID 获取消息.
 
-    async def clear(self) -> None:
-        """清空消息总线."""
-        async with self._lock:
-            self._messages.clear()
+        Args:
+            message_id: 消息 ID
+
+        Returns:
+            消息，如果找不到返回 None
+        """
+        for m in self._messages:
+            if m.get("message_id") == message_id:
+                return m
+        return None
+
+    async def _notify_subscribers(self, message: dict[str, Any]) -> None:
+        """通知订阅者."""
+        to_agent = message.get("to_agent")
+
+        # 通知广播订阅者
+        for callback in self._broadcast_subscribers:
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(message)
+                else:
+                    callback(message)
+            except Exception as e:
+                logger.error(f"Broadcast subscriber error: {e}")
+
+        # 通知特定 Agent 的订阅者
+        if to_agent and to_agent in self._subscribers:
+            for callback in self._subscribers[to_agent]:
+                try:
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback(message)
+                    else:
+                        callback(message)
+                except Exception as e:
+                    logger.error(f"Subscriber error for {to_agent}: {e}")
 
 
 # 全局消息总线实例
@@ -192,12 +316,7 @@ _message_bus: Optional[MessageBus] = None
 
 
 def get_message_bus() -> MessageBus:
-    """
-    获取全局消息总线实例.
-
-    Returns:
-        MessageBus 实例
-    """
+    """获取全局消息总线实例."""
     global _message_bus
     if _message_bus is None:
         _message_bus = MessageBus()
