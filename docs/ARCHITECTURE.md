@@ -312,8 +312,82 @@ from riskmonitor_multiagent.utils import is_non_empty_str
 from riskmonitor_multiagent.contracts import validate_orchestrator_output
 ```
 
+## 架构决策与设计
+
+### ADR-001: LLM 调用缓存策略
+
+**日期**: 2026-03-17  
+**状态**: Accepted
+
+**问题**: 当前系统 LLM 调用延迟高（P95: 153秒），token 消耗大（238,326 tokens/次），需要优化性能。
+
+**决策**: 引入 LLM 调用缓存，使用纯内存 LRU 缓存策略。
+
+**原因**:
+- temperature=0 的请求是确定性的，可以安全缓存
+- 纯内存实现简单，无额外依赖
+- LRU 策略可以控制内存使用
+
+**后果**:
+- 正面：缓存命中时延迟大幅降低，Token 消耗减少
+- 负面：内存占用增加（默认 1000 条），只对 temperature=0 的请求有效
+
+---
+
+### ADR-002: 输出自动修复策略
+
+**日期**: 2026-03-17  
+**状态**: Accepted
+
+**问题**: 当前契约失败率 26.76%，主要原因是 LLM 输出 JSON 不稳定。
+
+**决策**: 实现 3 层自动修复机制：
+1. 直接解析 JSON
+2. 从文本中提取 JSON（处理 ```json 包裹）
+3. 修复常见 JSON 问题（尾随逗号、注释等）
+
+---
+
+### Phase 4 核心设计
+
+#### 协作指标改进
+
+**IDS (信息多样性)**:
+- 多维度加权计算（角色多样性 30%、内容语义差异 30%、视角互补性 25%、输出完整性 15%）
+- 过滤降级输出，给部分协作基础分
+
+**Milestone (里程碑达成率)**:
+- 每个里程碑检查输出质量（不只是存在性）
+- Intent: 检查 primary_intent_type 非 "unknown" 且非降级
+- Plan: 检查 plan_steps 有合理内容
+- Execution: 检查 Engineer/Analyst 有实质性输出，或有 receipts/artifacts
+- Finalize: 检查有 summary/output/conclusion
+
+#### 多 Agent 协作模式
+
+**1. 消息总线 (Message Bus)**:
+- REQUEST/RESPONSE/BROADCAST 消息类型
+- 支持订阅和通知
+- 完整的消息历史记录
+
+**2. 动态协作 (Dynamic Workflow)**:
+- 状态机驱动，不是固定顺序
+- Moderator 动态决定下一步
+- 支持迭代和重规划
+
+**3. 层次协作 (Hierarchical)**:
+- 多层结构定义
+- 任务分发和结果汇总
+- 后台监控线程（真正的主动性）
+
+**4. ReAct + CoT 推理范式**:
+- Thought → Action → Observation 循环
+- CoT 思维链（reasoning + evidence）
+- BDI 模型（信念、愿望、意图）
+
+---
+
 ## 相关文档
 
 - 快速开始：[QUICKSTART.md](./QUICKSTART.md)
 - 路线图：[ROADMAP.md](./ROADMAP.md)
-- 评测手册：[../EVALUATION.md](../EVALUATION.md)

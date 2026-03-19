@@ -17,10 +17,10 @@ from riskmonitor_multiagent.utils.ids import new_run_id
 class Belief:
     """Agent 的信念：Agent 认为世界的状态."""
     
-    belief_id: str = field(default_factory=lambda: f"belief_{uuid.uuid4().hex[:8]}")
     content: Any
     source: str
     confidence: float = 1.0
+    belief_id: str = field(default_factory=lambda: f"belief_{uuid.uuid4().hex[:8]}")
     timestamp_ms: int = field(default_factory=lambda: __import__('time').time_ns() // 1000000)
 
 
@@ -28,22 +28,22 @@ class Belief:
 class Desire:
     """Agent 的愿望：Agent 想要达到的状态."""
     
-    desire_id: str = field(default_factory=lambda: f"desire_{uuid.uuid4().hex[:8]}")
     description: str
     priority: int = 0
     active: bool = True
+    desire_id: str = field(default_factory=lambda: f"desire_{uuid.uuid4().hex[:8]}")
 
 
 @dataclass
 class Intention:
     """Agent 的意图：Agent 承诺要执行的行动."""
     
-    intention_id: str = field(default_factory=lambda: f"intention_{uuid.uuid4().hex[:8]}")
     description: str
     target_agent: Optional[str] = None
     tool_name: Optional[str] = None
     tool_params: Optional[dict[str, Any]] = None
     status: str = "pending"
+    intention_id: str = field(default_factory=lambda: f"intention_{uuid.uuid4().hex[:8]}")
     created_timestamp_ms: int = field(default_factory=lambda: __import__('time').time_ns() // 1000000)
 
 
