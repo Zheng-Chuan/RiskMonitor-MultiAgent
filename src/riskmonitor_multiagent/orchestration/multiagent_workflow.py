@@ -1,7 +1,7 @@
 """
 完整的多 Agent 协作工作流.
 
-让系统真正能跑起来的完整实现.
+让系统真正能跑起来的完整实现，集成消息总线.
 """
 
 from __future__ import annotations
@@ -17,6 +17,8 @@ from riskmonitor_multiagent.agents.roles import (
     RiskAnalystAgent,
     SystemEngineerAgent,
 )
+from riskmonitor_multiagent.agents.moderator import ModeratorAgent
+from riskmonitor_multiagent.orchestration.message_bus import get_message_bus
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
 from riskmonitor_multiagent.services.logging_service import new_request_id
 from riskmonitor_multiagent.utils.ids import new_run_id
@@ -30,10 +32,12 @@ class MultiAgentCollaborationWorkflow:
     """
     完整的多 Agent 协作工作流.
 
-    整合所有 Agent，让系统真正能跑起来.
+    整合所有 Agent，让系统真正能跑起来，使用消息总线通信.
     """
 
     def __init__(self):
+        self._message_bus = get_message_bus()
+        self._moderator = ModeratorAgent()
         self._intent_agent = IntentAgent()
         self._orchestrator_agent = OrchestratorAgent()
         self._critic_agent = CriticAgent()
@@ -47,7 +51,7 @@ class MultiAgentCollaborationWorkflow:
         task: dict[str, Any],
     ) -> dict[str, Any]:
         """
-        运行多 Agent 协作工作流.
+        运行多 Agent 协作工作流，使用消息总线.
 
         Args:
             task: 任务
@@ -66,38 +70,99 @@ class MultiAgentCollaborationWorkflow:
         logger.info(f"Starting multi-agent collaboration for task: {request_id}")
 
         try:
+            # 发送广播消息：任务开始
+            await self._message_bus.broadcast(
+                from_agent="workflow",
+                content={"status": "started", "task_id": request_id},
+            )
+
             # Step 1: Intent Agent
             logger.info("Step 1: Intent Agent")
+            # 发送请求到 Intent Agent
+            request_msg = await self._message_bus.send_request(
+                from_agent="workflow",
+                to_agent="intent",
+                content={"task": task},
+            )
+            # 执行 Intent Agent
             intent_result = await self._intent_agent.recognize(task=task)
+            # 发送响应消息
+            response_msg = await self._message_bus.send_response(
+                from_agent="intent",
+                to_agent="workflow",
+                content={"output": intent_result.output, "ok": intent_result.ok},
+                in_reply_to=request_msg["message_id"],
+            )
+            # 记录到对话历史
             self._conversation_history.append({
                 "from_agent": "intent",
                 "type": "response",
                 "content": {"output": intent_result.output, "ok": intent_result.ok},
+                "message_id": response_msg["message_id"],
             })
 
             # Step 2: Orchestrator Agent
             logger.info("Step 2: Orchestrator Agent")
+            request_msg = await self._message_bus.send_request(
+                from_agent="workflow",
+                to_agent="orchestrator",
+                content={"task": task, "intent": intent_result.output},
+            )
             orchestrator_result = await self._orchestrator_agent.orchestrate(task=task)
+            response_msg = await self._message_bus.send_response(
+                from_agent="orchestrator",
+                to_agent="workflow",
+                content={"output": orchestrator_result.output, "ok": orchestrator_result.ok},
+                in_reply_to=request_msg["message_id"],
+            )
             self._conversation_history.append({
                 "from_agent": "orchestrator",
                 "type": "response",
                 "content": {"output": orchestrator_result.output, "ok": orchestrator_result.ok},
+                "message_id": response_msg["message_id"],
             })
 
             # Step 3: Critic Agent
             logger.info("Step 3: Critic Agent")
+            request_msg = await self._message_bus.send_request(
+                from_agent="workflow",
+                to_agent="critic",
+                content={"task": task, "orchestrator": orchestrator_result.output},
+            )
             critic_result = await self._critic_agent.review(
                 task=task,
                 orchestrator=orchestrator_result.output,
+            )
+            response_msg = await self._message_bus.send_response(
+                from_agent="critic",
+                to_agent="workflow",
+                content={"output": critic_result.output, "ok": critic_result.ok},
+                in_reply_to=request_msg["message_id"],
             )
             self._conversation_history.append({
                 "from_agent": "critic",
                 "type": "response",
                 "content": {"output": critic_result.output, "ok": critic_result.ok},
+                "message_id": response_msg["message_id"],
             })
 
             # Step 4: Parallel Delegation - Engineer and Analyst
             logger.info("Step 4: Parallel Delegation")
+            
+            # 发送请求给 Engineer
+            engineer_request_msg = await self._message_bus.send_request(
+                from_agent="workflow",
+                to_agent="system_engineer",
+                content={"task": task},
+            )
+            # 发送请求给 Analyst
+            analyst_request_msg = await self._message_bus.send_request(
+                from_agent="workflow",
+                to_agent="risk_analyst",
+                content={"task": task},
+            )
+            
+            # 并行执行
             engineer_task = asyncio.create_task(
                 self._system_engineer_agent.analyze_task(task=task)
             )
@@ -109,16 +174,32 @@ class MultiAgentCollaborationWorkflow:
                 engineer_task,
                 analyst_task,
             )
-
+            
+            # 发送响应消息
+            engineer_response_msg = await self._message_bus.send_response(
+                from_agent="system_engineer",
+                to_agent="workflow",
+                content={"output": engineer_result.output, "ok": engineer_result.ok},
+                in_reply_to=engineer_request_msg["message_id"],
+            )
+            analyst_response_msg = await self._message_bus.send_response(
+                from_agent="risk_analyst",
+                to_agent="workflow",
+                content={"output": analyst_result.output, "ok": analyst_result.ok},
+                in_reply_to=analyst_request_msg["message_id"],
+            )
+            
             self._conversation_history.append({
                 "from_agent": "system_engineer",
                 "type": "response",
                 "content": {"output": engineer_result.output, "ok": engineer_result.ok},
+                "message_id": engineer_response_msg["message_id"],
             })
             self._conversation_history.append({
                 "from_agent": "risk_analyst",
                 "type": "response",
                 "content": {"output": analyst_result.output, "ok": analyst_result.ok},
+                "message_id": analyst_response_msg["message_id"],
             })
 
             # 构建结果
@@ -126,11 +207,15 @@ class MultiAgentCollaborationWorkflow:
             observe_ms("orchestrator_latency_ms", latency_ms)
             inc_counter("orchestrator_runs_success")
 
+            # 获取消息总线的历史
+            message_history = self._message_bus.get_message_history()
+
             result = {
                 "status": "completed",
                 "run_id": run_id,
                 "task_id": request_id,
                 "conversation_history": self._conversation_history,
+                "message_history": message_history,
                 "latency_ms": latency_ms,
                 "intent": intent_result.output,
                 "orchestrator": orchestrator_result.output,
@@ -138,6 +223,12 @@ class MultiAgentCollaborationWorkflow:
                 "engineer": engineer_result.output,
                 "analyst": analyst_result.output,
             }
+
+            # 发送广播消息：任务完成
+            await self._message_bus.broadcast(
+                from_agent="workflow",
+                content={"status": "completed", "task_id": request_id},
+            )
 
             logger.info(f"Multi-agent collaboration completed for task: {request_id}")
             return result
@@ -147,11 +238,21 @@ class MultiAgentCollaborationWorkflow:
             observe_ms("orchestrator_latency_ms", latency_ms)
             inc_counter("orchestrator_runs_error")
             logger.exception(f"Orchestration failed for task {request_id}")
+            
+            # 发送广播消息：任务失败
+            await self._message_bus.broadcast(
+                from_agent="workflow",
+                content={"status": "error", "task_id": request_id, "error": str(e)},
+            )
+            
+            message_history = self._message_bus.get_message_history()
+            
             return {
                 "status": "error",
                 "run_id": run_id,
                 "task_id": request_id,
                 "conversation_history": self._conversation_history,
+                "message_history": message_history,
                 "latency_ms": latency_ms,
                 "errors": [str(e)],
             }

@@ -97,9 +97,10 @@ class TestMessageContract:
 class TestMessageBus:
     """测试 Message Bus."""
 
-    def test_send_message(self, message_bus: MessageBus) -> None:
+    @pytest.mark.asyncio
+    async def test_send_message(self, message_bus: MessageBus) -> None:
         """测试发送消息."""
-        message = message_bus.send_request(
+        message = await message_bus.send_request(
             from_agent="intent",
             to_agent="orchestrator",
             content={"task": "test"},
@@ -110,9 +111,10 @@ class TestMessageBus:
         assert message.get("from_agent") == "intent"
         assert message.get("to_agent") == "orchestrator"
 
-    def test_broadcast_message(self, message_bus: MessageBus) -> None:
+    @pytest.mark.asyncio
+    async def test_broadcast_message(self, message_bus: MessageBus) -> None:
         """测试广播消息."""
-        message = message_bus.broadcast(
+        message = await message_bus.broadcast(
             from_agent="moderator",
             content={"status": "started"},
         )
@@ -121,15 +123,16 @@ class TestMessageBus:
         assert message.get("message_type") == "broadcast"
         assert message.get("to_agent") is None
 
-    def test_get_message_history(self, message_bus: MessageBus) -> None:
+    @pytest.mark.asyncio
+    async def test_get_message_history(self, message_bus: MessageBus) -> None:
         """测试获取消息历史."""
         # 发送几条消息
-        message_bus.send_request(
+        await message_bus.send_request(
             from_agent="intent",
             to_agent="orchestrator",
             content={"task": "test1"},
         )
-        message_bus.send_request(
+        await message_bus.send_request(
             from_agent="orchestrator",
             to_agent="critic",
             content={"task": "test2"},
@@ -138,14 +141,15 @@ class TestMessageBus:
         history = message_bus.get_message_history()
         assert len(history) == 2
 
-    def test_get_messages_for_agent(self, message_bus: MessageBus) -> None:
+    @pytest.mark.asyncio
+    async def test_get_messages_for_agent(self, message_bus: MessageBus) -> None:
         """测试获取特定 Agent 的消息."""
-        message_bus.send_request(
+        await message_bus.send_request(
             from_agent="intent",
             to_agent="orchestrator",
             content={"task": "test1"},
         )
-        message_bus.send_request(
+        await message_bus.send_request(
             from_agent="orchestrator",
             to_agent="critic",
             content={"task": "test2"},
@@ -155,7 +159,8 @@ class TestMessageBus:
         assert len(orchestrator_messages) == 1
         assert orchestrator_messages[0].get("to_agent") == "orchestrator"
 
-    def test_subscribe_and_notify(self, message_bus: MessageBus) -> None:
+    @pytest.mark.asyncio
+    async def test_subscribe_and_notify(self, message_bus: MessageBus) -> None:
         """测试订阅和通知."""
         received_messages = []
 
@@ -164,7 +169,7 @@ class TestMessageBus:
 
         message_bus.subscribe("orchestrator", callback)
 
-        message_bus.send_request(
+        await message_bus.send_request(
             from_agent="intent",
             to_agent="orchestrator",
             content={"task": "test"},

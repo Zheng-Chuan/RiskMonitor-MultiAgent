@@ -113,6 +113,7 @@ def _build_compatible_output(
     latency_ms = (time.time() - start_time) * 1000
 
     return {
+        "schema_version": "orchestrator_run.v1",
         "ok": result.get("status") == "completed",
         "latency_ms": latency_ms,
         "result": {
@@ -122,7 +123,7 @@ def _build_compatible_output(
             "intent": intent_output,
             "orchestrator_plan": orchestrator_plan_output,
             "critic_plan": critic_plan_output,
-            "approval": {"required": False, "approved": True},
+            "approval": {"required": True, "approved": True},
             "engineer": engineer_output,
             "analyst": analyst_output,
             "artifacts": {},
