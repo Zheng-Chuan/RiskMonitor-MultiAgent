@@ -7,6 +7,10 @@ Agent 角色定义.
 - CriticAgent: 计划评审
 - SystemEngineerAgent: 系统工程师分析
 - RiskAnalystAgent: 风险分析师评估
+
+支持 BDI + ReAct:
+- 继承 BDIAgentMixin: 信念、愿望、意图
+- 继承 ReActAgentMixin: ReAct 循环 + CoT 思维链
 """
 
 from __future__ import annotations
@@ -14,6 +18,8 @@ from __future__ import annotations
 from typing import Any
 
 from riskmonitor_multiagent.agents.base import AgentResult, BaseAgent
+from riskmonitor_multiagent.agents.bdi import BDIAgentMixin
+from riskmonitor_multiagent.agents.react_agent import ReActAgentMixin
 from riskmonitor_multiagent.contracts import (
     INTENT_OUTPUT_SCHEMA_VERSION,
     RISK_ANALYST_OUTPUT_SCHEMA_VERSION,
