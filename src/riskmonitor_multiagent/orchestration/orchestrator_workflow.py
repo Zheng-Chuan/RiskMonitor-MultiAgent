@@ -1,6 +1,8 @@
 """Orchestration module using Multi-Agent Collaboration.
 
 此文件基于新的多 Agent 协作系统，同时保持与旧接口兼容.
+
+支持 ReAct + CoT：设置 ENABLE_REACT=true 来启用真正的 ReAct + CoT.
 """
 
 from __future__ import annotations
@@ -20,12 +22,24 @@ from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
 from riskmonitor_multiagent.memory import MemoryStore, get_memory_store
 from riskmonitor_multiagent.utils.ids import new_run_id
 
+# 检查是否启用 ReAct + CoT
+ENABLE_REACT = os.getenv("ENABLE_REACT", "false").strip().lower() in {"true", "1", "yes"}
+if ENABLE_REACT:
+    try:
+        from riskmonitor_multiagent.orchestration.react_workflow import run_react_workflow
+        logger.info("ReAct + CoT enabled: ENABLE_REACT=true")
+    except ImportError:
+        logger.warning("ReAct module not found, falling back to regular workflow")
+        ENABLE_REACT = False
+
 
 async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
     """
     运行多 Agent 协作工作流.
 
     保持与旧接口兼容，内部使用新的多 Agent 协作系统.
+
+    如果设置了 ENABLE_REACT=true，则使用真正的 ReAct + CoT 工作流.
 
     Args:
         task: 任务，格式同旧接口
@@ -40,6 +54,20 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
     logger.info(f"Starting multi-agent orchestration for task: {task.get('task_id') or run_id}")
 
     try:
+        # 如果启用了 ReAct + CoT，则使用 ReAct 工作流
+        if ENABLE_REACT:
+            logger.info("Using ReAct + CoT workflow")
+            out = await run_react_workflow(task=task)
+            
+            latency_ms = (time.time() - start_time) * 1000
+            observe_ms("orchestrator_latency_ms", latency_ms)
+            inc_counter("orchestrator_runs_success")
+            
+            return out
+
+        # 否则使用原来的工作流
+        logger.info("Using regular multi-agent workflow")
+        
         # 重置状态
         reset_message_bus()
         reset_multi_agent_workflow()
