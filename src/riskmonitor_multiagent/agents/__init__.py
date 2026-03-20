@@ -1,13 +1,10 @@
-from riskmonitor_multiagent.agents.roles import CriticAgent
-from riskmonitor_multiagent.agents.roles import IntentAgent
-from riskmonitor_multiagent.agents.roles import OrchestratorAgent
-from riskmonitor_multiagent.agents.roles import RiskAnalystAgent
-from riskmonitor_multiagent.agents.roles import SystemEngineerAgent
+"""
+Agent 模块.
 
-__all__ = [
-    "CriticAgent",
-    "IntentAgent",
-    "OrchestratorAgent",
-    "RiskAnalystAgent",
-    "SystemEngineerAgent",
-]
+保留 BaseAgent 和 AgentResult 供其他模块使用.
+主动 Agent 请使用 proactive_agents 模块.
+"""
+
+from riskmonitor_multiagent.agents.base import AgentResult, BaseAgent
+
+__all__ = ["AgentResult", "BaseAgent"]
