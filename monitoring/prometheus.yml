@@ -1,0 +1,55 @@
+# Prometheus 配置文件 - RiskMonitor MultiAgent 监控系统
+global:
+  scrape_interval: 15s  # 抓取间隔 - 生产环境可以增大到 30s 或 60s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'riskmonitor-multiagent'
+
+# 告警规则 (可选)
+rule_files:
+  # - "alerts.yml"
+
+# 抓取配置
+scrape_configs:
+  # 1. 监控 Prometheus 自身
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    metrics_path: /metrics
+    scheme: http
+
+  # 2. 监控 RiskMonitor MultiAgent 应用
+  - job_name: "riskmonitor-app"
+    static_configs:
+      - targets: ["host.docker.internal:8000"]  # Mac Docker 访问宿主机
+    metrics_path: /metrics
+    scheme: http
+    
+    # 重试配置
+    scrape_timeout: 10s
+    honor_labels: true
+    
+    # 指标重标签
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: "([^:]+):\\d+"
+        replacement: "${1}"
+
+  # 3. 监控 MySQL (可选)
+  - job_name: "mysql"
+    static_configs:
+      - targets: ["mysql:9104"]  # MySQL Exporter 端口
+    metrics_path: /metrics
+    scheme: http
+
+  # 4. 监控 Redis (可选)
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:9121"]  # Redis Exporter 端口
+    metrics_path: /metrics
+    scheme: http
+
+# 远程写入配置 (可选，用于长期存储)
+# remote_write:
+#   - url: "http://remote-storage:9201/write"

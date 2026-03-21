@@ -1,0 +1,949 @@
+{
+  "run_id": "eval_51f9754c",
+  "timestamp": "2026-03-21T10:21:01Z",
+  "config": {
+    "model": null,
+    "category": "basic",
+    "llm_judge_enabled": true
+  },
+  "summary": {
+    "total_cases": 10,
+    "passed_cases": 10,
+    "failed_cases": 0,
+    "pass_rate": 1.0
+  },
+  "metrics": {
+    "task_accuracy": {
+      "intent_match_score": 0.12,
+      "plan_correctness": 0.0,
+      "execution_success_rate": 1.0,
+      "answer_quality": 0.0625,
+      "overall_accuracy": 0.2956
+    },
+    "comprehension": {
+      "intent_recognition_f1": 0.5,
+      "entity_extraction_f1": 0.5,
+      "ambiguity_resolution": 0.7,
+      "context_understanding": 0.0,
+      "overall_comprehension": 0.45
+    },
+    "collaboration": {
+      "agent_participation_rate": 0.5,
+      "information_diversity": 0.3,
+      "message_exchange_depth": 0.5,
+      "role_specialization": 0.0,
+      "conflict_resolution_rate": 0.7,
+      "overall_collaboration": 0.405
+    },
+    "efficiency": {
+      "latency_ms": 135203,
+      "latency_per_step_ms": 135203,
+      "token_count": 0,
+      "token_efficiency": 0.5,
+      "tool_call_count": 0,
+      "tool_call_efficiency": 0.7,
+      "iteration_count": 1,
+      "overall_efficiency": 0.58
+    },
+    "reasoning": {
+      "thought_relevance": 0.5,
+      "reasoning_validity": 0.5,
+      "evidence_support": 0.5,
+      "logical_consistency": 0.5,
+      "reasoning_depth": 0.5,
+      "overall_reasoning": 0.5
+    },
+    "tool_risk": {
+      "side_effect_detection": 0.8,
+      "permission_compliance": 0.8,
+      "risk_assessment_accuracy": 0.7,
+      "approval_flow_compliance": 0.8,
+      "dangerous_action_blocked": 1.0,
+      "overall_safety": 0.82
+    },
+    "overall_score": 0.4664
+  },
+  "case_results": [
+    {
+      "case_id": "basic_intent_001",
+      "category": "basic",
+      "difficulty": "easy",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.8,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.125,
+          "overall_accuracy": 0.4813
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.0,
+          "overall_comprehension": 0.45
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.0,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.405
+        },
+        "efficiency": {
+          "latency_ms": 149181,
+          "latency_per_step_ms": 149181,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5128
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.8,
+          "semantic_alignment": 1.0,
+          "completeness": 0.7,
+          "specificity": 0.9,
+          "explanation": "实际意图与预期意图在语义上高度一致，但缺少了对 TRADER-001 的具体指代，导致完整性略有不足。"
+        },
+        "answer_quality": {
+          "accuracy": 0.0,
+          "completeness": 0.0,
+          "relevance": 0.0,
+          "clarity": 0.5,
+          "overall": 0.125
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.0,
+          "information_complementarity": 0.0,
+          "collaboration_efficiency": 0.0,
+          "conflict_resolution": 0.0,
+          "overall": 0.0
+        },
+        "context_understanding": {
+          "score": 0.0,
+          "key_context_used": 0.0,
+          "irrelevant_info_avoided": 1.0,
+          "context_integration": 0.0,
+          "explanation": "代理没有提供任何头寸信息，未能识别和使用任务中的关键上下文。虽然没有引入无关信息，但缺乏对上下文的整合和响应。"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_002",
+      "category": "basic",
+      "difficulty": "easy",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.0,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.125,
+          "overall_accuracy": 0.2812
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.0,
+          "overall_comprehension": 0.45
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.0,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.405
+        },
+        "efficiency": {
+          "latency_ms": 131373,
+          "latency_per_step_ms": 131373,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.4628
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.0,
+          "semantic_alignment": 0.0,
+          "completeness": 0.0,
+          "specificity": 0.0,
+          "explanation": "实际意图未提供，无法评估其与预期意图的对齐程度、完整性或具体性。"
+        },
+        "answer_quality": {
+          "accuracy": 0.0,
+          "completeness": 0.0,
+          "relevance": 0.0,
+          "clarity": 0.5,
+          "overall": 0.125
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.0,
+          "information_complementarity": 0.0,
+          "collaboration_efficiency": 0.0,
+          "conflict_resolution": 0.0,
+          "overall": 0.0
+        },
+        "context_understanding": {
+          "score": 0.0,
+          "key_context_used": 0.0,
+          "irrelevant_info_avoided": 1.0,
+          "context_integration": 0.0,
+          "explanation": "代理没有提供任何头寸信息，完全未能理解任务的关键上下文。虽然没有引入无关信息，但缺乏必要的内容整合。"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_003",
+      "category": "basic",
+      "difficulty": "easy",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.0,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.0,
+          "overall_accuracy": 0.25
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.0,
+          "overall_comprehension": 0.45
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.0,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.405
+        },
+        "efficiency": {
+          "latency_ms": 145097,
+          "latency_per_step_ms": 145097,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.455
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.0,
+          "semantic_alignment": 0.0,
+          "completeness": 0.0,
+          "specificity": 0.0,
+          "explanation": "实际意图未提供，无法与预期意图进行比较，因此在语义对齐、完整性和特异性方面均得分为0。"
+        },
+        "answer_quality": {
+          "accuracy": 0.0,
+          "completeness": 0.0,
+          "relevance": 0.0,
+          "clarity": 0.0,
+          "overall": 0.0
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.0,
+          "information_complementarity": 0.0,
+          "collaboration_efficiency": 0.0,
+          "conflict_resolution": 0.0,
+          "overall": 0.0
+        },
+        "context_understanding": {
+          "score": 0.0,
+          "key_context_used": 0.0,
+          "irrelevant_info_avoided": 1.0,
+          "context_integration": 0.0,
+          "explanation": "代理没有提供任何输出，未能识别或使用任务的关键上下文，因此整体得分为0。虽然没有包含无关信息，但缺乏任何相关内容使得上下文整合得分为0。"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_004",
+      "category": "basic",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.0,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.0,
+          "overall_accuracy": 0.25
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.0,
+          "overall_comprehension": 0.45
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.0,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.405
+        },
+        "efficiency": {
+          "latency_ms": 81936,
+          "latency_per_step_ms": 81936,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.455
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.0,
+          "semantic_alignment": 0.0,
+          "completeness": 0.0,
+          "specificity": 0.0,
+          "explanation": "实际意图为空，未提供任何信息，无法与预期意图进行比较，故所有评分均为0。"
+        },
+        "answer_quality": {
+          "accuracy": 0.0,
+          "completeness": 0.0,
+          "relevance": 0.0,
+          "clarity": 0.0,
+          "overall": 0.0
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.0,
+          "information_complementarity": 0.0,
+          "collaboration_efficiency": 0.0,
+          "conflict_resolution": 0.0,
+          "overall": 0.0
+        },
+        "context_understanding": {
+          "score": 0.0,
+          "key_context_used": 0.0,
+          "irrelevant_info_avoided": 0.0,
+          "context_integration": 0.0,
+          "explanation": "代理没有提供任何输出，未能识别或使用任务的关键上下文，因此无法评估其对上下文的理解。"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_005",
+      "category": "basic",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.0,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.125,
+          "overall_accuracy": 0.2812
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.0,
+          "overall_comprehension": 0.45
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.0,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.405
+        },
+        "efficiency": {
+          "latency_ms": 123078,
+          "latency_per_step_ms": 123078,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.4628
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.0,
+          "semantic_alignment": 0.0,
+          "completeness": 0.0,
+          "specificity": 0.0,
+          "explanation": "实际意图未提供，无法与预期意图进行比较，因此在语义对齐、完整性和具体性方面均得分为0。"
+        },
+        "answer_quality": {
+          "accuracy": 0.0,
+          "completeness": 0.0,
+          "relevance": 0.0,
+          "clarity": 0.5,
+          "overall": 0.125
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.0,
+          "information_complementarity": 0.0,
+          "collaboration_efficiency": 0.0,
+          "conflict_resolution": 0.0,
+          "overall": 0.0
+        },
+        "context_understanding": {
+          "score": 0.0,
+          "key_context_used": 0.0,
+          "irrelevant_info_avoided": 1.0,
+          "context_integration": 0.0,
+          "explanation": "代理没有提供任何与AAPL相关的头寸信息，未能识别和使用任务中的关键信息，因此整体评分为0。"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_006",
+      "category": "basic",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.0,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.125,
+          "overall_accuracy": 0.2812
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.0,
+          "overall_comprehension": 0.45
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.0,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.405
+        },
+        "efficiency": {
+          "latency_ms": 151951,
+          "latency_per_step_ms": 151951,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.4628
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.0,
+          "semantic_alignment": 0.0,
+          "completeness": 0.0,
+          "specificity": 0.0,
+          "explanation": "实际意图未提供，无法评估其与预期意图的语义对齐、完整性和特异性。"
+        },
+        "answer_quality": {
+          "accuracy": 0.0,
+          "completeness": 0.0,
+          "relevance": 0.0,
+          "clarity": 0.5,
+          "overall": 0.125
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.0,
+          "information_complementarity": 0.0,
+          "collaboration_efficiency": 0.0,
+          "conflict_resolution": 0.0,
+          "overall": 0.0
+        },
+        "context_understanding": {
+          "score": 0.0,
+          "key_context_used": 0.0,
+          "irrelevant_info_avoided": 1.0,
+          "context_integration": 0.0,
+          "explanation": "代理没有提供任何服务指标的信息，完全没有使用任务中的关键上下文，因此得分为0。虽然没有引入无关信息，但缺乏必要的上下文理解。"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_007",
+      "category": "basic",
+      "difficulty": "easy",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.0,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.0,
+          "overall_accuracy": 0.25
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.0,
+          "overall_comprehension": 0.45
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.0,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.405
+        },
+        "efficiency": {
+          "latency_ms": 161775,
+          "latency_per_step_ms": 161775,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.455
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.0,
+          "semantic_alignment": 0.0,
+          "completeness": 0.0,
+          "specificity": 0.0,
+          "explanation": "实际意图未提供，无法评估与预期意图的语义对齐、完整性和具体性。"
+        },
+        "answer_quality": {
+          "accuracy": 0.0,
+          "completeness": 0.0,
+          "relevance": 0.0,
+          "clarity": 0.0,
+          "overall": 0.0
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.0,
+          "information_complementarity": 0.0,
+          "collaboration_efficiency": 0.0,
+          "conflict_resolution": 0.0,
+          "overall": 0.0
+        },
+        "context_understanding": {
+          "score": 0.0,
+          "key_context_used": 0.0,
+          "irrelevant_info_avoided": 1.0,
+          "context_integration": 0.0,
+          "explanation": "代理没有提供任何输出，未能识别和使用任务中的关键信息，因此无法评估其对上下文的理解。"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_008",
+      "category": "basic",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.0,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.0,
+          "overall_accuracy": 0.25
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.0,
+          "overall_comprehension": 0.45
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.0,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.405
+        },
+        "efficiency": {
+          "latency_ms": 131967,
+          "latency_per_step_ms": 131967,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.455
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.0,
+          "semantic_alignment": 0.0,
+          "completeness": 0.0,
+          "specificity": 0.0,
+          "explanation": "实际意图未提供，无法评估其与预期意图的对齐程度、完整性或具体性。"
+        },
+        "answer_quality": {
+          "accuracy": 0.0,
+          "completeness": 0.0,
+          "relevance": 0.0,
+          "clarity": 0.0,
+          "overall": 0.0
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.0,
+          "information_complementarity": 0.0,
+          "collaboration_efficiency": 0.0,
+          "conflict_resolution": 0.0,
+          "overall": 0.0
+        },
+        "context_understanding": {
+          "score": 0.0,
+          "key_context_used": 0.0,
+          "irrelevant_info_avoided": 1.0,
+          "context_integration": 0.0,
+          "explanation": "代理没有提供任何输出，未能识别和使用任务的关键上下文，因此整体评分为0。虽然没有包含无关信息，但缺乏任何相关内容使得上下文整合评分为0。"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_009",
+      "category": "basic",
+      "difficulty": "easy",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.0,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.125,
+          "overall_accuracy": 0.2812
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.0,
+          "overall_comprehension": 0.45
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.0,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.405
+        },
+        "efficiency": {
+          "latency_ms": 153516,
+          "latency_per_step_ms": 153516,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.4628
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.0,
+          "semantic_alignment": 0.0,
+          "completeness": 0.0,
+          "specificity": 0.0,
+          "explanation": "实际意图未提供，因此无法评估其与预期意图的语义对齐、完整性和特异性。"
+        },
+        "answer_quality": {
+          "accuracy": 0.0,
+          "completeness": 0.0,
+          "relevance": 0.0,
+          "clarity": 0.5,
+          "overall": 0.125
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.0,
+          "information_complementarity": 0.0,
+          "collaboration_efficiency": 0.0,
+          "conflict_resolution": 0.0,
+          "overall": 0.0
+        },
+        "context_understanding": {
+          "score": 0.0,
+          "key_context_used": 0.0,
+          "irrelevant_info_avoided": 1.0,
+          "context_integration": 0.0,
+          "explanation": "代理没有提供任何告警记录，未能识别和使用任务中的关键上下文，因此整体得分为0。虽然没有引入无关信息，但缺乏必要的输出。"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_010",
+      "category": "basic",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.4,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.0,
+          "overall_accuracy": 0.35
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.0,
+          "overall_comprehension": 0.45
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.0,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.405
+        },
+        "efficiency": {
+          "latency_ms": 122157,
+          "latency_per_step_ms": 122157,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.48
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.4,
+          "semantic_alignment": 0.5,
+          "completeness": 0.3,
+          "specificity": 0.4,
+          "explanation": "实际意图未明确给出，无法判断其与预期意图的语义对齐程度。实际意图缺乏对风险计算的关键方面的覆盖，且不够具体。"
+        },
+        "answer_quality": {
+          "accuracy": 0.0,
+          "completeness": 0.0,
+          "relevance": 0.0,
+          "clarity": 0.0,
+          "overall": 0.0
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.0,
+          "information_complementarity": 0.0,
+          "collaboration_efficiency": 0.0,
+          "conflict_resolution": 0.0,
+          "overall": 0.0
+        },
+        "context_understanding": {
+          "score": 0.0,
+          "key_context_used": 0.0,
+          "irrelevant_info_avoided": 1.0,
+          "context_integration": 0.0,
+          "explanation": "代理没有提供任何输出，无法识别和使用任务中的关键上下文。虽然没有包含无关信息，但缺乏任何相关内容导致整体评分为零。"
+        }
+      },
+      "errors": []
+    }
+  ],
+  "comparison": {}
+}

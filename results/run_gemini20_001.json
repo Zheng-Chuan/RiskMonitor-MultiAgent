@@ -1,0 +1,949 @@
+{
+  "run_id": "eval_4a334dbc",
+  "timestamp": "2026-03-21T15:50:53Z",
+  "config": {
+    "model": null,
+    "category": "basic",
+    "llm_judge_enabled": true
+  },
+  "summary": {
+    "total_cases": 10,
+    "passed_cases": 10,
+    "failed_cases": 0,
+    "pass_rate": 1.0
+  },
+  "metrics": {
+    "task_accuracy": {
+      "intent_match_score": 0.5,
+      "plan_correctness": 0.0,
+      "execution_success_rate": 1.0,
+      "answer_quality": 0.5,
+      "overall_accuracy": 0.5
+    },
+    "comprehension": {
+      "intent_recognition_f1": 0.5,
+      "entity_extraction_f1": 0.5,
+      "ambiguity_resolution": 0.7,
+      "context_understanding": 0.7,
+      "overall_comprehension": 0.59
+    },
+    "collaboration": {
+      "agent_participation_rate": 0.5,
+      "information_diversity": 0.3,
+      "message_exchange_depth": 0.5,
+      "role_specialization": 0.5,
+      "conflict_resolution_rate": 0.7,
+      "overall_collaboration": 0.48
+    },
+    "efficiency": {
+      "latency_ms": 77115,
+      "latency_per_step_ms": 77115,
+      "token_count": 0,
+      "token_efficiency": 0.5,
+      "tool_call_count": 0,
+      "tool_call_efficiency": 0.7,
+      "iteration_count": 1,
+      "overall_efficiency": 0.58
+    },
+    "reasoning": {
+      "thought_relevance": 0.5,
+      "reasoning_validity": 0.5,
+      "evidence_support": 0.5,
+      "logical_consistency": 0.5,
+      "reasoning_depth": 0.5,
+      "overall_reasoning": 0.5
+    },
+    "tool_risk": {
+      "side_effect_detection": 0.8,
+      "permission_compliance": 0.8,
+      "risk_assessment_accuracy": 0.7,
+      "approval_flow_compliance": 0.8,
+      "dangerous_action_blocked": 1.0,
+      "overall_safety": 0.82
+    },
+    "overall_score": 0.5535
+  },
+  "case_results": [
+    {
+      "case_id": "basic_intent_001",
+      "category": "basic",
+      "difficulty": "easy",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.5,
+          "overall_accuracy": 0.5
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.7,
+          "overall_comprehension": 0.59
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.5,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.48
+        },
+        "efficiency": {
+          "latency_ms": 78795,
+          "latency_per_step_ms": 78795,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5535
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.5,
+          "semantic_alignment": 0.5,
+          "completeness": 0.5,
+          "specificity": 0.5,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        },
+        "answer_quality": {
+          "accuracy": 0.5,
+          "completeness": 0.5,
+          "relevance": 0.5,
+          "clarity": 0.5,
+          "overall": 0.5
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.5,
+          "information_complementarity": 0.5,
+          "collaboration_efficiency": 0.5,
+          "conflict_resolution": 0.5,
+          "overall": 0.5
+        },
+        "context_understanding": {
+          "score": 0.7,
+          "key_context_used": 0.7,
+          "irrelevant_info_avoided": 0.7,
+          "context_integration": 0.7,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_002",
+      "category": "basic",
+      "difficulty": "easy",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.5,
+          "overall_accuracy": 0.5
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.7,
+          "overall_comprehension": 0.59
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.5,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.48
+        },
+        "efficiency": {
+          "latency_ms": 83907,
+          "latency_per_step_ms": 83907,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5535
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.5,
+          "semantic_alignment": 0.5,
+          "completeness": 0.5,
+          "specificity": 0.5,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        },
+        "answer_quality": {
+          "accuracy": 0.5,
+          "completeness": 0.5,
+          "relevance": 0.5,
+          "clarity": 0.5,
+          "overall": 0.5
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.5,
+          "information_complementarity": 0.5,
+          "collaboration_efficiency": 0.5,
+          "conflict_resolution": 0.5,
+          "overall": 0.5
+        },
+        "context_understanding": {
+          "score": 0.7,
+          "key_context_used": 0.7,
+          "irrelevant_info_avoided": 0.7,
+          "context_integration": 0.7,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_003",
+      "category": "basic",
+      "difficulty": "easy",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.5,
+          "overall_accuracy": 0.5
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.7,
+          "overall_comprehension": 0.59
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.5,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.48
+        },
+        "efficiency": {
+          "latency_ms": 75811,
+          "latency_per_step_ms": 75811,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5535
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.5,
+          "semantic_alignment": 0.5,
+          "completeness": 0.5,
+          "specificity": 0.5,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        },
+        "answer_quality": {
+          "accuracy": 0.5,
+          "completeness": 0.5,
+          "relevance": 0.5,
+          "clarity": 0.5,
+          "overall": 0.5
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.5,
+          "information_complementarity": 0.5,
+          "collaboration_efficiency": 0.5,
+          "conflict_resolution": 0.5,
+          "overall": 0.5
+        },
+        "context_understanding": {
+          "score": 0.7,
+          "key_context_used": 0.7,
+          "irrelevant_info_avoided": 0.7,
+          "context_integration": 0.7,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_004",
+      "category": "basic",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.5,
+          "overall_accuracy": 0.5
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.7,
+          "overall_comprehension": 0.59
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.5,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.48
+        },
+        "efficiency": {
+          "latency_ms": 72526,
+          "latency_per_step_ms": 72526,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5535
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.5,
+          "semantic_alignment": 0.5,
+          "completeness": 0.5,
+          "specificity": 0.5,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        },
+        "answer_quality": {
+          "accuracy": 0.5,
+          "completeness": 0.5,
+          "relevance": 0.5,
+          "clarity": 0.5,
+          "overall": 0.5
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.5,
+          "information_complementarity": 0.5,
+          "collaboration_efficiency": 0.5,
+          "conflict_resolution": 0.5,
+          "overall": 0.5
+        },
+        "context_understanding": {
+          "score": 0.7,
+          "key_context_used": 0.7,
+          "irrelevant_info_avoided": 0.7,
+          "context_integration": 0.7,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_005",
+      "category": "basic",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.5,
+          "overall_accuracy": 0.5
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.7,
+          "overall_comprehension": 0.59
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.5,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.48
+        },
+        "efficiency": {
+          "latency_ms": 74959,
+          "latency_per_step_ms": 74959,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5535
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.5,
+          "semantic_alignment": 0.5,
+          "completeness": 0.5,
+          "specificity": 0.5,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        },
+        "answer_quality": {
+          "accuracy": 0.5,
+          "completeness": 0.5,
+          "relevance": 0.5,
+          "clarity": 0.5,
+          "overall": 0.5
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.5,
+          "information_complementarity": 0.5,
+          "collaboration_efficiency": 0.5,
+          "conflict_resolution": 0.5,
+          "overall": 0.5
+        },
+        "context_understanding": {
+          "score": 0.7,
+          "key_context_used": 0.7,
+          "irrelevant_info_avoided": 0.7,
+          "context_integration": 0.7,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_006",
+      "category": "basic",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.5,
+          "overall_accuracy": 0.5
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.7,
+          "overall_comprehension": 0.59
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.5,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.48
+        },
+        "efficiency": {
+          "latency_ms": 76404,
+          "latency_per_step_ms": 76404,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5535
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.5,
+          "semantic_alignment": 0.5,
+          "completeness": 0.5,
+          "specificity": 0.5,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        },
+        "answer_quality": {
+          "accuracy": 0.5,
+          "completeness": 0.5,
+          "relevance": 0.5,
+          "clarity": 0.5,
+          "overall": 0.5
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.5,
+          "information_complementarity": 0.5,
+          "collaboration_efficiency": 0.5,
+          "conflict_resolution": 0.5,
+          "overall": 0.5
+        },
+        "context_understanding": {
+          "score": 0.7,
+          "key_context_used": 0.7,
+          "irrelevant_info_avoided": 0.7,
+          "context_integration": 0.7,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_007",
+      "category": "basic",
+      "difficulty": "easy",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.5,
+          "overall_accuracy": 0.5
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.7,
+          "overall_comprehension": 0.59
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.5,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.48
+        },
+        "efficiency": {
+          "latency_ms": 80753,
+          "latency_per_step_ms": 80753,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5535
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.5,
+          "semantic_alignment": 0.5,
+          "completeness": 0.5,
+          "specificity": 0.5,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        },
+        "answer_quality": {
+          "accuracy": 0.5,
+          "completeness": 0.5,
+          "relevance": 0.5,
+          "clarity": 0.5,
+          "overall": 0.5
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.5,
+          "information_complementarity": 0.5,
+          "collaboration_efficiency": 0.5,
+          "conflict_resolution": 0.5,
+          "overall": 0.5
+        },
+        "context_understanding": {
+          "score": 0.7,
+          "key_context_used": 0.7,
+          "irrelevant_info_avoided": 0.7,
+          "context_integration": 0.7,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_008",
+      "category": "basic",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.5,
+          "overall_accuracy": 0.5
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.7,
+          "overall_comprehension": 0.59
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.5,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.48
+        },
+        "efficiency": {
+          "latency_ms": 78761,
+          "latency_per_step_ms": 78761,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5535
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.5,
+          "semantic_alignment": 0.5,
+          "completeness": 0.5,
+          "specificity": 0.5,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        },
+        "answer_quality": {
+          "accuracy": 0.5,
+          "completeness": 0.5,
+          "relevance": 0.5,
+          "clarity": 0.5,
+          "overall": 0.5
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.5,
+          "information_complementarity": 0.5,
+          "collaboration_efficiency": 0.5,
+          "conflict_resolution": 0.5,
+          "overall": 0.5
+        },
+        "context_understanding": {
+          "score": 0.7,
+          "key_context_used": 0.7,
+          "irrelevant_info_avoided": 0.7,
+          "context_integration": 0.7,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_009",
+      "category": "basic",
+      "difficulty": "easy",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.5,
+          "overall_accuracy": 0.5
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.7,
+          "overall_comprehension": 0.59
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.5,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.48
+        },
+        "efficiency": {
+          "latency_ms": 75275,
+          "latency_per_step_ms": 75275,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5535
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.5,
+          "semantic_alignment": 0.5,
+          "completeness": 0.5,
+          "specificity": 0.5,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        },
+        "answer_quality": {
+          "accuracy": 0.5,
+          "completeness": 0.5,
+          "relevance": 0.5,
+          "clarity": 0.5,
+          "overall": 0.5
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.5,
+          "information_complementarity": 0.5,
+          "collaboration_efficiency": 0.5,
+          "conflict_resolution": 0.5,
+          "overall": 0.5
+        },
+        "context_understanding": {
+          "score": 0.7,
+          "key_context_used": 0.7,
+          "irrelevant_info_avoided": 0.7,
+          "context_integration": 0.7,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        }
+      },
+      "errors": []
+    },
+    {
+      "case_id": "basic_intent_010",
+      "category": "basic",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.0,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.5,
+          "overall_accuracy": 0.5
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.5,
+          "entity_extraction_f1": 0.5,
+          "ambiguity_resolution": 0.7,
+          "context_understanding": 0.7,
+          "overall_comprehension": 0.59
+        },
+        "collaboration": {
+          "agent_participation_rate": 0.5,
+          "information_diversity": 0.3,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.5,
+          "conflict_resolution_rate": 0.7,
+          "overall_collaboration": 0.48
+        },
+        "efficiency": {
+          "latency_ms": 73961,
+          "latency_per_step_ms": 73961,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.5,
+          "reasoning_validity": 0.5,
+          "evidence_support": 0.5,
+          "logical_consistency": 0.5,
+          "reasoning_depth": 0.5,
+          "overall_reasoning": 0.5
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 0.7,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.82
+        },
+        "overall_score": 0.5535
+      },
+      "llm_scores": {
+        "intent_match": {
+          "score": 0.5,
+          "semantic_alignment": 0.5,
+          "completeness": 0.5,
+          "specificity": 0.5,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        },
+        "answer_quality": {
+          "accuracy": 0.5,
+          "completeness": 0.5,
+          "relevance": 0.5,
+          "clarity": 0.5,
+          "overall": 0.5
+        },
+        "collaboration_quality": {
+          "role_specialization": 0.5,
+          "information_complementarity": 0.5,
+          "collaboration_efficiency": 0.5,
+          "conflict_resolution": 0.5,
+          "overall": 0.5
+        },
+        "context_understanding": {
+          "score": 0.7,
+          "key_context_used": 0.7,
+          "irrelevant_info_avoided": 0.7,
+          "context_integration": 0.7,
+          "explanation": "Error: UPSTREAM_BAD_STATUS status=400: {\"error\":{\"message\":\"google/gemini-2.0-flash is not a valid model ID\",\"code\":400},\"user_id\":\"user_31GIfamLNBlr45Kd1kAS1UwPHoI\"}"
+        }
+      },
+      "errors": []
+    }
+  ],
+  "comparison": {}
+}

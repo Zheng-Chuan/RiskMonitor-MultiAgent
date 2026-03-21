@@ -83,6 +83,7 @@ class BaseAgent:
         governance: dict[str, Any] | None = None,
         temperature: float = 0.2,
         max_tokens: int | None = 512,
+        use_json_mode: bool = True,
     ) -> AgentResult:
         """
         向 LLM 发起请求并解析 JSON 响应.
@@ -90,7 +91,7 @@ class BaseAgent:
         流程:
         1. 检查 API Key 和禁用标志
         2. 治理检查（配额、优先级）
-        3. 调用 LLM
+        3. 调用 LLM（启用 JSON Mode）
         4. 解析 JSON
         5. 记录指标
 
@@ -100,6 +101,7 @@ class BaseAgent:
             governance: 治理参数（user_id, priority）
             temperature: 采样温度
             max_tokens: 最大 Token 数
+            use_json_mode: 是否启用 JSON Mode（默认 True，强制模型输出 JSON）
 
         Returns:
             AgentResult 包含输出数据和元信息
@@ -157,6 +159,7 @@ class BaseAgent:
                 priority=priority,
                 gov_meta=gov_meta,
                 started=started,
+                use_json_mode=use_json_mode,
             )
 
         except LLMError:
@@ -180,22 +183,71 @@ class BaseAgent:
         gov_meta: dict,
         started: float,
         max_attempts: int = 3,
+        use_json_mode: bool = True,
     ) -> AgentResult:
-        """带重试机制的 LLM 调用."""
+        """带重试机制的 LLM 调用（支持智能修复）.
+        
+        重试策略:
+        - 第 1 次：正常请求
+        - 第 2-N 次：将错误信息反馈给 LLM，让它修复上次的输出
+        - 最多重试 max_attempts 次
+        
+        Args:
+            client: LLM 客户端
+            user_prompt: 用户提示词
+            temperature: 采样温度
+            max_tokens: 最大 Token 数
+            model_label: 模型标签
+            user_id: 用户 ID
+            priority: 优先级
+            gov_meta: 治理元数据
+            started: 开始时间
+            max_attempts: 最大尝试次数
+            use_json_mode: 是否启用 JSON Mode
+        
+        Returns:
+            AgentResult 包含输出数据和元信息
+        
+        Raises:
+            LLMError: 当所有尝试都失败时
+        """
         last_error: LLMError | None = None
-
+        last_raw_output: str | None = None  # 保存上次的原始输出
+        last_error_message: str | None = None  # 保存上次的错误信息
+        
         for attempt in range(max_attempts):
             try:
+                # 使用 JSON Mode 强制模型输出严格 JSON
+                response_format = {"type": "json_object"} if use_json_mode else None
+                
+                # 构建请求消息
+                messages = [
+                    {"role": "system", "content": self._system_prompt},
+                ]
+                
+                # 如果是重试，添加修复提示
+                if attempt == 0:
+                    # 第 1 次：正常请求
+                    messages.append({"role": "user", "content": user_prompt})
+                else:
+                    # 第 2-N 次：请求 LLM 修复上次的输出
+                    repair_prompt = self._build_repair_prompt(
+                        original_prompt=user_prompt,
+                        last_output=last_raw_output,
+                        error_message=last_error_message,
+                        attempt=attempt + 1,
+                        max_attempts=max_attempts,
+                    )
+                    messages.append({"role": "user", "content": repair_prompt})
+                
                 resp = await client.chat_completions(
-                    messages=[
-                        {"role": "system", "content": self._system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
+                    messages=messages,
                     model=self._model,
                     temperature=temperature,
                     max_tokens=max_tokens,
+                    response_format=response_format,
                 )
-
+                
                 # 记录成功指标
                 latency = self._elapsed_ms(started)
                 observe_ms("rm_llm_call", latency, labels={"agent": self._name, "model": model_label})
@@ -205,26 +257,91 @@ class BaseAgent:
                         "agent": self._name, "model": model_label,
                         "user": user_id, "priority": priority,
                     })
-
-                # 解析响应
+                
+                # 解析响应（不捕获异常，让外层处理）
                 return self._parse_response(resp, model_label, user_id, priority, gov_meta)
-
+                
             except LLMError as e:
                 last_error = e
-                if e.code == "BAD_LLM_OUTPUT" and attempt < max_attempts - 1:
-                    # JSON 解析错误时重试
+                
+                # 保存错误信息用于下次重试
+                if attempt < max_attempts - 1:
+                    # 提取原始输出（如果是解析错误）
+                    if e.code == "BAD_LLM_OUTPUT":
+                        # 从错误信息中提取 raw output
+                        import re
+                        match = re.search(r'raw=(.+?)(?:\nTraceback|$)', str(e.message), re.DOTALL)
+                        if match:
+                            last_raw_output = match.group(1).strip()[:2000]  # 限制长度
+                        last_error_message = str(e.message)[:500]
+                    
+                    # 等待后重试
                     await asyncio.sleep(1.0 * (attempt + 1))
                     continue
-
-                # 记录错误指标并抛出
+                
+                # 最后一次尝试失败，记录错误并抛出
                 self._record_error(model_label, e.code, started)
                 raise
-
+        
+        # 不应该到这里，但以防万一
         if last_error:
             self._record_error(model_label, last_error.code, started)
             raise last_error
-
+        
         raise LLMError(code="UNKNOWN", message="Unexpected error in retry loop")
+    
+    def _build_repair_prompt(
+        self,
+        *,
+        original_prompt: str,
+        last_output: str | None,
+        error_message: str | None,
+        attempt: int,
+        max_attempts: int,
+    ) -> str:
+        """构建修复专用的提示词.
+        
+        Args:
+            original_prompt: 原始的用户提示词
+            last_output: 上次的输出（可能格式错误）
+            error_message: 错误信息
+            attempt: 当前尝试次数
+            max_attempts: 最大尝试次数
+        
+        Returns:
+            修复专用的提示词
+        """
+        remaining = max_attempts - attempt + 1
+        
+        prompt = f"""你是一个专业的 JSON 修复助手。你的任务是修复上次输出中的格式错误。
+
+## 原始任务
+{original_prompt}
+
+## 上次的输出（有格式错误）
+```json
+{last_output or "N/A"}
+```
+
+## 错误信息
+{error_message or "JSON 解析失败"}
+
+## 你的任务
+请仔细检查上面的输出，找出 JSON 格式错误并修复它。常见问题包括：
+1. 缺少逗号（,）分隔字段
+2. 缺少引号（"）包裹字符串
+3. 多余的逗号或括号
+4. 缩进不正确
+
+## 要求
+1. **只输出修复后的 JSON**，不要添加任何解释
+2. 确保 JSON 格式完全正确，可以被 json.loads() 直接解析
+3. 保持原始输出的内容和结构，不要修改业务逻辑
+4. 这是第 {attempt} 次尝试，还剩 {remaining} 次机会
+
+请现在输出修复后的 JSON："""
+        
+        return prompt
 
     def _parse_response(
         self,

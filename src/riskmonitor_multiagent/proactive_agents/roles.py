@@ -26,6 +26,7 @@ from riskmonitor_multiagent.governance.versions import (
     PROMPT_VERSION_SYSTEM_ENGINEER,
     get_policy_version,
 )
+from riskmonitor_multiagent.contracts.intent_output import INTENT_OUTPUT_SCHEMA_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -56,21 +57,29 @@ class ProactiveIntentAgent(BaseProactiveAgent):
 Your job is to:
 1. Recognize user intent from natural language
 2. Extract key entities and slots
-3. Assess risk level and permission requirements
-4. Generate evidence for your reasoning
+3. Assess risk level
 
-Return only valid JSON with keys:
-- schema_version: "intent_output.v2"
-- primary_intent_type: string (e.g., "query", "analyze", "alert")
-- intents: list of intent objects with type, slots, confidence
-- risk_level: "LOW", "MEDIUM", or "HIGH"
-- permission_requirements: object with side_effects, requires_human_approval
-- evidence: object citing sources
+Return ONLY a simple JSON object with these 4 fields:
+- intent: string (e.g., "query_positions", "analyze_risk", "list_alerts")
+- slots: object with extracted entities (e.g., {"trader_id": "TRADER-001"})
+- confidence: number between 0.0 and 1.0
+- risk: "LOW", "MEDIUM", or "HIGH"
+
+Example output:
+{
+  "intent": "query_positions",
+  "slots": {"trader_id": "TRADER-001"},
+  "confidence": 0.95,
+  "risk": "LOW"
+}
+
+DO NOT include: schema_version, primary_intent_type, intents array, permission_requirements, disambiguation, evidence.
+Just the 4 simple fields above.
 
 Use ReAct reasoning:
 - Thought: What is the user trying to do?
 - Reasoning: Why do I think this is the intent?
-- Evidence: What keywords or patterns support this?
+- Evidence: What keywords support this?
 
 Write Chinese text using only English punctuation."""
 
@@ -99,12 +108,12 @@ Write Chinese text using only English punctuation."""
         return await self.run_with_react(
             task=task,
             context={"metadata": metadata},
-            max_tokens=384,
-            max_steps=3,
+            max_tokens=None,  # 不限制 token 数，让 GPT-4.5 自由输出
+            max_steps=5,
         )
 
     async def _generate_final_answer(self, task: dict[str, Any], history: list) -> dict[str, Any]:
-        """生成意图识别结果."""
+        """生成意图识别结果（简化格式）."""
         from riskmonitor_multiagent.contracts import (
             INTENT_OUTPUT_SCHEMA_VERSION,
             normalize_intent_output,
@@ -113,41 +122,72 @@ Write Chinese text using only English punctuation."""
         payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
         content = payload.get("content") if isinstance(payload.get("content"), str) else ""
         
-        steps_summary = "\n".join([
-            f"Thought: {s.thought}\nReasoning: {s.reasoning}"
-            for s in history
-        ])
-        
+        # 简化的 prompt，只要求 4 个字段
         prompt = f"""Based on your ReAct reasoning, generate the final intent recognition result.
 
-Task: {task}
-Content: {content}
+Task content: {content}
 
 Your reasoning chain:
-{steps_summary}
+{history[-1].thought if history else ''}
 
-Generate JSON with:
-- primary_intent_type
-- intents (list with type, slots, confidence)
-- risk_level
-- permission_requirements
-- evidence"""
+Generate a SIMPLE JSON with ONLY these 4 fields:
+- intent: the action type (e.g., "query_positions", "analyze_risk")
+- slots: extracted entities as key-value pairs
+- confidence: 0.0 to 1.0
+- risk: "LOW", "MEDIUM", or "HIGH"
+
+Example:
+{{
+  "intent": "query_positions",
+  "slots": {{"trader_id": "TRADER-001"}},
+  "confidence": 0.95,
+  "risk": "LOW"
+}}"""
 
         result = await self._base_agent.ask_json(
             user_prompt=prompt,
             fallback={
-                "schema_version": INTENT_OUTPUT_SCHEMA_VERSION,
-                "primary_intent_type": "unknown",
-                "intents": [{"intent_type": "unknown", "slots": {}, "confidence": 0.2}],
-                "risk_level": "MEDIUM",
-                "permission_requirements": {"side_effects": [], "requires_human_approval": False},
-                "evidence": {"fields": ["task.payload.content"]},
+                "intent": "unknown",
+                "slots": {},
+                "confidence": 0.5,
+                "risk": "MEDIUM",
             },
-            max_tokens=384,
+            max_tokens=None,  # 不限制 token 数
         )
         
-        output = normalize_intent_output(result.output if isinstance(result.output, dict) else {})
+        # 将简化格式转换为标准格式
+        output = self._convert_to_standard_format(result.output if isinstance(result.output, dict) else {})
         return output
+    
+    def _convert_to_standard_format(self, simple_output: dict[str, Any]) -> dict[str, Any]:
+        """将简化的 4 字段格式转换为标准格式."""
+        # 提取简化的字段
+        intent = simple_output.get("intent", "unknown")
+        slots = simple_output.get("slots", {})
+        confidence = simple_output.get("confidence", 0.5)
+        risk = simple_output.get("risk", "MEDIUM")
+        
+        # 转换为标准格式
+        return {
+            "schema_version": INTENT_OUTPUT_SCHEMA_VERSION,
+            "primary_intent_type": intent.split("_")[0] if "_" in intent else intent,  # "query_positions" -> "query"
+            "intents": [
+                {
+                    "intent_type": intent,
+                    "slots": slots,
+                    "confidence": float(confidence) if isinstance(confidence, (int, float)) else 0.5
+                }
+            ],
+            "risk_level": risk,
+            "permission_requirements": {
+                "side_effects": False,
+                "requires_human_approval": risk == "HIGH",
+                "allowed_tools": None,
+            },
+            "evidence": {
+                "fields": ["task.payload.content"],
+            },
+        }
 
 
 class ProactiveOrchestratorAgent(BaseProactiveAgent):
@@ -448,7 +488,43 @@ Never invent metrics. Use only provided data."""
 
     async def _perceive_environment(self) -> None:
         """主动感知环境 - 监控系统指标."""
-        pass
+        # 从内存指标中获取系统状态
+        from riskmonitor_multiagent.observability.metrics import render_prometheus_metrics
+        
+        # 解析 Prometheus 格式的指标
+        metrics_text = render_prometheus_metrics()
+        
+        # 检查错误率指标
+        error_count = 0
+        total_count = 0
+        for line in metrics_text.split("\n"):
+            if "proactive_agent_runs_error" in line or "agent_runs_error" in line:
+                try:
+                    value = int(line.split()[-1])
+                    error_count += value
+                except (ValueError, IndexError):
+                    pass
+            if "proactive_agent_runs_total" in line or "agent_runs_total" in line:
+                try:
+                    value = int(line.split()[-1])
+                    total_count += value
+                except (ValueError, IndexError):
+                    pass
+        
+        # 如果错误率超过阈值，添加信念
+        if total_count > 0:
+            error_rate = error_count / total_count
+            if error_rate > 0.1:  # 错误率超过 10%
+                self.add_belief(
+                    content={
+                        "metric": "error_rate",
+                        "value": error_rate,
+                        "errors": error_count,
+                        "total": total_count,
+                    },
+                    source="system_metrics",
+                    confidence=0.95,
+                )
 
     async def analyze_task(
         self,

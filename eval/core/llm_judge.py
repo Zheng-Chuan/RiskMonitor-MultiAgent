@@ -365,5 +365,289 @@ Return JSON format:
                 "overall": 0.5,
             }
 
+    async def evaluate_intent_match(
+        self,
+        expected_intent: str,
+        actual_intent: str,
+        context: str,
+    ) -> dict[str, Any]:
+        """
+        评估意图匹配度.
+
+        Args:
+            expected_intent: 期望的意图
+            actual_intent: 实际的意图
+            context: 任务上下文
+
+        Returns:
+            包含 score (0-1) 和 explanation 的字典
+        """
+        prompt = f"""Please evaluate whether the actual intent matches the expected intent.
+
+Task Context:
+{context}
+
+Expected Intent:
+{expected_intent}
+
+Actual Intent:
+{actual_intent}
+
+Evaluate the intent match on these criteria:
+1. semantic_alignment: Are the intents semantically aligned even if not identical?
+2. completeness: Does the actual intent cover all key aspects of the expected intent?
+3. specificity: Is the actual intent appropriately specific?
+
+Return JSON format:
+{{
+    "score": <overall_score_0_to_1>,
+    "semantic_alignment": <score_0_to_1>,
+    "completeness": <score_0_to_1>,
+    "specificity": <score_0_to_1>,
+    "explanation": "<brief explanation in Chinese>"
+}}"""
+
+        try:
+            result = await self._agent.ask_json(
+                user_prompt=prompt,
+                fallback={
+                    "score": 0.5,
+                    "semantic_alignment": 0.5,
+                    "completeness": 0.5,
+                    "specificity": 0.5,
+                    "explanation": "Intent match evaluation failed",
+                },
+                max_tokens=512,
+            )
+
+            output = result.output if isinstance(result.output, dict) else {}
+            return {
+                "score": float(output.get("score", 0.5)),
+                "semantic_alignment": float(output.get("semantic_alignment", 0.5)),
+                "completeness": float(output.get("completeness", 0.5)),
+                "specificity": float(output.get("specificity", 0.5)),
+                "explanation": output.get("explanation", ""),
+            }
+        except Exception as e:
+            logger.warning(f"LLM judge failed for intent match: {e}")
+            return {
+                "score": 0.5,
+                "semantic_alignment": 0.5,
+                "completeness": 0.5,
+                "specificity": 0.5,
+                "explanation": f"Error: {str(e)}",
+            }
+
+    async def evaluate_ambiguity_resolution(
+        self,
+        task: str,
+        intent_output: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        评估歧义消解能力.
+
+        Args:
+            task: 任务描述
+            intent_output: 意图识别输出
+
+        Returns:
+            包含 score (0-1) 和 explanation 的字典
+        """
+        intent_text = json.dumps(intent_output, ensure_ascii=False, indent=2)
+
+        prompt = f"""Please evaluate how well the agent resolved ambiguities in the task.
+
+Task:
+{task}
+
+Intent Output:
+{intent_text[:1000]}
+
+Evaluate the ambiguity resolution:
+1. ambiguity_identified: Did the agent identify ambiguities in the task?
+2. clarification_quality: Were the clarifications appropriate?
+3. assumption_transparency: Are the agent's assumptions clearly stated?
+
+Return JSON format:
+{{
+    "score": <overall_score_0_to_1>,
+    "ambiguity_identified": <score_0_to_1>,
+    "clarification_quality": <score_0_to_1>,
+    "assumption_transparency": <score_0_to_1>,
+    "explanation": "<brief explanation in Chinese>"
+}}"""
+
+        try:
+            result = await self._agent.ask_json(
+                user_prompt=prompt,
+                fallback={
+                    "score": 0.7,
+                    "ambiguity_identified": 0.7,
+                    "clarification_quality": 0.7,
+                    "assumption_transparency": 0.7,
+                    "explanation": "Ambiguity resolution evaluation failed",
+                },
+                max_tokens=512,
+            )
+
+            output = result.output if isinstance(result.output, dict) else {}
+            return {
+                "score": float(output.get("score", 0.7)),
+                "ambiguity_identified": float(output.get("ambiguity_identified", 0.7)),
+                "clarification_quality": float(output.get("clarification_quality", 0.7)),
+                "assumption_transparency": float(output.get("assumption_transparency", 0.7)),
+                "explanation": output.get("explanation", ""),
+            }
+        except Exception as e:
+            logger.warning(f"LLM judge failed for ambiguity resolution: {e}")
+            return {
+                "score": 0.7,
+                "ambiguity_identified": 0.7,
+                "clarification_quality": 0.7,
+                "assumption_transparency": 0.7,
+                "explanation": f"Error: {str(e)}",
+            }
+
+    async def evaluate_context_understanding(
+        self,
+        task: str,
+        agent_output: str,
+    ) -> dict[str, Any]:
+        """
+        评估上下文理解能力.
+
+        Args:
+            task: 任务描述
+            agent_output: Agent 输出
+
+        Returns:
+            包含 score (0-1) 和 explanation 的字典
+        """
+        prompt = f"""Please evaluate how well the agent understood the context of the task.
+
+Task:
+{task}
+
+Agent Output:
+{agent_output[:1500]}
+
+Evaluate context understanding:
+1. key_context_used: Did the agent correctly identify and use key context from the task?
+2. irrelevant_info_avoided: Did the agent avoid being distracted by irrelevant information?
+3. context_integration: Was the relevant context properly integrated into the response?
+
+Return JSON format:
+{{
+    "score": <overall_score_0_to_1>,
+    "key_context_used": <score_0_to_1>,
+    "irrelevant_info_avoided": <score_0_to_1>,
+    "context_integration": <score_0_to_1>,
+    "explanation": "<brief explanation in Chinese>"
+}}"""
+
+        try:
+            result = await self._agent.ask_json(
+                user_prompt=prompt,
+                fallback={
+                    "score": 0.7,
+                    "key_context_used": 0.7,
+                    "irrelevant_info_avoided": 0.7,
+                    "context_integration": 0.7,
+                    "explanation": "Context understanding evaluation failed",
+                },
+                max_tokens=512,
+            )
+
+            output = result.output if isinstance(result.output, dict) else {}
+            return {
+                "score": float(output.get("score", 0.7)),
+                "key_context_used": float(output.get("key_context_used", 0.7)),
+                "irrelevant_info_avoided": float(output.get("irrelevant_info_avoided", 0.7)),
+                "context_integration": float(output.get("context_integration", 0.7)),
+                "explanation": output.get("explanation", ""),
+            }
+        except Exception as e:
+            logger.warning(f"LLM judge failed for context understanding: {e}")
+            return {
+                "score": 0.7,
+                "key_context_used": 0.7,
+                "irrelevant_info_avoided": 0.7,
+                "context_integration": 0.7,
+                "explanation": f"Error: {str(e)}",
+            }
+
+    async def evaluate_conflict_resolution(
+        self,
+        messages: list[dict[str, Any]],
+        task: str,
+    ) -> dict[str, Any]:
+        """
+        评估冲突解决能力.
+
+        Args:
+            messages: 消息列表
+            task: 任务描述
+
+        Returns:
+            包含 score (0-1) 和 explanation 的字典
+        """
+        messages_text = "\n".join([
+            f"[{msg.get('from', 'unknown')} -> {msg.get('to', 'unknown')}]: {msg.get('content', '')[:200]}"
+            for msg in messages[:10]
+        ])
+
+        prompt = f"""Please evaluate how well conflicts between agents were resolved.
+
+Task:
+{task}
+
+Messages:
+{messages_text}
+
+Evaluate conflict resolution:
+1. conflict_identified: Were conflicts properly identified?
+2. resolution_quality: Were conflicts resolved effectively?
+3. consensus_achieved: Was consensus or agreement reached?
+
+Return JSON format:
+{{
+    "score": <overall_score_0_to_1>,
+    "conflict_identified": <score_0_to_1>,
+    "resolution_quality": <score_0_to_1>,
+    "consensus_achieved": <score_0_to_1>,
+    "explanation": "<brief explanation in Chinese>"
+}}"""
+
+        try:
+            result = await self._agent.ask_json(
+                user_prompt=prompt,
+                fallback={
+                    "score": 0.7,
+                    "conflict_identified": 0.7,
+                    "resolution_quality": 0.7,
+                    "consensus_achieved": 0.7,
+                    "explanation": "Conflict resolution evaluation failed",
+                },
+                max_tokens=512,
+            )
+
+            output = result.output if isinstance(result.output, dict) else {}
+            return {
+                "score": float(output.get("score", 0.7)),
+                "conflict_identified": float(output.get("conflict_identified", 0.7)),
+                "resolution_quality": float(output.get("resolution_quality", 0.7)),
+                "consensus_achieved": float(output.get("consensus_achieved", 0.7)),
+                "explanation": output.get("explanation", ""),
+            }
+        except Exception as e:
+            logger.warning(f"LLM judge failed for conflict resolution: {e}")
+            return {
+                "score": 0.7,
+                "conflict_identified": 0.7,
+                "resolution_quality": 0.7,
+                "consensus_achieved": 0.7,
+                "explanation": f"Error: {str(e)}",
+            }
+
 
 __all__ = ["LLMJudge"]

@@ -25,6 +25,13 @@ from riskmonitor_multiagent.proactive_agents.roles import (
     ProactiveSystemEngineerAgent,
     ProactiveRiskAnalystAgent,
 )
+from riskmonitor_multiagent.proactive_agents.question_manager import (
+    QuestionManager,
+    PendingQuestion,
+    get_question_manager,
+    ask_user_question,
+    answer_user_question,
+)
 
 __all__ = [
     "BaseProactiveAgent",
@@ -38,4 +45,9 @@ __all__ = [
     "ProactiveCriticAgent",
     "ProactiveSystemEngineerAgent",
     "ProactiveRiskAnalystAgent",
+    "QuestionManager",
+    "PendingQuestion",
+    "get_question_manager",
+    "ask_user_question",
+    "answer_user_question",
 ]

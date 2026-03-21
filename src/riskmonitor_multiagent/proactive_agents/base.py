@@ -285,12 +285,68 @@ class BaseProactiveAgent:
         pass
     
     async def _deliberate(self) -> None:
-        """思考 - 根据信念和愿望形成意图（子类可重写）."""
-        pass
+        """思考 - 根据信念和愿望形成意图."""
+        # 获取最新的信念
+        recent_beliefs = self.get_beliefs()[-5:]  # 最近 5 个信念
+        
+        # 获取活跃的愿望
+        active_desires = self.get_active_desires()
+        
+        # 检查是否有需要主动处理的情况
+        for belief in recent_beliefs:
+            # 如果信念来自系统监控，检查是否需要主动告警
+            if belief.source == "system_metrics":
+                if belief.content.get("metric") == "error_rate":
+                    error_rate = belief.content.get("value", 0)
+                    if error_rate > 0.1:  # 错误率超过 10%
+                        # 形成主动告警的意图
+                        self.add_intention(
+                            description=f"主动告警：系统错误率异常 ({error_rate*100:.1f}%)",
+                            target_agent="orchestrator",
+                            tool_name="submit_alerts",
+                            tool_params={
+                                "alert_type": "system_error",
+                                "severity": "high" if error_rate > 0.2 else "medium",
+                                "message": f"系统错误率 {error_rate*100:.1f}% 超过阈值 (10%)",
+                                "metric_name": "error_rate",
+                                "metric_value": error_rate,
+                            },
+                        )
+                        logger.info(f"[{self._name}] Created proactive alert intention for error rate {error_rate*100:.1f}%")
     
     async def _act(self) -> None:
-        """行动 - 执行意图（子类可重写）."""
-        pass
+        """行动 - 执行意图."""
+        pending_intentions = self.get_pending_intentions()
+        
+        for intention in pending_intentions:
+            # 更新状态为 executing
+            self.update_intention_status(intention.intention_id, "executing")
+            
+            try:
+                # 如果有目标 Agent，发送消息
+                if intention.target_agent:
+                    from riskmonitor_multiagent.orchestration.message_bus import get_message_bus
+                    message_bus = get_message_bus()
+                    
+                    await message_bus.send_request(
+                        from_agent=self._name,
+                        to_agent=intention.target_agent,
+                        content={
+                            "type": "proactive_alert",
+                            "intention": intention.description,
+                            "tool_name": intention.tool_name,
+                            "tool_params": intention.tool_params,
+                        },
+                    )
+                    
+                    logger.info(f"[{self._name}] Sent proactive alert to {intention.target_agent}")
+                
+                # 更新状态为 completed
+                self.update_intention_status(intention.intention_id, "completed")
+                
+            except Exception as e:
+                logger.exception(f"[{self._name}] Failed to execute intention: {e}")
+                self.update_intention_status(intention.intention_id, "failed")
     
     async def run_with_react(
         self,
@@ -517,7 +573,27 @@ Return as JSON with "action_type" and "action" (dict with params)."""
         elif action_type == "finalize":
             return {"status": "finalized", "result": action}
         elif action_type == "ask_human":
-            return {"status": "needs_human", "question": action.get("question", "")}
+            # 真正的 ask_human 实现 - 等待用户回答
+            question = action.get("question", "需要您的帮助")
+            context = action.get("context", {})
+            timeout = action.get("timeout", 300)  # 默认 5 分钟
+            
+            from riskmonitor_multiagent.proactive_agents.question_manager import get_question_manager
+            
+            manager = get_question_manager()
+            answer = await manager.ask_user(
+                agent_name=self._name,
+                question=question,
+                context=context,
+                timeout_seconds=timeout,
+            )
+            
+            return {
+                "status": "human_answered",
+                "question": question,
+                "answer": answer,
+                "timeout": answer.startswith("[超时]"),
+            }
         else:
             return {"status": "unknown_action", "action": action}
     
@@ -531,7 +607,18 @@ Return as JSON with "action_type" and "action" (dict with params)."""
             return False
         
         last_step = history[-1]
-        return last_step.action_type in {"finalize", "ask_human"}
+        
+        # 如果是 finalize，终止
+        if last_step.action_type == "finalize":
+            return True
+        
+        # 如果是 ask_human 但已超时，终止
+        if last_step.action_type == "ask_human":
+            observation = last_step.observation
+            if observation and observation.get("timeout"):
+                return True  # 超时后终止
+        
+        return False
     
     async def _generate_final_answer(
         self,
