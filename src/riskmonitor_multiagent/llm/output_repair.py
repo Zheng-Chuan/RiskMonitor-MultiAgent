@@ -1,6 +1,6 @@
 """LLM 输出自动修复模块.
 
-提供 JSON 解析和 Schema 验证的自动修复功能。
+提供 JSON 解析和 Schema 验证的自动修复功能.
 """
 
 from __future__ import annotations
@@ -24,9 +24,9 @@ class OutputRepairError(Exception):
 
 def extract_json_from_text(text: str) -> Optional[str]:
     """
-    从文本中提取 JSON（处理 LLM 输出前后有多余文本的情况）.
+    从文本中提取 JSON(处理 LLM 输出前后有多余文本的情况).
 
-    支持：
+    支持:
     - 纯 JSON
     - ```json ... ``` 包裹
     - {...} 包裹但周围有其他文本
@@ -70,7 +70,7 @@ def fix_common_json_issues(text: str) -> str:
     """
     修复常见的 JSON 格式问题.
 
-    修复：
+    修复:
     - 尾随逗号
     - 单引号改为双引号
     - 未加引号的 key

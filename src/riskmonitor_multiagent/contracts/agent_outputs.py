@@ -1,11 +1,11 @@
 """
 Agent 输出契约定义与验证.
 
-本模块定义各 Agent 的输出格式规范，提供:
+本模块定义各 Agent 的输出格式规范,提供:
 - 验证函数: validate_* - 检查输出是否符合契约
 - 归一化函数: normalize_* - 将不完整输出补充为有效格式
 
-所有函数均返回标准结构，便于上层统一处理.
+所有函数均返回标准结构,便于上层统一处理.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ RISK_ANALYST_VERSION = "risk_analyst_output.v1"
 ORCHESTRATOR_VERSION = "orchestrator_output.v1"
 CRITIC_VERSION = "critic_review.v1"
 
-# 向后兼容的别名（测试直接导入这些名称）
+# 向后兼容的别名(测试直接导入这些名称)
 SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION = SYSTEM_ENGINEER_VERSION
 RISK_ANALYST_OUTPUT_SCHEMA_VERSION = RISK_ANALYST_VERSION
 ORCHESTRATOR_OUTPUT_SCHEMA_VERSION = ORCHESTRATOR_VERSION
@@ -34,15 +34,15 @@ def _validate_schema_version(
 ) -> None:
     """验证 schema_version 字段.
     
-    放宽验证：只要版本号存在且是字符串即可，不强制要求完全匹配。
-    版本差异通过 normalize 函数处理。
+    放宽验证:只要版本号存在且是字符串即可,不强制要求完全匹配.
+    版本差异通过 normalize 函数处理.
     """
     version = output.get("schema_version")
     if version is None:
-        return  # 允许缺失，normalize 会补充
+        return  # 允许缺失,normalize 会补充
     if not is_non_empty_str(version):
         errors.append("bad_schema_version")
-    # 放宽：版本不匹配不报错，让 normalize 处理兼容性
+    # 放宽:版本不匹配不报错,让 normalize 处理兼容性
 
 
 def _ensure_dict(value: Any, default: dict) -> dict:
@@ -86,7 +86,7 @@ def validate_system_engineer_output(output: dict[str, Any]) -> tuple[bool, list[
 
 def normalize_system_engineer_output(output: dict[str, Any]) -> dict[str, Any]:
     """
-    归一化系统工程师输出，补充缺失字段.
+    归一化系统工程师输出,补充缺失字段.
 
     默认值:
     - schema_version: system_engineer_output.v1
@@ -149,7 +149,7 @@ def validate_risk_analyst_output(output: dict[str, Any]) -> tuple[bool, list[str
 
 def normalize_risk_analyst_output(output: dict[str, Any]) -> dict[str, Any]:
     """
-    归一化风险分析师输出，补充缺失字段.
+    归一化风险分析师输出,补充缺失字段.
 
     默认值:
     - schema_version: risk_analyst_output.v1
@@ -180,14 +180,14 @@ def validate_orchestrator_output(output: dict[str, Any]) -> tuple[bool, list[str
     验证编排器 Agent 输出.
 
     检查项:
-    - schema_version 有效性（放宽，允许版本差异）
-    - intent 结构（放宽，允许缺失）
-    - plan_steps 格式与完整性（放宽非关键字段）
+    - schema_version 有效性(放宽,允许版本差异)
+    - intent 结构(放宽,允许缺失)
+    - plan_steps 格式与完整性(放宽非关键字段)
     - evidence 引用有效性
     - degraded 标志一致性
     - commands 与 receipt 绑定
     
-    优化策略：只检查核心字段，其他字段通过 normalize 自动修复。
+    优化策略:只检查核心字段,其他字段通过 normalize 自动修复.
     """
     if not isinstance(output, dict):
         return False, ["output must be dict"]
@@ -195,12 +195,12 @@ def validate_orchestrator_output(output: dict[str, Any]) -> tuple[bool, list[str
     errors: list[str] = []
     _validate_schema_version(output, ORCHESTRATOR_VERSION, errors)
 
-    # 检查 intent（放宽：允许缺失或不完整，normalize 会补充）
+    # 检查 intent(放宽:允许缺失或不完整,normalize 会补充)
     intent = output.get("intent")
     if intent is not None and not isinstance(intent, dict):
         errors.append("bad_intent")
 
-    # 检查 plan_steps（放宽：只要存在且是列表即可，字段缺失通过 normalize 修复）
+    # 检查 plan_steps(放宽:只要存在且是列表即可,字段缺失通过 normalize 修复)
     steps = output.get("plan_steps")
     if steps is not None:
         if not isinstance(steps, list):
@@ -210,10 +210,10 @@ def validate_orchestrator_output(output: dict[str, Any]) -> tuple[bool, list[str
                 if not isinstance(step, dict):
                     errors.append("bad_plan_step")
                     continue
-                # 放宽：只检查 kind 字段存在，其他字段缺失通过 normalize 修复
+                # 放宽:只检查 kind 字段存在,其他字段缺失通过 normalize 修复
                 if not is_non_empty_str(step.get("kind")):
                     errors.append("bad_plan_step_kind")
-                # step_id 和 reason 缺失不报错，normalize 会补充
+                # step_id 和 reason 缺失不报错,normalize 会补充
                 # 检查 delegate 特有字段
                 if step.get("kind") == "delegate":
                     if not is_non_empty_str(step.get("target_agent")):
@@ -254,7 +254,7 @@ def validate_orchestrator_output(output: dict[str, Any]) -> tuple[bool, list[str
 
 def normalize_orchestrator_output(output: dict[str, Any]) -> dict[str, Any]:
     """
-    归一化编排器输出，补充缺失字段并修复格式.
+    归一化编排器输出,补充缺失字段并修复格式.
 
     主要修复:
     - 补充 schema_version, intent, plan_steps
@@ -338,7 +338,7 @@ def validate_critic_review(output: dict[str, Any]) -> tuple[bool, list[str]]:
 
 def normalize_critic_review(output: dict[str, Any]) -> dict[str, Any]:
     """
-    归一化评审员输出，补充缺失字段.
+    归一化评审员输出,补充缺失字段.
 
     默认值 (保守策略):
     - ok: False

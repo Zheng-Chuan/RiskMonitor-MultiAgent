@@ -2,7 +2,7 @@
 """
 Chroma 知识库初始化脚本.
 
-向 Chroma 向量数据库中插入一些与 Equities desk 相关的知识数据，
+向 Chroma 向量数据库中插入一些与 Equities desk 相关的知识数据,
 用于支持第 4 个和第 8 个测试用例.
 """
 
@@ -144,5 +144,5 @@ async def init_knowledge_base() -> None:
 
 
 if __name__ == "__main__":
-    # 注意：ChromaVectorStore 是同步的，不需要 asyncio.run
+    # 注意:ChromaVectorStore 是同步的,不需要 asyncio.run
     init_knowledge_base()

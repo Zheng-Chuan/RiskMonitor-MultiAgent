@@ -1,11 +1,11 @@
 """
 主动 Agent 基类 - 具备 BDI 模型、ReAct 循环和后台监控能力.
 
-核心特性：
-1. BDI 模型：信念（Belief）、愿望（Desire）、意图（Intention）
-2. ReAct 循环：Thought → Reasoning → Action → Observation
-3. CoT 思维链：每个步骤都有动态生成的 reason 和 evidence
-4. 后台监控：主动感知环境变化并发起行为
+核心特性:
+1. BDI 模型:信念(Belief)、愿望(Desire)、意图(Intention)
+2. ReAct 循环:Thought → Reasoning → Action → Observation
+3. CoT 思维链:每个步骤都有动态生成的 reason 和 evidence
+4. 后台监控:主动感知环境变化并发起行为
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Belief:
-    """Agent 的信念：Agent 认为世界的状态."""
+    """Agent 的信念:Agent 认为世界的状态."""
     
     content: Any
     source: str
@@ -36,7 +36,7 @@ class Belief:
 
 @dataclass
 class Desire:
-    """Agent 的愿望：Agent 想要达到的状态."""
+    """Agent 的愿望:Agent 想要达到的状态."""
     
     description: str
     priority: int = 0
@@ -46,7 +46,7 @@ class Desire:
 
 @dataclass
 class Intention:
-    """Agent 的意图：Agent 承诺要执行的行动."""
+    """Agent 的意图:Agent 承诺要执行的行动."""
     
     description: str
     target_agent: Optional[str] = None
@@ -59,7 +59,7 @@ class Intention:
 
 @dataclass
 class ReActStep:
-    """ReAct 循环的单个步骤（动态生成，非硬编码）."""
+    """ReAct 循环的单个步骤(动态生成,非硬编码)."""
     
     step_id: str
     thought: str
@@ -87,11 +87,11 @@ class BaseProactiveAgent:
     """
     主动 Agent 基类.
     
-    具备：
-    1. BDI 模型：信念、愿望、意图
-    2. ReAct 循环：动态生成 thought/reasoning/evidence
-    3. 后台监控：主动感知环境
-    4. CoT 思维链：每个步骤都有推理过程
+    具备:
+    1. BDI 模型:信念、愿望、意图
+    2. ReAct 循环:动态生成 thought/reasoning/evidence
+    3. 后台监控:主动感知环境
+    4. CoT 思维链:每个步骤都有推理过程
     """
     
     def __init__(
@@ -115,7 +115,7 @@ class BaseProactiveAgent:
             policy_version: 策略版本
             model: 模型名称
             enable_background_monitor: 是否启用后台监控
-            monitor_interval_seconds: 后台监控间隔（秒）
+            monitor_interval_seconds: 后台监控间隔(秒)
         """
         self._name = name
         self._system_prompt = system_prompt
@@ -146,7 +146,7 @@ class BaseProactiveAgent:
             self._init_desires()
     
     def _init_desires(self) -> None:
-        """初始化 Agent 的愿望（子类可重写）."""
+        """初始化 Agent 的愿望(子类可重写)."""
         pass
     
     @property
@@ -182,7 +182,7 @@ class BaseProactiveAgent:
         return desire
     
     def get_active_desires(self) -> list[Desire]:
-        """获取活跃愿望（按优先级排序）."""
+        """获取活跃愿望(按优先级排序)."""
         active = [d for d in self._desires if d.active]
         return sorted(active, key=lambda x: -x.priority)
     
@@ -236,7 +236,7 @@ class BaseProactiveAgent:
         }
     
     async def start_background_monitor(self) -> None:
-        """启动后台监控（真正的主动性）."""
+        """启动后台监控(真正的主动性)."""
         if self._monitor_task is not None:
             logger.warning(f"[{self._name}] Monitor already running")
             return
@@ -281,7 +281,7 @@ class BaseProactiveAgent:
         logger.info(f"[{self._name}] Monitor loop exited")
     
     async def _perceive_environment(self) -> None:
-        """感知环境 - 更新信念（子类可重写）."""
+        """感知环境 - 更新信念(子类可重写)."""
         pass
     
     async def _deliberate(self) -> None:
@@ -294,14 +294,14 @@ class BaseProactiveAgent:
         
         # 检查是否有需要主动处理的情况
         for belief in recent_beliefs:
-            # 如果信念来自系统监控，检查是否需要主动告警
+            # 如果信念来自系统监控,检查是否需要主动告警
             if belief.source == "system_metrics":
                 if belief.content.get("metric") == "error_rate":
                     error_rate = belief.content.get("value", 0)
                     if error_rate > 0.1:  # 错误率超过 10%
                         # 形成主动告警的意图
                         self.add_intention(
-                            description=f"主动告警：系统错误率异常 ({error_rate*100:.1f}%)",
+                            description=f"主动告警:系统错误率异常 ({error_rate*100:.1f}%)",
                             target_agent="orchestrator",
                             tool_name="submit_alerts",
                             tool_params={
@@ -323,7 +323,7 @@ class BaseProactiveAgent:
             self.update_intention_status(intention.intention_id, "executing")
             
             try:
-                # 如果有目标 Agent，发送消息
+                # 如果有目标 Agent,发送消息
                 if intention.target_agent:
                     from riskmonitor_multiagent.orchestration.message_bus import get_message_bus
                     message_bus = get_message_bus()
@@ -359,7 +359,7 @@ class BaseProactiveAgent:
         """
         使用 ReAct 循环执行任务.
         
-        这是核心方法，每个任务都会走：
+        这是核心方法,每个任务都会走:
         1. Thought: 生成思考
         2. Reasoning: 生成推理理由
         3. Evidence: 生成证据
@@ -444,7 +444,7 @@ class BaseProactiveAgent:
         history: list[ReActStep],
         context: dict[str, Any] | None,
     ) -> str:
-        """生成思考 - 动态生成，非硬编码."""
+        """生成思考 - 动态生成,非硬编码."""
         history_text = self._format_history(history)
         context_text = self._format_context(context)
         
@@ -456,15 +456,27 @@ History: {history_text}
 
 Generate a thought about what you should consider or do next. Be specific and relevant to the task.
 
-Thought:"""
+Only return the thought text, no JSON format."""
 
-        result = await self._base_agent.ask_json(
-            user_prompt=prompt,
-            fallback={"thought": "继续执行任务"},
-            max_tokens=128,
-        )
-        
-        return result.output.get("thought", "继续执行任务")
+        try:
+            from riskmonitor_multiagent.llm import LlmClient
+            
+            client = LlmClient()
+            resp = await client.chat_completions(
+                messages=[
+                    {"role": "system", "content": self._system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                model=self._model,
+                temperature=0.7,
+                max_tokens=128,
+                use_cache=False,
+            )
+            
+            content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+            return content.strip() if content.strip() else "继续执行任务"
+        except Exception:
+            return "继续执行任务"
     
     async def _generate_reasoning(
         self,
@@ -487,15 +499,27 @@ Generate a reasoning that explains why you chose this thought. Consider:
 - What do you need to verify?
 - What are the risks or uncertainties?
 
-Reasoning:"""
+Only return the reasoning text, no JSON format."""
 
-        result = await self._base_agent.ask_json(
-            user_prompt=prompt,
-            fallback={"reasoning": "基于任务要求执行"},
-            max_tokens=256,
-        )
-        
-        return result.output.get("reasoning", "基于任务要求执行")
+        try:
+            from riskmonitor_multiagent.llm import LlmClient
+            
+            client = LlmClient()
+            resp = await client.chat_completions(
+                messages=[
+                    {"role": "system", "content": self._system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                model=self._model,
+                temperature=0.7,
+                max_tokens=256,
+                use_cache=False,
+            )
+            
+            content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+            return content.strip() if content.strip() else "基于任务要求执行"
+        except Exception:
+            return "基于任务要求执行"
     
     async def _generate_evidence(
         self,
@@ -548,7 +572,6 @@ Choose an action type and parameters:
 - "llm_call": Make another LLM call to gather more information
 - "tool_call": Execute a tool (specify tool_name and params)
 - "finalize": Task is complete, generate final answer
-- "ask_human": Need human input to proceed
 
 Return as JSON with "action_type" and "action" (dict with params)."""
 
@@ -598,7 +621,7 @@ Return as JSON with "action_type" and "action" (dict with params)."""
             return {"status": "unknown_action", "action": action}
     
     async def _execute_tool_call(self, action: dict[str, Any]) -> dict[str, Any]:
-        """执行工具调用（子类可重写）."""
+        """执行工具调用(子类可重写)."""
         return {"status": "tool_call_not_implemented", "action": action}
     
     async def _should_terminate(self, task: dict[str, Any], history: list[ReActStep]) -> bool:
@@ -608,11 +631,11 @@ Return as JSON with "action_type" and "action" (dict with params)."""
         
         last_step = history[-1]
         
-        # 如果是 finalize，终止
+        # 如果是 finalize,终止
         if last_step.action_type == "finalize":
             return True
         
-        # 如果是 ask_human 但已超时，终止
+        # 如果是 ask_human 但已超时,终止
         if last_step.action_type == "ask_human":
             observation = last_step.observation
             if observation and observation.get("timeout"):
@@ -654,7 +677,9 @@ Generate a comprehensive final answer as JSON."""
         
         lines = []
         for step in history[-3:]:
-            lines.append(f"- {step.step_id}: Thought={step.thought[:50]}... Reason={step.reasoning[:50]}... Action={step.action_type}")
+            thought_str = str(step.thought) if step.thought else ""
+            reasoning_str = str(step.reasoning) if step.reasoning else ""
+            lines.append(f"- {step.step_id}: Thought={thought_str[:50]}... Reason={reasoning_str[:50]}... Action={step.action_type}")
         
         return "\n".join(lines)
     

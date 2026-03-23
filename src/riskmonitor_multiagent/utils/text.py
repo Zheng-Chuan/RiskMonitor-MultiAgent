@@ -8,7 +8,7 @@ from typing import Any
 
 def clean_llm_output(text: str) -> str:
     """
-    清理 LLM 输出，提取有效 JSON 内容.
+    清理 LLM 输出,提取有效 JSON 内容.
 
     处理常见问题:
     - 去除 markdown 代码块标记 (```json ... ```)
@@ -19,7 +19,7 @@ def clean_llm_output(text: str) -> str:
         text: 原始 LLM 输出文本
 
     Returns:
-        清理后的文本，应当是可解析的 JSON
+        清理后的文本,应当是可解析的 JSON
     """
     text = text.strip()
 
@@ -80,7 +80,7 @@ def truncate_context(context: dict[str, Any] | None, max_chars: int = 1500) -> d
     if len(ctx_str) <= max_chars:
         return context
 
-    # 截断策略：保留关键字段，截断长文本
+    # 截断策略:保留关键字段,截断长文本
     truncated = dict(context)
     for key in ["artifacts", "receipts", "plan"]:
         if key in truncated:

@@ -1,7 +1,7 @@
 """
 动态协作工作流测试.
 
-证明这是真正的动态协作，不是固定顺序.
+证明这是真正的动态协作,不是固定顺序.
 """
 
 from __future__ import annotations
@@ -151,9 +151,9 @@ class TestDynamicCollaborationProof:
 
     def test_not_fixed_order(self, workflow: DynamicCollaborationWorkflow) -> None:
         """
-        证明：不是固定顺序.
+        证明:不是固定顺序.
         
-        动态协作的核心是：下一步取决于当前状态，不是硬编码的步骤.
+        动态协作的核心是:下一步取决于当前状态,不是硬编码的步骤.
         """
         # 场景 1: 初始状态
         workflow._state = "initial"
@@ -163,7 +163,7 @@ class TestDynamicCollaborationProof:
         action1 = asyncio.run(workflow._decide_next_action())
         assert action1 == "call_intent"
         
-        # 场景 2: Intent 已完成，Orchestrator 未完成
+        # 场景 2: Intent 已完成,Orchestrator 未完成
         workflow._state = "intent_done"
         workflow._completed_agents = {"intent"}
         
@@ -179,15 +179,15 @@ class TestDynamicCollaborationProof:
         action3 = asyncio.run(workflow._decide_next_action())
         assert action3 == "done"
         
-        # 关键证明：不同状态下，决策不同！
+        # 关键证明:不同状态下,决策不同!
         # 这不是固定顺序 Step 1, 2, 3, 4...
-        # 而是根据 _state 和 _completed_agents 动态决定！
+        # 而是根据 _state 和 _completed_agents 动态决定!
 
     def test_decision_based_on_state(self, workflow: DynamicCollaborationWorkflow) -> None:
         """
-        证明：决策基于状态.
+        证明:决策基于状态.
         
-        下一步行动由 _state 和 _completed_agents 决定，
+        下一步行动由 _state 和 _completed_agents 决定,
         不是硬编码的顺序.
         """
         test_cases = [
@@ -244,9 +244,9 @@ class TestDynamicCollaborationProof:
 
     def test_state_machine(self, workflow: DynamicCollaborationWorkflow) -> None:
         """
-        证明：这是一个状态机.
+        证明:这是一个状态机.
         
-        工作流有状态（_state），状态会变化，
+        工作流有状态(_state),状态会变化,
         决策基于当前状态.
         """
         import asyncio
@@ -265,8 +265,8 @@ class TestDynamicCollaborationProof:
         workflow._state = "orchestrator_done"
         workflow._completed_agents.add("orchestrator")
         
-        # 证明状态真的变了！
-        # 这不是固定顺序，而是状态驱动的！
+        # 证明状态真的变了!
+        # 这不是固定顺序,而是状态驱动的!
         assert workflow._state == "orchestrator_done"
         assert "orchestrator" in workflow._completed_agents
         
@@ -276,12 +276,12 @@ class TestDynamicCollaborationProof:
 
     def test_completed_agents_tracking(self, workflow: DynamicCollaborationWorkflow) -> None:
         """
-        证明：追踪已完成的 Agent.
+        证明:追踪已完成的 Agent.
         
-        系统知道哪些 Agent 已经完成了，
+        系统知道哪些 Agent 已经完成了,
         这是动态决策的关键.
         """
-        # 初始：没有完成的
+        # 初始:没有完成的
         assert len(workflow._completed_agents) == 0
         
         # 添加 Intent
@@ -298,50 +298,50 @@ class TestDynamicCollaborationProof:
         assert "intent" in workflow._completed_agents
         assert "critic" not in workflow._completed_agents
         
-        # 这证明：系统追踪状态，不是固定顺序！
+        # 这证明:系统追踪状态,不是固定顺序!
 
 
 def prove_dynamic_collaboration() -> str:
     """
     证明这是真正的动态协作的总结.
     
-    返回：证明文本
+    返回:证明文本
     """
     proof = """
 ================================================================================
-                    证明：这是真正的动态协作，不是固定顺序！
+                    证明:这是真正的动态协作,不是固定顺序!
 ================================================================================
 
-核心证据：
+核心证据:
 
 1. 决策函数 _decide_next_action() 不是返回固定的 "step1", "step2"
-   而是基于当前状态（_state）和已完成的 Agent（_completed_agents）
-   动态决定下一步做什么！
+   而是基于当前状态(_state)和已完成的 Agent(_completed_agents)
+   动态决定下一步做什么!
 
-2. 有明确的状态机：
+2. 有明确的状态机:
    initial -> intent_done -> orchestrator_done -> critic_done -> all_done
 
-3. 系统追踪已完成的 Agent：
+3. 系统追踪已完成的 Agent:
    _completed_agents = {"intent", "orchestrator", ...}
 
-4. 不同状态下，决策不同：
+4. 不同状态下,决策不同:
    - initial: call_intent
    - intent_done: call_orchestrator
    - orchestrator_done: call_critic
    - critic_done: call_both_parallel
    - 等等...
 
-5. 没有硬编码的 Step 1, Step 2, Step 3, Step 4！
-   完全是状态驱动的！
+5. 没有硬编码的 Step 1, Step 2, Step 3, Step 4!
+   完全是状态驱动的!
 
-对比：
+对比:
 
-| 方面 | 固定顺序 | 动态协作（本项目） |
+| 方面 | 固定顺序 | 动态协作(本项目) |
 |------|----------|-------------------|
 | 执行顺序 | 硬编码 Step 1-4 | 基于状态动态决定 |
 | 决策方式 | 固定不变 | 每次迭代重新决策 |
 | 状态追踪 | 无 | 有 _state 和 _completed_agents |
-| 灵活性 | 低 | 高，可以根据需要调整 |
+| 灵活性 | 低 | 高,可以根据需要调整 |
 
 ================================================================================
                             Q.E.D. (Quod Erat Demonstrandum)

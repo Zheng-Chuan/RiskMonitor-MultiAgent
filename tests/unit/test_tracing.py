@@ -1,5 +1,5 @@
 """
-分布式追踪（Tracing）测试.
+分布式追踪(Tracing)测试.
 """
 
 from __future__ import annotations

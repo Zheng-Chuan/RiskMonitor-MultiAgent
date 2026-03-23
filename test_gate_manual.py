@@ -44,10 +44,10 @@ summary_good = {
 }
 
 result = evaluate_quality_gate(summary_good)
-print(f"结果：{'✅ 通过' if result.passed else '❌ 失败'}")
-print(f"指标摘要：{result.metrics_summary}")
+print(f"结果:{'✅ 通过' if result.passed else '❌ 失败'}")
+print(f"指标摘要:{result.metrics_summary}")
 if not result.passed:
-    print(f"失败原因：{result.reasons}")
+    print(f"失败原因:{result.reasons}")
 
 # 测试用例 2: 证据支持度太低
 print("\n" + "=" * 60)
@@ -82,10 +82,10 @@ summary_bad = {
 }
 
 result = evaluate_quality_gate(summary_bad)
-print(f"结果：{'✅ 通过' if result.passed else '❌ 失败'}")
-print(f"指标摘要：{result.metrics_summary}")
+print(f"结果:{'✅ 通过' if result.passed else '❌ 失败'}")
+print(f"指标摘要:{result.metrics_summary}")
 if not result.passed:
-    print(f"失败原因：{result.reasons}")
+    print(f"失败原因:{result.reasons}")
 
 print("\n" + "=" * 60)
 print("✅ 质量门禁系统工作正常!")

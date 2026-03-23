@@ -1,7 +1,7 @@
 """
 消息总线实现.
 
-实现多 Agent 之间的通信基础设施，支持发送、接收、订阅消息.
+实现多 Agent 之间的通信基础设施,支持发送、接收、订阅消息.
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ class MessageBus:
     """
     消息总线.
 
-    负责 Agent 之间的消息传递，支持：
-    - 发送消息（点对点、广播）
+    负责 Agent 之间的消息传递,支持:
+    - 发送消息(点对点、广播)
     - 订阅消息
     - 查询消息历史
     """
@@ -53,7 +53,7 @@ class MessageBus:
             message_type: 消息类型
             from_agent: 发送者 Agent ID
             content: 消息内容
-            to_agent: 接收者 Agent ID（None 表示广播）
+            to_agent: 接收者 Agent ID(None 表示广播)
             in_reply_to: 回复的消息 ID
 
         Returns:
@@ -278,7 +278,7 @@ class MessageBus:
             message_id: 消息 ID
 
         Returns:
-            消息，如果找不到返回 None
+            消息,如果找不到返回 None
         """
         for m in self._messages:
             if m.get("message_id") == message_id:
@@ -324,6 +324,6 @@ def get_message_bus() -> MessageBus:
 
 
 def reset_message_bus() -> None:
-    """重置消息总线（用于测试）."""
+    """重置消息总线(用于测试)."""
     global _message_bus
     _message_bus = None

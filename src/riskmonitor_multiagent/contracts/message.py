@@ -1,7 +1,7 @@
 """
 多 Agent 协作消息契约定义.
 
-定义 Message Bus 的消息格式，包括消息类型、发送者、接收者、内容等.
+定义 Message Bus 的消息格式,包括消息类型、发送者、接收者、内容等.
 """
 
 from __future__ import annotations
@@ -18,11 +18,11 @@ MESSAGE_SCHEMA_VERSION = "message.v1"
 class MessageType(Enum):
     """消息类型枚举."""
 
-    REQUEST = "request"           # 请求：向某个 Agent 提问
-    RESPONSE = "response"         # 响应：回答请求
-    BROADCAST = "broadcast"       # 广播：告诉所有 Agent
-    INTERRUPT = "interrupt"       # 中断：暂停当前流程
-    FEEDBACK = "feedback"         # 反馈：给其他 Agent 提意见
+    REQUEST = "request"           # 请求:向某个 Agent 提问
+    RESPONSE = "response"         # 响应:回答请求
+    BROADCAST = "broadcast"       # 广播:告诉所有 Agent
+    INTERRUPT = "interrupt"       # 中断:暂停当前流程
+    FEEDBACK = "feedback"         # 反馈:给其他 Agent 提意见
     TOOL_CALL = "tool_call"       # 工具调用请求
     TOOL_RESULT = "tool_result"   # 工具调用结果
 
@@ -37,8 +37,8 @@ def validate_message(message: dict[str, Any]) -> tuple[bool, list[str]]:
     - from_agent 为非空字符串
     - content 为字典
     - timestamp_ms 为正整数
-    - 如果有 to_agent，必须为非空字符串
-    - 如果有 in_reply_to，必须为非空字符串
+    - 如果有 to_agent,必须为非空字符串
+    - 如果有 in_reply_to,必须为非空字符串
     """
     if not isinstance(message, dict):
         return False, ["message must be dict"]
@@ -77,12 +77,12 @@ def validate_message(message: dict[str, Any]) -> tuple[bool, list[str]]:
         except (TypeError, ValueError):
             errors.append("bad_timestamp_ms")
 
-    # 检查 to_agent（可选）
+    # 检查 to_agent(可选)
     to_agent = message.get("to_agent")
     if to_agent is not None and not is_non_empty_str(to_agent):
         errors.append("bad_to_agent")
 
-    # 检查 in_reply_to（可选）
+    # 检查 in_reply_to(可选)
     in_reply_to = message.get("in_reply_to")
     if in_reply_to is not None and not is_non_empty_str(in_reply_to):
         errors.append("bad_in_reply_to")
@@ -92,7 +92,7 @@ def validate_message(message: dict[str, Any]) -> tuple[bool, list[str]]:
 
 def normalize_message(message: dict[str, Any]) -> dict[str, Any]:
     """
-    归一化消息，补充缺失字段.
+    归一化消息,补充缺失字段.
 
     主要处理:
     - 补充缺失的基础字段

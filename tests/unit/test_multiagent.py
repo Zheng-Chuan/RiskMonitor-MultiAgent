@@ -175,7 +175,7 @@ class TestMessageBus:
             content={"task": "test"},
         )
 
-        # 注意：这里用的是 async 回调，实际测试需要 asyncio
+        # 注意:这里用的是 async 回调,实际测试需要 asyncio
         # 这里只验证订阅成功
         assert len(message_bus._subscribers["orchestrator"]) == 1
 

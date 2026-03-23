@@ -1,5 +1,5 @@
 """
-层次协作（Hierarchical）测试.
+层次协作(Hierarchical)测试.
 """
 
 from __future__ import annotations

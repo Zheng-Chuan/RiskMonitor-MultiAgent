@@ -18,7 +18,7 @@ def safe_json_loads(text: str, default: Any = None) -> Any:
         default: 解析失败时的默认值
 
     Returns:
-        解析后的对象，或默认值
+        解析后的对象,或默认值
     """
     if not text or not isinstance(text, str):
         return default
@@ -39,7 +39,7 @@ def safe_json_dumps(obj: Any, default: str = "{}", ensure_ascii: bool = False) -
         ensure_ascii: 是否转义非 ASCII 字符
 
     Returns:
-        JSON 字符串，或默认值
+        JSON 字符串,或默认值
     """
     if obj is None:
         return default

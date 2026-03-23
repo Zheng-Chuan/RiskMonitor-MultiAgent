@@ -124,7 +124,7 @@ def get_llm_api_key() -> str:
 
 
 def get_llm_base_url() -> str:
-    """获取 LLM 主机 Base URL（OpenAI 兼容接口）. 必须设置 LLM_BASE_URL 环境变量."""
+    """获取 LLM 主机 Base URL(OpenAI 兼容接口). 必须设置 LLM_BASE_URL 环境变量."""
     value = os.getenv("LLM_BASE_URL")
     if value is None or not value.strip():
         _try_load_repo_dotenv()
@@ -136,7 +136,7 @@ def get_llm_base_url() -> str:
 
 
 def get_llm_model() -> str:
-    """获取 LLM 模型 ID；优先读 LLM_MODEL，默认 qwen3-8b. 切换平台时在 .env 中改为目标模型名."""
+    """获取 LLM 模型 ID;优先读 LLM_MODEL,默认 qwen3-8b. 切换平台时在 .env 中改为目标模型名."""
     value = os.getenv("LLM_MODEL")
     if value is None or not value.strip():
         _try_load_repo_dotenv()
@@ -166,10 +166,10 @@ def get_llm_app_title() -> str:
 
 def get_llm_resolve_ip() -> str:
     """
-    获取 LLM API 的固定 IP 地址（可选）.
+    获取 LLM API 的固定 IP 地址(可选).
 
-    用于绕过 DNS 解析问题（如 Cloudflare 某些节点故障时）.
-    格式: IP 地址，例如 "104.26.9.9"
+    用于绕过 DNS 解析问题(如 Cloudflare 某些节点故障时).
+    格式: IP 地址,例如 "104.26.9.9"
     """
     value = os.getenv("LLM_RESOLVE_IP")
     if value is None:

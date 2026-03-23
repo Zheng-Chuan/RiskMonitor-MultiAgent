@@ -1,6 +1,6 @@
 """错误处理模块.
 
-提供统一的错误处理功能：
+提供统一的错误处理功能:
 - 错误分级
 - 可恢复/不可恢复错误区分
 - 死信队列
@@ -74,7 +74,7 @@ class ErrorRecord:
 
 
 class DeadLetterQueue:
-    """死信队列（纯内存实现）."""
+    """死信队列(纯内存实现)."""
 
     def __init__(self, max_size: int = 1000) -> None:
         self._queue: list[ErrorRecord] = []

@@ -1,7 +1,7 @@
 """
 意图输出契约定义.
 
-定义 IntentAgent 的输出格式，包括意图识别结果、风险等级、权限要求等.
+定义 IntentAgent 的输出格式,包括意图识别结果、风险等级、权限要求等.
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def validate_intent_output(output: dict[str, Any]) -> tuple[bool, list[str]]:
 
 def normalize_intent_output(output: dict[str, Any]) -> dict[str, Any]:
     """
-    归一化意图输出，补充缺失字段并处理多意图排序.
+    归一化意图输出,补充缺失字段并处理多意图排序.
 
     主要处理:
     - 补充缺失的基础字段

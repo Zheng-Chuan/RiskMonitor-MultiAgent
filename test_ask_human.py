@@ -35,7 +35,7 @@ async def test_ask_user():
         print(f"\n📢 新问题通知:")
         print(f"   ID: {question.question_id}")
         print(f"   Agent: {question.agent_name}")
-        print(f"   问题：{question.question}")
+        print(f"   问题:{question.question}")
     
     manager.register_callback(on_new_question)
     
@@ -47,7 +47,7 @@ async def test_ask_user():
     question_task = asyncio.create_task(
         ask_user_question(
             agent_name="test_agent",
-            question="请问 1+1 等于几？",
+            question="请问 1+1 等于几?",
             context={"task_id": "test_001"},
             timeout_seconds=30,
         )
@@ -65,7 +65,7 @@ async def test_ask_user():
     
     # 等待回答
     answer = await question_task
-    print(f"\n✅ Agent 收到回答：{answer}")
+    print(f"\n✅ Agent 收到回答:{answer}")
     
     # 测试 2: 超时处理
     print("\n" + "=" * 60)
@@ -81,9 +81,9 @@ async def test_ask_user():
         )
     )
     
-    # 不输入答案，等待超时
+    # 不输入答案,等待超时
     answer2 = await question_task2
-    print(f"\n⏰ 超时结果：{answer2}")
+    print(f"\n⏰ 超时结果:{answer2}")
     
     # 测试 3: 查看历史记录
     print("\n" + "=" * 60)
@@ -91,13 +91,13 @@ async def test_ask_user():
     print("=" * 60)
     
     all_questions = manager.get_all_questions()
-    print(f"\n总问题数：{len(all_questions)}")
+    print(f"\n总问题数:{len(all_questions)}")
     for q in all_questions:
         print(f"\n问题 {q.question_id[:8]}...:")
         print(f"  Agent: {q.agent_name}")
-        print(f"  问题：{q.question}")
-        print(f"  状态：{q.status}")
-        print(f"  回答：{q.answer or '无'}")
+        print(f"  问题:{q.question}")
+        print(f"  状态:{q.status}")
+        print(f"  回答:{q.answer or '无'}")
     
     print("\n" + "=" * 60)
     print("✅ 所有测试完成!")

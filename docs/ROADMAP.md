@@ -466,8 +466,6 @@
 - [x] 完整的 ReAct 循环
 - [x] 完整的 CoT 思维链
 - [x] ReAct + CoT 集成到实际 Agent
-
-**验收 Checklist**
 - [x] Agent 可以主动感知环境并发起行动 (已实现 _perceive/_deliberate/_act)
 - [ ] Agent 可以主动提问 (需要实现问题管理器和用户交互)
 - [x] 多轮对话可以优化结果

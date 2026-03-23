@@ -62,7 +62,7 @@ def test_memory_entry_scope_must_be_private_or_shared():
 
 @pytest.mark.asyncio
 async def test_memory_store_roundtrip_with_mock_redis():
-    """测试 MemoryStore 使用 mock Redis。"""
+    """测试 MemoryStore 使用 mock Redis."""
     from riskmonitor_multiagent.memory import MemoryStore
 
     # 模拟存储数据
@@ -141,7 +141,7 @@ async def test_memory_store_roundtrip_with_mock_redis():
 
 @pytest.mark.asyncio
 async def test_memory_store_run_context_with_mock_redis():
-    """测试 MemoryStore 的 run context 功能。"""
+    """测试 MemoryStore 的 run context 功能."""
     from riskmonitor_multiagent.memory import MemoryStore
 
     # 创建 mock Redis
@@ -170,7 +170,7 @@ async def test_memory_store_run_context_with_mock_redis():
 
 @pytest.mark.asyncio
 async def test_memory_store_run_summary_with_mock_redis():
-    """测试 MemoryStore 的 run summary 功能。"""
+    """测试 MemoryStore 的 run summary 功能."""
     from riskmonitor_multiagent.memory import MemoryStore
 
     # 创建 mock Redis
@@ -196,7 +196,7 @@ async def test_memory_store_run_summary_with_mock_redis():
 
 
 def test_memory_store_semantic_disabled_by_default(monkeypatch):
-    """测试 MemoryStore 默认禁用语义搜索。"""
+    """测试 MemoryStore 默认禁用语义搜索."""
     monkeypatch.delenv("PAGE_INDEX_ENABLED", raising=False)
     from riskmonitor_multiagent.memory import MemoryStore
 

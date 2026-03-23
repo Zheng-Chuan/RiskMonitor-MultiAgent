@@ -34,7 +34,7 @@ async def main() -> int:
     except ValueError:
         print("错误: 未配置 LLM_API_KEY", file=sys.stderr)
         print("请在项目根目录创建 .env 文件并添加: LLM_API_KEY=你的密钥", file=sys.stderr)
-        print("可复制 .env.example 为 .env 后填写。切勿将密钥提交到 git 或粘贴到聊天。", file=sys.stderr)
+        print("可复制 .env.example 为 .env 后填写.切勿将密钥提交到 git 或粘贴到聊天.", file=sys.stderr)
         return 1
 
     if not api_key or len(api_key) < 10:
@@ -66,7 +66,7 @@ async def main() -> int:
     print("响应内容:", text[:200] + ("..." if len(text) > 200 else ""))
     if isinstance(usage, dict):
         print("Token 使用:", json.dumps(usage, ensure_ascii=False))
-    print("OK: LLM 连接正常，可以运行 make eval-run 等进行带真实调用的评测。")
+    print("OK: LLM 连接正常,可以运行 make eval-run 等进行带真实调用的评测.")
     return 0
 
 

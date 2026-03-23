@@ -1,7 +1,7 @@
 """
 全局单例管理器.
 
-统一管理全局实例，避免重复的单例管理代码.
+统一管理全局实例,避免重复的单例管理代码.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ class SingletonManager:
     """
     全局单例管理器.
 
-    统一管理全局实例，提供：
+    统一管理全局实例,提供:
     - 获取单例实例
     - 重置单例实例
     - 批量重置所有单例
@@ -43,7 +43,7 @@ class SingletonManager:
         重置单例实例.
 
         Args:
-            key: 可选的实例标识，如果为 None 则重置所有实例
+            key: 可选的实例标识,如果为 None 则重置所有实例
         """
         if key:
             cls._instances.pop(key, None)

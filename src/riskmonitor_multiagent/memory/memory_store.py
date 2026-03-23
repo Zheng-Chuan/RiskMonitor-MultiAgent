@@ -1,7 +1,7 @@
 """
 统一内存存储系统.
 
-融合原 UnifiedMemory 和 ContextStore 功能，提供:
+融合原 UnifiedMemory 和 ContextStore 功能,提供:
 - 短期工作记忆 (Redis): Agent 独立记忆 + 共享记忆
 - 长期运行记忆 (Redis Hash): 完整的运行状态快照
 - 长期语义记忆 (PageIndex): 可检索的知识积累
@@ -49,8 +49,8 @@ class MemoryStore:
     统一内存存储.
     
     提供分层记忆管理:
-    1. 短期记忆: Agent 独立 + 共享，支持 TTL
-    2. 长期上下文: 完整运行状态，持久化
+    1. 短期记忆: Agent 独立 + 共享,支持 TTL
+    2. 长期上下文: 完整运行状态,持久化
     3. 长期语义: PageIndex 向量检索
     """
 
@@ -106,9 +106,9 @@ class MemoryStore:
         
         Args:
             entry: 记忆内容
-            agent_id: Agent 标识（scope=private 时必填）
+            agent_id: Agent 标识(scope=private 时必填)
             scope: "private" 或 "shared"
-            ttl: 过期时间（秒），默认使用配置值
+            ttl: 过期时间(秒),默认使用配置值
         
         Returns:
             归一化后的条目
@@ -141,7 +141,7 @@ class MemoryStore:
         
         await pipe.execute()
         
-        # 异步索引到 PageIndex（如果有启用）
+        # 异步索引到 PageIndex(如果有启用)
         if self._config.enable_page_index and scope == "shared":
             await self._index_to_page_index(nd)
         
@@ -169,7 +169,7 @@ class MemoryStore:
             limit: 返回条数上限
         
         Returns:
-            记忆条目列表（按时间倒序）
+            记忆条目列表(按时间倒序)
         """
         r = await self._ensure_connected()
         
@@ -221,9 +221,9 @@ class MemoryStore:
         data: dict[str, Any],
     ) -> None:
         """
-        保存运行上下文（原 ContextStore 功能）.
+        保存运行上下文(原 ContextStore 功能).
         
-        存储完整的运行状态到 Redis Hash，支持:
+        存储完整的运行状态到 Redis Hash,支持:
         - 运行恢复
         - 审计追踪
         - 调试排查
@@ -276,7 +276,7 @@ class MemoryStore:
         
         Args:
             event_id: 事件标识
-            latest: 是否返回最新的（默认）或最早的
+            latest: 是否返回最新的(默认)或最早的
         
         Returns:
             运行上下文或 None
@@ -367,9 +367,9 @@ class MemoryStore:
     
     async def _index_to_page_index(self, entry: dict[str, Any]) -> None:
         """
-        索引到 PageIndex（长期语义记忆）.
+        索引到 PageIndex(长期语义记忆).
         
-        仅索引重要类型的条目（plan, final）。
+        仅索引重要类型的条目(plan, final).
         """
         if not self._config.enable_page_index:
             return
@@ -385,7 +385,7 @@ class MemoryStore:
             return
         
         # TODO: 实现 PageIndex 客户端调用
-        # 这里预留接口，实际实现需要 PageIndex SDK
+        # 这里预留接口,实际实现需要 PageIndex SDK
         pass
     
     async def search_semantic(
@@ -441,7 +441,7 @@ def get_memory_store() -> MemoryStore:
     """
     获取全局 MemoryStore 实例.
     
-    根据环境变量变化自动重建。
+    根据环境变量变化自动重建.
     """
     global _MEMORY_STORE, _MEMORY_CONFIG_SIG
     

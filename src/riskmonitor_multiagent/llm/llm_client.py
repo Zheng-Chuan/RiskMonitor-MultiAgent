@@ -1,10 +1,10 @@
-"""LLM 客户端（OpenAI 兼容）.
+"""LLM 客户端(OpenAI 兼容).
 
 说明:
-- 统一封装 Chat Completions 调用，可对接任意 OpenAI 兼容的 LLM 平台
+- 统一封装 Chat Completions 调用,可对接任意 OpenAI 兼容的 LLM 平台
 - 仅负责 HTTP 调用与错误封装, 不包含业务逻辑
 - 切换平台时只需更换 LLM_BASE_URL、LLM_API_KEY、LLM_MODEL
-- 支持固定 IP 解析（绕过 DNS 故障节点）
+- 支持固定 IP 解析(绕过 DNS 故障节点)
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def _build_headers(host_header: Optional[str] = None) -> dict[str, str]:
 
 
 class LlmClient:
-    """LLM 异步客户端（OpenAI 兼容 API）."""
+    """LLM 异步客户端(OpenAI 兼容 API)."""
 
     def __init__(
         self,
@@ -101,12 +101,12 @@ class LlmClient:
         调用 Chat Completions.
 
         参数:
-            messages: 对话消息列表，每个元素包含 role/content
-            model: 可选，覆盖默认模型
+            messages: 对话消息列表,每个元素包含 role/content
+            model: 可选,覆盖默认模型
             temperature: 采样温度
-            max_tokens: 可选，最大输出 tokens
+            max_tokens: 可选,最大输出 tokens
             use_cache: 是否使用缓存
-            response_format: 可选，强制模型输出特定格式
+            response_format: 可选,强制模型输出特定格式
                 - {"type": "json_object"} 启用 JSON Mode
                 - {"type": "json_schema", "json_schema": {...}} 启用结构化输出
 
@@ -143,7 +143,7 @@ class LlmClient:
         if response_format is not None:
             payload["response_format"] = response_format
 
-        # 应用 DNS 补丁（固定 IP）
+        # 应用 DNS 补丁(固定 IP)
         self._apply_dns_patch()
 
         # 准备 URL 和 headers
@@ -154,7 +154,7 @@ class LlmClient:
         client = self._http_client
         should_close = False
         if client is None:
-            # 增加超时：连接5秒，总时间120秒（大模型响应需要更长时间）
+            # 增加超时:连接5秒,总时间120秒(大模型响应需要更长时间)
             timeout = aiohttp.ClientTimeout(
                 total=120.0,
                 connect=10.0,
@@ -201,7 +201,7 @@ class LlmClient:
                                 status_code=int(resp.status),
                             )
                         
-                        # 写入缓存（只缓存 temperature=0 的确定性请求）
+                        # 写入缓存(只缓存 temperature=0 的确定性请求)
                         if use_cache and temperature == 0.0:
                             cache = get_llm_cache()
                             cache.set(

@@ -8,11 +8,11 @@ import pytest_asyncio
 
 @pytest.fixture(autouse=True, scope="function")
 def reset_memory_store():
-    """在每个测试前清理 MemoryStore 的 Redis 数据。"""
+    """在每个测试前清理 MemoryStore 的 Redis 数据."""
     # 设置测试环境变量
     os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
-    # 清理全局 MemoryStore 实例，强制重新创建
+    # 清理全局 MemoryStore 实例,强制重新创建
     try:
         from riskmonitor_multiagent.memory.memory_store import _MEMORY_STORE, MemoryStore
         import riskmonitor_multiagent.memory.memory_store as ms_module

@@ -1,12 +1,12 @@
-"""Pydantic Settings 配置管理（新）.
+"""Pydantic Settings 配置管理(新).
 
-使用 pydantic-settings 统一管理配置，提供类型安全、环境变量支持和验证。
+使用 pydantic-settings 统一管理配置,提供类型安全、环境变量支持和验证.
 
-兼容性：
+兼容性:
 - 保留原有的 config.py 中的函数作为兼容层
 - 新代码可以直接使用 Config 类
 
-使用示例：
+使用示例:
 ```python
 from riskmonitor_multiagent.config_pydantic import config
 
@@ -39,7 +39,7 @@ def _find_dotenv() -> Optional[str]:
 class Config(BaseSettings):
     """统一配置类.
 
-    配置来源优先级（从高到低）：
+    配置来源优先级(从高到低):
     1. 环境变量
     2. .env 文件
     3. 默认值

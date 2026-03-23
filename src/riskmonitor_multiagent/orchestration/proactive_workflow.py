@@ -28,11 +28,11 @@ class ProactiveMultiAgentWorkflow:
     """
     主动多 Agent 协作工作流.
     
-    核心特点：
+    核心特点:
     1. 每个 Agent 都具备 BDI 模型
     2. 每个 Agent 都使用 ReAct 循环
     3. 每个 Agent 都有后台监控线程
-    4. 动态协作，非固定流程
+    4. 动态协作,非固定流程
     """
     
     def __init__(self) -> None:
@@ -80,11 +80,11 @@ class ProactiveMultiAgentWorkflow:
         """
         运行主动多 Agent 协作.
         
-        流程：
-        1. Intent Agent 识别意图（使用 ReAct）
-        2. Orchestrator Agent 制定计划（使用 ReAct）
-        3. Critic Agent 评审计划（使用 ReAct）
-        4. Engineer 和 Analyst 并行执行（使用 ReAct）
+        流程:
+        1. Intent Agent 识别意图(使用 ReAct)
+        2. Orchestrator Agent 制定计划(使用 ReAct)
+        3. Critic Agent 评审计划(使用 ReAct)
+        4. Engineer 和 Analyst 并行执行(使用 ReAct)
         5. 汇总结果
         
         Args:

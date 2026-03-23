@@ -1,7 +1,7 @@
 """
 质量门禁检查模块.
 
-检查评估结果是否达到质量要求，输出通过/失败结论及原因.
+检查评估结果是否达到质量要求,输出通过/失败结论及原因.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ def evaluate_quality_gate(summary: dict[str, Any]) -> GateResult:
     检查评估结果是否通过质量门禁.
     
     Args:
-        summary: 评估摘要，包含 aggregates 字段
+        summary: 评估摘要,包含 aggregates 字段
         
     Returns:
         GateResult 包含是否通过及原因
@@ -159,7 +159,7 @@ def evaluate_with_custom_thresholds(
     aggregates = summary.get("aggregates", {})
     metrics = aggregates.get("metrics", {})
     
-    # 从配置获取阈值，如果没有配置则使用默认值
+    # 从配置获取阈值,如果没有配置则使用默认值
     threshold_config = thresholds.get("thresholds", {})
     
     # 检查每个指标

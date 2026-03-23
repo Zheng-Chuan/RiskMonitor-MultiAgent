@@ -1,6 +1,6 @@
 """LLM 调用缓存模块.
 
-提供 LLM 调用缓存功能，避免重复请求相同的 prompt，提升性能。
+提供 LLM 调用缓存功能,避免重复请求相同的 prompt,提升性能.
 """
 
 from __future__ import annotations
@@ -24,14 +24,14 @@ class CacheEntry:
 
 
 class LLMCache:
-    """LLM 调用缓存（纯内存实现）."""
+    """LLM 调用缓存(纯内存实现)."""
 
     def __init__(self, max_size: int = 1000) -> None:
         """
         初始化缓存.
 
         Args:
-            max_size: 最大缓存条目数量，超过会淘汰最旧的
+            max_size: 最大缓存条目数量,超过会淘汰最旧的
         """
         self._cache: dict[str, CacheEntry] = {}
         self._max_size = max_size
@@ -71,7 +71,7 @@ class LLMCache:
         从缓存获取响应.
 
         Returns:
-            缓存的响应，如果没有命中返回 None
+            缓存的响应,如果没有命中返回 None
         """
         key = self._compute_key(messages, model, temperature, max_tokens, **kwargs)
         entry = self._cache.get(key)
@@ -101,7 +101,7 @@ class LLMCache:
 
         key = self._compute_key(messages, model, temperature, max_tokens, **kwargs)
 
-        # 淘汰策略：如果超过 max_size，删除最旧的
+        # 淘汰策略:如果超过 max_size,删除最旧的
         if len(self._cache) >= self._max_size:
             oldest_key = min(self._cache.keys(), key=lambda k: self._cache[k].timestamp)
             del self._cache[oldest_key]
@@ -146,6 +146,6 @@ def get_llm_cache(max_size: int = 1000) -> LLMCache:
 
 
 def reset_llm_cache() -> None:
-    """重置缓存（用于测试）."""
+    """重置缓存(用于测试)."""
     global _llm_cache
     _llm_cache = None

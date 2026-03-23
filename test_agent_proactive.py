@@ -50,13 +50,13 @@ async def test_agent_proactive():
     print(f"\n4. 检查 Agent 状态...")
     # 检查信念
     beliefs = agent.get_beliefs(source="system_metrics")
-    print(f"   信念数量：{len(beliefs)}")
+    print(f"   信念数量:{len(beliefs)}")
     for belief in beliefs:
         print(f"     - {belief.belief_id}: {belief.content}")
     
     # 检查意图
     intentions = agent.get_pending_intentions()
-    print(f"   待处理意图：{len(intentions)}")
+    print(f"   待处理意图:{len(intentions)}")
     for intention in intentions:
         print(f"     - {intention.intention_id}: {intention.description}")
         print(f"       Target: {intention.target_agent}")
@@ -65,9 +65,9 @@ async def test_agent_proactive():
     # 检查 BDI 状态
     bdi_state = agent.get_bdi_state()
     print(f"\n5. BDI 状态摘要:")
-    print(f"   信念：{len(bdi_state['beliefs'])}")
-    print(f"   愿望：{len(bdi_state['desires'])}")
-    print(f"   意图：{len(bdi_state['intentions'])}")
+    print(f"   信念:{len(bdi_state['beliefs'])}")
+    print(f"   愿望:{len(bdi_state['desires'])}")
+    print(f"   意图:{len(bdi_state['intentions'])}")
     
     # 停止监控
     print(f"\n6. 停止 Agent 后台监控...")

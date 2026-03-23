@@ -1,5 +1,5 @@
 """
-分布式追踪（Distributed Tracing）.
+分布式追踪(Distributed Tracing).
 
 实现请求追踪、Span 管理和 Trace ID 传播.
 """
@@ -131,7 +131,7 @@ def get_trace_store() -> TraceStore:
 
 
 def reset_trace_store() -> None:
-    """重置 TraceStore（用于测试）."""
+    """重置 TraceStore(用于测试)."""
     global _trace_store
     _trace_store = None
 
@@ -167,7 +167,7 @@ def trace(
     
     Args:
         name: Span 名称
-        trace_id: 可选的 Trace ID（如果不提供则使用当前上下文或创建新的）
+        trace_id: 可选的 Trace ID(如果不提供则使用当前上下文或创建新的)
         attributes: 可选的属性字典
         
     Yields:

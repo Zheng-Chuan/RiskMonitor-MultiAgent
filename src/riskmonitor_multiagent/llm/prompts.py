@@ -1,6 +1,6 @@
 """提示词管理模块.
 
-提供提示词外部化和加载功能。
+提供提示词外部化和加载功能.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ class PromptLoader:
         初始化提示词加载器.
 
         Args:
-            prompts_dir: 提示词目录路径，默认从项目根目录的 prompts/ 加载
+            prompts_dir: 提示词目录路径,默认从项目根目录的 prompts/ 加载
         """
         if prompts_dir is None:
             repo_root = Path(__file__).resolve().parents[3]
@@ -34,10 +34,10 @@ class PromptLoader:
         加载提示词.
 
         Args:
-            name: 提示词名称（不含扩展名）
+            name: 提示词名称(不含扩展名)
 
         Returns:
-            提示词内容，找不到返回 None
+            提示词内容,找不到返回 None
         """
         # 尝试多种扩展名
         for ext in [".txt", ".md", ".json"]:
@@ -53,10 +53,10 @@ class PromptLoader:
         加载 JSON 格式的提示词.
 
         Args:
-            name: 提示词名称（不含扩展名）
+            name: 提示词名称(不含扩展名)
 
         Returns:
-            提示词 dict，找不到返回 None
+            提示词 dict,找不到返回 None
         """
         content = self.load(name)
         if content:

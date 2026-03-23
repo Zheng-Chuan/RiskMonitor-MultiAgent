@@ -1,7 +1,7 @@
 """
 问题管理器 - Agent 主动提问功能.
 
-管理 Agent 与用户之间的问答交互，支持:
+管理 Agent 与用户之间的问答交互,支持:
 1. Agent 主动向用户提问
 2. 等待用户回答 (支持超时)
 3. 问题队列管理
@@ -67,10 +67,10 @@ class QuestionManager:
         """
         注册问题回调.
         
-        当有新问题时，会调用所有注册的回调函数.
+        当有新问题时,会调用所有注册的回调函数.
         
         Args:
-            callback: 回调函数，接收 PendingQuestion 参数
+            callback: 回调函数,接收 PendingQuestion 参数
         """
         self._callbacks.append(callback)
         logger.debug(f"Registered question callback: {callback.__name__}")
@@ -92,7 +92,7 @@ class QuestionManager:
             timeout_seconds: 超时时间 (秒), 默认 5 分钟
             
         Returns:
-            用户的回答，如果超时返回超时消息
+            用户的回答,如果超时返回超时消息
         """
         question_id = str(uuid.uuid4())
         
@@ -116,9 +116,9 @@ class QuestionManager:
         
         # 打印问题到控制台 (简单的 CLI 交互)
         print(f"\n{'='*60}")
-        print(f"[{agent_name}] 提问：{question}")
+        print(f"[{agent_name}] 提问:{question}")
         print(f"问题 ID: {question_id}")
-        print(f"超时时间：{timeout_seconds}秒")
+        print(f"超时时间:{timeout_seconds}秒")
         print(f"{'='*60}\n")
         
         # 等待回答
@@ -157,7 +157,7 @@ class QuestionManager:
         question.answered_at = time.time()
         question.status = "answered"
         
-        # 触发事件，唤醒等待的 Agent
+        # 触发事件,唤醒等待的 Agent
         if question_id in self._answer_events:
             self._answer_events[question_id].set()
         
@@ -193,7 +193,7 @@ class QuestionManager:
         if question.status == "pending":
             question.status = "cancelled"
             
-            # 触发事件，唤醒等待的 Agent
+            # 触发事件,唤醒等待的 Agent
             if question_id in self._answer_events:
                 self._answer_events[question_id].set()
             
@@ -267,7 +267,7 @@ async def ask_user_question(
     timeout_seconds: float = 300,
 ) -> str:
     """
-    便捷函数：向用户提问.
+    便捷函数:向用户提问.
     
     Args:
         agent_name: Agent 名称
@@ -289,7 +289,7 @@ async def ask_user_question(
 
 async def answer_user_question(question_id: str, answer: str) -> bool:
     """
-    便捷函数：提交用户回答.
+    便捷函数:提交用户回答.
     
     Args:
         question_id: 问题 ID

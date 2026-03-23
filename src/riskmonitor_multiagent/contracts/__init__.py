@@ -36,14 +36,14 @@ from riskmonitor_multiagent.contracts.memory_entry import (
     validate_memory_entry,
 )
 
-# 向后兼容的旧名称（测试依赖这些名称）
+# 向后兼容的旧名称(测试依赖这些名称)
 CRITIC_REVIEW_SCHEMA_VERSION = CRITIC_VERSION
 ORCHESTRATOR_OUTPUT_SCHEMA_VERSION = ORCHESTRATOR_VERSION
 RISK_ANALYST_OUTPUT_SCHEMA_VERSION = RISK_ANALYST_VERSION
 SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION = SYSTEM_ENGINEER_VERSION
 
 __all__ = [
-    # Agent 输出 - 版本常量（旧名称）
+    # Agent 输出 - 版本常量(旧名称)
     "CRITIC_REVIEW_SCHEMA_VERSION",
     "ORCHESTRATOR_OUTPUT_SCHEMA_VERSION",
     "RISK_ANALYST_OUTPUT_SCHEMA_VERSION",

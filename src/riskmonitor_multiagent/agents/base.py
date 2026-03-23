@@ -1,7 +1,7 @@
 """
 Agent 基类定义.
 
-提供统一的 LLM 交互能力，包括:
+提供统一的 LLM 交互能力,包括:
 - JSON 输出解析
 - 错误重试机制
 - Token 用量追踪
@@ -36,7 +36,7 @@ class AgentResult:
         ok: 是否成功
         output: 输出的字典数据
         usage: Token 用量信息
-        meta: 元数据（模型、温度等）
+        meta: 元数据(模型、温度等)
     """
     ok: bool
     output: dict[str, Any]
@@ -45,7 +45,7 @@ class AgentResult:
 
 
 class BaseAgent:
-    """Agent 基类，封装 LLM 调用能力."""
+    """Agent 基类,封装 LLM 调用能力."""
 
     def __init__(
         self,
@@ -61,7 +61,7 @@ class BaseAgent:
         初始化 Agent.
 
         Args:
-            name: Agent 名称（用于指标和日志）
+            name: Agent 名称(用于指标和日志)
             system_prompt: 系统提示词
             client: 可选的 LLM 客户端实例
             model: 可选的模型名称
@@ -90,18 +90,18 @@ class BaseAgent:
 
         流程:
         1. 检查 API Key 和禁用标志
-        2. 治理检查（配额、优先级）
-        3. 调用 LLM（启用 JSON Mode）
+        2. 治理检查(配额、优先级)
+        3. 调用 LLM(启用 JSON Mode)
         4. 解析 JSON
         5. 记录指标
 
         Args:
             user_prompt: 用户提示词
             fallback: 失败时的默认返回值
-            governance: 治理参数（user_id, priority）
+            governance: 治理参数(user_id, priority)
             temperature: 采样温度
             max_tokens: 最大 Token 数
-            use_json_mode: 是否启用 JSON Mode（默认 True，强制模型输出 JSON）
+            use_json_mode: 是否启用 JSON Mode(默认 True,强制模型输出 JSON)
 
         Returns:
             AgentResult 包含输出数据和元信息
@@ -147,7 +147,7 @@ class BaseAgent:
                 )
                 raise LLMError(code="GOVERNANCE_BLOCKED", message=str(gov_meta))
 
-            # 执行 LLM 调用（带重试）
+            # 执行 LLM 调用(带重试)
             client = self._client or LlmClient()
             return await self._call_with_retry(
                 client=client,
@@ -185,11 +185,11 @@ class BaseAgent:
         max_attempts: int = 3,
         use_json_mode: bool = True,
     ) -> AgentResult:
-        """带重试机制的 LLM 调用（支持智能修复）.
+        """带重试机制的 LLM 调用(支持智能修复).
         
         重试策略:
-        - 第 1 次：正常请求
-        - 第 2-N 次：将错误信息反馈给 LLM，让它修复上次的输出
+        - 第 1 次:正常请求
+        - 第 2-N 次:将错误信息反馈给 LLM,让它修复上次的输出
         - 最多重试 max_attempts 次
         
         Args:
@@ -225,12 +225,12 @@ class BaseAgent:
                     {"role": "system", "content": self._system_prompt},
                 ]
                 
-                # 如果是重试，添加修复提示
+                # 如果是重试,添加修复提示
                 if attempt == 0:
-                    # 第 1 次：正常请求
+                    # 第 1 次:正常请求
                     messages.append({"role": "user", "content": user_prompt})
                 else:
-                    # 第 2-N 次：请求 LLM 修复上次的输出
+                    # 第 2-N 次:请求 LLM 修复上次的输出
                     repair_prompt = self._build_repair_prompt(
                         original_prompt=user_prompt,
                         last_output=last_raw_output,
@@ -258,7 +258,7 @@ class BaseAgent:
                         "user": user_id, "priority": priority,
                     })
                 
-                # 解析响应（不捕获异常，让外层处理）
+                # 解析响应(不捕获异常,让外层处理)
                 return self._parse_response(resp, model_label, user_id, priority, gov_meta)
                 
             except LLMError as e:
@@ -266,7 +266,7 @@ class BaseAgent:
                 
                 # 保存错误信息用于下次重试
                 if attempt < max_attempts - 1:
-                    # 提取原始输出（如果是解析错误）
+                    # 提取原始输出(如果是解析错误)
                     if e.code == "BAD_LLM_OUTPUT":
                         # 从错误信息中提取 raw output
                         import re
@@ -279,11 +279,11 @@ class BaseAgent:
                     await asyncio.sleep(1.0 * (attempt + 1))
                     continue
                 
-                # 最后一次尝试失败，记录错误并抛出
+                # 最后一次尝试失败,记录错误并抛出
                 self._record_error(model_label, e.code, started)
                 raise
         
-        # 不应该到这里，但以防万一
+        # 不应该到这里,但以防万一
         if last_error:
             self._record_error(model_label, last_error.code, started)
             raise last_error
@@ -303,7 +303,7 @@ class BaseAgent:
         
         Args:
             original_prompt: 原始的用户提示词
-            last_output: 上次的输出（可能格式错误）
+            last_output: 上次的输出(可能格式错误)
             error_message: 错误信息
             attempt: 当前尝试次数
             max_attempts: 最大尝试次数
@@ -313,12 +313,12 @@ class BaseAgent:
         """
         remaining = max_attempts - attempt + 1
         
-        prompt = f"""你是一个专业的 JSON 修复助手。你的任务是修复上次输出中的格式错误。
+        prompt = f"""你是一个专业的 JSON 修复助手.你的任务是修复上次输出中的格式错误.
 
 ## 原始任务
 {original_prompt}
 
-## 上次的输出（有格式错误）
+## 上次的输出(有格式错误)
 ```json
 {last_output or "N/A"}
 ```
@@ -327,19 +327,19 @@ class BaseAgent:
 {error_message or "JSON 解析失败"}
 
 ## 你的任务
-请仔细检查上面的输出，找出 JSON 格式错误并修复它。常见问题包括：
-1. 缺少逗号（,）分隔字段
-2. 缺少引号（"）包裹字符串
+请仔细检查上面的输出,找出 JSON 格式错误并修复它.常见问题包括:
+1. 缺少逗号(,)分隔字段
+2. 缺少引号(")包裹字符串
 3. 多余的逗号或括号
 4. 缩进不正确
 
 ## 要求
-1. **只输出修复后的 JSON**，不要添加任何解释
-2. 确保 JSON 格式完全正确，可以被 json.loads() 直接解析
-3. 保持原始输出的内容和结构，不要修改业务逻辑
-4. 这是第 {attempt} 次尝试，还剩 {remaining} 次机会
+1. **只输出修复后的 JSON**,不要添加任何解释
+2. 确保 JSON 格式完全正确,可以被 json.loads() 直接解析
+3. 保持原始输出的内容和结构,不要修改业务逻辑
+4. 这是第 {attempt} 次尝试,还剩 {remaining} 次机会
 
-请现在输出修复后的 JSON："""
+请现在输出修复后的 JSON:"""
         
         return prompt
 
@@ -371,7 +371,7 @@ class BaseAgent:
                         "type": metric, "user": user_id, "priority": priority,
                     }, value=v)
 
-        # 提取文本并解析 JSON（带自动修复）
+        # 提取文本并解析 JSON(带自动修复)
         raw_text = extract_first_text(resp).strip()
         clean_text = clean_llm_output(raw_text)
 
@@ -434,7 +434,7 @@ class BaseAgent:
 
     @staticmethod
     def _elapsed_ms(started: float) -> float:
-        """计算已耗时间（毫秒）."""
+        """计算已耗时间(毫秒)."""
         return (time.monotonic() - started) * 1000.0
 
     @property

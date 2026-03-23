@@ -7,7 +7,7 @@ from typing import Callable
 
 
 def now_ms() -> int:
-    """获取当前时间戳（毫秒）."""
+    """获取当前时间戳(毫秒)."""
     return int(time.time() * 1000)
 
 
@@ -16,7 +16,7 @@ def elapsed_ms(start_time: float) -> float:
     计算从 start_time 到当前时间的毫秒数.
 
     Args:
-        start_time: monotonic 时间戳（秒）
+        start_time: monotonic 时间戳(秒)
 
     Returns:
         毫秒数
@@ -49,7 +49,7 @@ class Timer:
 
 def measure_time(func: Callable) -> Callable:
     """
-    装饰器：测量函数执行时间.
+    装饰器:测量函数执行时间.
 
     用法:
         @measure_time

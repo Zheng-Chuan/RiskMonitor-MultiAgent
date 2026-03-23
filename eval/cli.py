@@ -77,7 +77,7 @@ async def run_workflow_runner(task: dict[str, Any]) -> dict[str, Any]:
     """
     工作流运行器.
     
-    这是评估系统的核心入口，调用实际的 Agent 系统.
+    这是评估系统的核心入口,调用实际的 Agent 系统.
     """
     try:
         from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
@@ -358,7 +358,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
     
     print("=" * 60)
     
-    # 返回状态码 (0=通过，1=失败)
+    # 返回状态码 (0=通过,1=失败)
     return 0 if gate_result.passed else 1
 
 

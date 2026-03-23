@@ -114,7 +114,7 @@ class TestCoTEnhancedReActLoop:
             history: list[ReActStep],
             thought: str,
         ) -> str:
-            return f"理由：{thought} 是必要的"
+            return f"理由:{thought} 是必要的"
         
         def evidence_generator(
             task: dict,

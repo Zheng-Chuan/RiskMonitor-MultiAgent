@@ -35,10 +35,10 @@ class ProactiveIntentAgent(BaseProactiveAgent):
     """
     主动意图识别 Agent.
     
-    具备：
-    - 后台监控：主动感知用户输入模式
-    - ReAct 循环：动态推理意图
-    - BDI 模型：维护意图识别的信念和愿望
+    具备:
+    - 后台监控:主动感知用户输入模式
+    - ReAct 循环:动态推理意图
+    - BDI 模型:维护意图识别的信念和愿望
     """
     
     def __init__(self) -> None:
@@ -99,7 +99,7 @@ Write Chinese text using only English punctuation."""
         task: dict[str, Any],
         metadata: dict[str, Any] | None = None,
     ) -> ProactiveAgentResult:
-        """识别任务意图（使用 ReAct 循环）."""
+        """识别任务意图(使用 ReAct 循环)."""
         self.add_belief(
             content={"task_id": task.get("task_id"), "content": task.get("payload", {}).get("content", "")},
             source="user_input",
@@ -108,12 +108,12 @@ Write Chinese text using only English punctuation."""
         return await self.run_with_react(
             task=task,
             context={"metadata": metadata},
-            max_tokens=None,  # 不限制 token 数，让 GPT-4.5 自由输出
+            max_tokens=None,  # 不限制 token 数,让 GPT-4.5 自由输出
             max_steps=5,
         )
 
     async def _generate_final_answer(self, task: dict[str, Any], history: list) -> dict[str, Any]:
-        """生成意图识别结果（简化格式）."""
+        """生成意图识别结果(简化格式)."""
         from riskmonitor_multiagent.contracts import (
             INTENT_OUTPUT_SCHEMA_VERSION,
             normalize_intent_output,
@@ -122,7 +122,7 @@ Write Chinese text using only English punctuation."""
         payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
         content = payload.get("content") if isinstance(payload.get("content"), str) else ""
         
-        # 简化的 prompt，只要求 4 个字段
+        # 简化的 prompt,只要求 4 个字段
         prompt = f"""Based on your ReAct reasoning, generate the final intent recognition result.
 
 Task content: {content}
@@ -194,10 +194,10 @@ class ProactiveOrchestratorAgent(BaseProactiveAgent):
     """
     主动编排 Agent.
     
-    具备：
-    - 后台监控：监控任务队列和系统状态
-    - ReAct 循环：动态制定和调整计划
-    - BDI 模型：维护任务规划信念
+    具备:
+    - 后台监控:监控任务队列和系统状态
+    - ReAct 循环:动态制定和调整计划
+    - BDI 模型:维护任务规划信念
     """
     
     def __init__(self) -> None:
@@ -248,7 +248,7 @@ Write Chinese text using only English punctuation."""
         task: dict[str, Any],
         context: dict[str, Any] | None = None,
     ) -> ProactiveAgentResult:
-        """编排任务（使用 ReAct 循环）."""
+        """编排任务(使用 ReAct 循环)."""
         self.add_belief(
             content={"task_id": task.get("task_id"), "context": context},
             source="orchestration_request",
@@ -324,10 +324,10 @@ class ProactiveCriticAgent(BaseProactiveAgent):
     """
     主动评审 Agent.
     
-    具备：
-    - 后台监控：监控计划执行质量
-    - ReAct 循环：动态评审和反馈
-    - BDI 模型：维护评审标准信念
+    具备:
+    - 后台监控:监控计划执行质量
+    - ReAct 循环:动态评审和反馈
+    - BDI 模型:维护评审标准信念
     """
     
     def __init__(self) -> None:
@@ -379,7 +379,7 @@ Write Chinese text using only English punctuation."""
         task: dict[str, Any],
         orchestrator: dict[str, Any],
     ) -> ProactiveAgentResult:
-        """评审计划（使用 ReAct 循环）."""
+        """评审计划(使用 ReAct 循环)."""
         self.add_belief(
             content={"plan": orchestrator.get("plan_steps", [])},
             source="orchestrator_plan",
@@ -438,10 +438,10 @@ class ProactiveSystemEngineerAgent(BaseProactiveAgent):
     """
     主动系统工程师 Agent.
     
-    具备：
-    - 后台监控：主动监控基础设施健康状态
-    - ReAct 循环：动态分析系统问题
-    - BDI 模型：维护系统状态信念
+    具备:
+    - 后台监控:主动监控基础设施健康状态
+    - ReAct 循环:动态分析系统问题
+    - BDI 模型:维护系统状态信念
     """
     
     def __init__(self) -> None:
@@ -511,7 +511,7 @@ Never invent metrics. Use only provided data."""
                 except (ValueError, IndexError):
                     pass
         
-        # 如果错误率超过阈值，添加信念
+        # 如果错误率超过阈值,添加信念
         if total_count > 0:
             error_rate = error_count / total_count
             if error_rate > 0.1:  # 错误率超过 10%
@@ -532,7 +532,7 @@ Never invent metrics. Use only provided data."""
         task: dict[str, Any],
         context: dict[str, Any] | None = None,
     ) -> ProactiveAgentResult:
-        """分析任务（使用 ReAct 循环）."""
+        """分析任务(使用 ReAct 循环)."""
         return await self.run_with_react(
             task=task,
             context=context,
@@ -590,10 +590,10 @@ class ProactiveRiskAnalystAgent(BaseProactiveAgent):
     """
     主动风险分析师 Agent.
     
-    具备：
-    - 后台监控：主动监控风险指标
-    - ReAct 循环：动态评估业务风险
-    - BDI 模型：维护风险状态信念
+    具备:
+    - 后台监控:主动监控风险指标
+    - ReAct 循环:动态评估业务风险
+    - BDI 模型:维护风险状态信念
     """
     
     def __init__(self) -> None:
@@ -645,7 +645,7 @@ Write Chinese text using only English punctuation."""
         task: dict[str, Any],
         context: dict[str, Any] | None = None,
     ) -> ProactiveAgentResult:
-        """分析任务（使用 ReAct 循环）."""
+        """分析任务(使用 ReAct 循环)."""
         return await self.run_with_react(
             task=task,
             context=context,

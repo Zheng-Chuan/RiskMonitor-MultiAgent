@@ -90,7 +90,7 @@ class HistoryComparator:
         加载历史评估结果.
         
         Args:
-            run_id: 运行 ID，如果为 None 则加载最新的
+            run_id: 运行 ID,如果为 None 则加载最新的
             
         Returns:
             历史评估结果
@@ -164,7 +164,7 @@ class HistoryComparator:
         
         Args:
             current: 当前评估结果
-            history: 历史评估结果，如果为 None 则自动加载
+            history: 历史评估结果,如果为 None 则自动加载
             
         Returns:
             对比结果

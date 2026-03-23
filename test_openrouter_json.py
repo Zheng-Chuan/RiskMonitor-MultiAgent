@@ -20,13 +20,13 @@ async def test_json_mode():
     client = LlmClient()
     
     # 测试 1: 不使用 JSON Mode
-    print("\n[测试 1] 不使用 JSON Mode（普通模式）")
+    print("\n[测试 1] 不使用 JSON Mode(普通模式)")
     print("-" * 60)
     try:
         response = await client.chat_completions(
             messages=[
-                {"role": "system", "content": "你是一个助手。"},
-                {"role": "user", "content": "用一句话介绍你自己。"},
+                {"role": "system", "content": "你是一个助手."},
+                {"role": "user", "content": "用一句话介绍你自己."},
             ],
             model="deepseek/deepseek-chat",
             temperature=0.2,
@@ -35,19 +35,19 @@ async def test_json_mode():
         
         from riskmonitor_multiagent.llm.llm_client import extract_first_text
         text = extract_first_text(response)
-        print(f"✅ 成功（普通文本）: {text[:100]}")
+        print(f"✅ 成功(普通文本): {text[:100]}")
     except Exception as e:
-        print(f"❌ 失败：{e}")
+        print(f"❌ 失败:{e}")
     
     # 测试 2: 使用 JSON Mode
-    print("\n[测试 2] 使用 JSON Mode（强制 JSON 输出）")
+    print("\n[测试 2] 使用 JSON Mode(强制 JSON 输出)")
     print("-" * 60)
     text = None
     try:
         response = await client.chat_completions(
             messages=[
-                {"role": "system", "content": "你必须输出严格的 JSON 格式。"},
-                {"role": "user", "content": '返回一个包含 name, age, city 三个字段的 JSON 对象，name="张三", age=25, city="北京"'},
+                {"role": "system", "content": "你必须输出严格的 JSON 格式."},
+                {"role": "user", "content": '返回一个包含 name, age, city 三个字段的 JSON 对象,name="张三", age=25, city="北京"'},
             ],
             model="deepseek/deepseek-chat",
             temperature=0.0,
@@ -59,7 +59,7 @@ async def test_json_mode():
         import json
         
         text = extract_first_text(response)
-        print(f"原始输出：{text}")
+        print(f"原始输出:{text}")
         
         # 尝试解析 JSON
         data = json.loads(text)
@@ -72,13 +72,13 @@ async def test_json_mode():
         print(f"✅ 所有必需字段都存在")
         
     except json.JSONDecodeError as e:
-        print(f"❌ JSON 解析失败：{e}")
-        print(f"   原始输出：{text}")
+        print(f"❌ JSON 解析失败:{e}")
+        print(f"   原始输出:{text}")
     except Exception as e:
-        print(f"❌ 失败：{e}")
+        print(f"❌ 失败:{e}")
     
-    # 测试 3: 使用 JSON Schema（结构化输出）
-    print("\n[测试 3] 使用 JSON Schema（最严格的格式控制）")
+    # 测试 3: 使用 JSON Schema(结构化输出)
+    print("\n[测试 3] 使用 JSON Schema(最严格的格式控制)")
     print("-" * 60)
     text = None
     try:
@@ -95,8 +95,8 @@ async def test_json_mode():
         
         response = await client.chat_completions(
             messages=[
-                {"role": "system", "content": "你必须输出符合 JSON Schema 的严格格式。"},
-                {"role": "user", "content": '创建一个人物，name="李四", age=30, city="上海"'},
+                {"role": "system", "content": "你必须输出符合 JSON Schema 的严格格式."},
+                {"role": "user", "content": '创建一个人物,name="李四", age=30, city="上海"'},
             ],
             model="deepseek/deepseek-chat",
             temperature=0.0,
@@ -111,10 +111,10 @@ async def test_json_mode():
         )
         
         text = extract_first_text(response)
-        print(f"原始输出：{text}")
+        print(f"原始输出:{text}")
         
         data = json.loads(text)
-        print(f"✅ 成功解析 JSON Schema 输出：{data}")
+        print(f"✅ 成功解析 JSON Schema 输出:{data}")
         
         # 验证字段类型
         assert isinstance(data["name"], str), "name 应该是字符串"
@@ -123,7 +123,7 @@ async def test_json_mode():
         print(f"✅ 所有字段类型都正确")
         
     except Exception as e:
-        print(f"❌ 失败：{e}")
+        print(f"❌ 失败:{e}")
     
     print("\n" + "=" * 60)
     print("测试完成")

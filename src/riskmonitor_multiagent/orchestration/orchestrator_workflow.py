@@ -26,10 +26,10 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
     使用具备 BDI + ReAct + 后台监控的主动 Agent.
     
     Args:
-        task: 任务，格式同旧接口
+        task: 任务,格式同旧接口
 
     Returns:
-        结果，格式同旧接口，便于兼容
+        结果,格式同旧接口,便于兼容
     """
     inc_counter("orchestrator_runs_total")
     start_time = time.time()
