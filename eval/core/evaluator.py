@@ -83,10 +83,33 @@ class ExecutionTrace:
     final_output: dict[str, Any] = field(default_factory=dict)
     tokens_used: int = 0
     
+    llm_interactions: list[dict[str, Any]] = field(default_factory=list)
+    
     @property
     def latency_ms(self) -> int:
         """执行延迟 (毫秒)."""
         return int((self.end_time - self.start_time) * 1000)
+    
+    def to_dict(self) -> dict[str, Any]:
+        """转换为字典."""
+        return {
+            "case_id": self.case_id,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "latency_ms": self.latency_ms,
+            "success": self.success,
+            "error": self.error,
+            "intent": self.intent,
+            "plan_steps": self.plan_steps,
+            "react_steps": self.react_steps,
+            "bdi_states": self.bdi_states,
+            "agent_outputs": self.agent_outputs,
+            "tool_calls": self.tool_calls,
+            "messages": self.messages,
+            "final_output": self.final_output,
+            "tokens_used": self.tokens_used,
+            "llm_interactions": self.llm_interactions,
+        }
 
 
 @dataclass
@@ -107,7 +130,7 @@ class CaseResult:
     
     def to_dict(self) -> dict[str, Any]:
         """转换为字典."""
-        return {
+        result = {
             "case_id": self.case_id,
             "category": self.category,
             "difficulty": self.difficulty,
@@ -116,6 +139,9 @@ class CaseResult:
             "llm_scores": self.llm_scores,
             "errors": self.errors,
         }
+        if self.trace is not None:
+            result["trace"] = self.trace.to_dict()
+        return result
 
 
 @dataclass
@@ -257,6 +283,7 @@ class Evaluator:
             trace.tool_calls = result_data.get("receipts", [])
             trace.final_output = result_data.get("orchestrator_final", {})
             trace.tokens_used = result_data.get("tokens_total", 0)
+            trace.llm_interactions = result_data.get("llm_interactions", [])
 
         except Exception as e:
             trace.end_time = time.time()

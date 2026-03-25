@@ -81,6 +81,7 @@ class ProactiveAgentResult:
     meta: dict[str, Any] | None = None
     react_steps: list[ReActStep] = field(default_factory=list)
     bdi_state: dict[str, Any] = field(default_factory=dict)
+    llm_interactions: list[dict[str, Any]] = field(default_factory=list)
 
 
 class BaseProactiveAgent:
@@ -136,6 +137,8 @@ class BaseProactiveAgent:
         self._beliefs: list[Belief] = []
         self._desires: list[Desire] = []
         self._intentions: list[Intention] = []
+        
+        self._llm_interactions: list[dict[str, Any]] = []
         
         self._monitor_task: Optional[asyncio.Task] = None
         self._is_running = False
@@ -234,6 +237,44 @@ class BaseProactiveAgent:
                 for i in self._intentions
             ],
         }
+    
+    def record_llm_interaction(
+        self,
+        interaction_type: str,
+        system_prompt: str,
+        user_prompt: str,
+        raw_response: str,
+        parsed_output: dict[str, Any],
+        latency_ms: int,
+        tokens_used: int = 0,
+        model: str = "",
+        success: bool = True,
+        error: str | None = None,
+    ) -> None:
+        """记录 LLM 交互."""
+        interaction = {
+            "timestamp_ms": int(time.time() * 1000),
+            "agent_name": self._name,
+            "interaction_type": interaction_type,
+            "system_prompt": system_prompt[:500] if system_prompt else "",
+            "user_prompt": user_prompt[:1000] if user_prompt else "",
+            "raw_response": raw_response[:2000] if raw_response else "",
+            "parsed_output": parsed_output,
+            "latency_ms": latency_ms,
+            "tokens_used": tokens_used,
+            "model": model,
+            "success": success,
+            "error": error,
+        }
+        self._llm_interactions.append(interaction)
+    
+    def get_llm_interactions(self) -> list[dict[str, Any]]:
+        """获取 LLM 交互记录."""
+        return list(self._llm_interactions)
+    
+    def clear_llm_interactions(self) -> None:
+        """清空 LLM 交互记录."""
+        self._llm_interactions.clear()
     
     async def start_background_monitor(self) -> None:
         """启动后台监控(真正的主动性)."""
@@ -417,6 +458,7 @@ class BaseProactiveAgent:
                 output=final_output,
                 react_steps=react_steps,
                 bdi_state=self.get_bdi_state(),
+                llm_interactions=self.get_llm_interactions(),
             )
             
             self._last_task_result = result
@@ -436,6 +478,7 @@ class BaseProactiveAgent:
                 output={"error": str(e)},
                 react_steps=react_steps,
                 bdi_state=self.get_bdi_state(),
+                llm_interactions=self.get_llm_interactions(),
             )
     
     async def _generate_thought(
@@ -461,6 +504,7 @@ Only return the thought text, no JSON format."""
         try:
             from riskmonitor_multiagent.llm import LlmClient
             
+            start_time = time.time()
             client = LlmClient()
             resp = await client.chat_completions(
                 messages=[
@@ -472,10 +516,35 @@ Only return the thought text, no JSON format."""
                 max_tokens=128,
                 use_cache=False,
             )
+            latency_ms = int((time.time() - start_time) * 1000)
             
             content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
-            return content.strip() if content.strip() else "继续执行任务"
-        except Exception:
+            thought = content.strip() if content.strip() else "继续执行任务"
+            
+            self.record_llm_interaction(
+                interaction_type="thought",
+                system_prompt=self._system_prompt,
+                user_prompt=prompt,
+                raw_response=content,
+                parsed_output={"thought": thought},
+                latency_ms=latency_ms,
+                model=self._model or "",
+                success=True,
+            )
+            
+            return thought
+        except Exception as e:
+            self.record_llm_interaction(
+                interaction_type="thought",
+                system_prompt=self._system_prompt,
+                user_prompt=prompt,
+                raw_response="",
+                parsed_output={},
+                latency_ms=0,
+                model=self._model or "",
+                success=False,
+                error=str(e),
+            )
             return "继续执行任务"
     
     async def _generate_reasoning(
@@ -504,6 +573,7 @@ Only return the reasoning text, no JSON format."""
         try:
             from riskmonitor_multiagent.llm import LlmClient
             
+            start_time = time.time()
             client = LlmClient()
             resp = await client.chat_completions(
                 messages=[
@@ -515,10 +585,35 @@ Only return the reasoning text, no JSON format."""
                 max_tokens=256,
                 use_cache=False,
             )
+            latency_ms = int((time.time() - start_time) * 1000)
             
             content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
-            return content.strip() if content.strip() else "基于任务要求执行"
-        except Exception:
+            reasoning = content.strip() if content.strip() else "基于任务要求执行"
+            
+            self.record_llm_interaction(
+                interaction_type="reasoning",
+                system_prompt=self._system_prompt,
+                user_prompt=prompt,
+                raw_response=content,
+                parsed_output={"reasoning": reasoning},
+                latency_ms=latency_ms,
+                model=self._model or "",
+                success=True,
+            )
+            
+            return reasoning
+        except Exception as e:
+            self.record_llm_interaction(
+                interaction_type="reasoning",
+                system_prompt=self._system_prompt,
+                user_prompt=prompt,
+                raw_response="",
+                parsed_output={},
+                latency_ms=0,
+                model=self._model or "",
+                success=False,
+                error=str(e),
+            )
             return "基于任务要求执行"
     
     async def _generate_evidence(
@@ -546,10 +641,23 @@ Generate evidence that supports your reasoning. Cite specific sources or data.
 
 Evidence (as JSON with keys like "sources", "data", "references"):"""
 
+        start_time = time.time()
         result = await self._base_agent.ask_json(
             user_prompt=prompt,
             fallback={"sources": [], "data": {}},
             max_tokens=256,
+        )
+        latency_ms = int((time.time() - start_time) * 1000)
+        
+        self.record_llm_interaction(
+            interaction_type="evidence",
+            system_prompt=self._system_prompt,
+            user_prompt=prompt,
+            raw_response=str(result.output),
+            parsed_output=result.output,
+            latency_ms=latency_ms,
+            model=self._model or "",
+            success=result.ok,
         )
         
         return result.output
@@ -575,15 +683,28 @@ Choose an action type and parameters:
 
 Return as JSON with "action_type" and "action" (dict with params)."""
 
+        start_time = time.time()
         result = await self._base_agent.ask_json(
             user_prompt=prompt,
             fallback={"action_type": "finalize", "action": {"answer": "任务已完成"}},
             max_tokens=256,
         )
+        latency_ms = int((time.time() - start_time) * 1000)
         
         output = result.output
         action_type = output.get("action_type", "finalize")
         action = output.get("action", {})
+        
+        self.record_llm_interaction(
+            interaction_type="action",
+            system_prompt=self._system_prompt,
+            user_prompt=prompt,
+            raw_response=str(output),
+            parsed_output=output,
+            latency_ms=latency_ms,
+            model=self._model or "",
+            success=result.ok,
+        )
         
         return action_type, action
     

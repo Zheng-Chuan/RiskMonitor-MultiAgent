@@ -106,6 +106,9 @@ def _build_compatible_output(
 
     latency_ms = (time.time() - start_time) * 1000
 
+    llm_interactions = result.get("llm_interactions", [])
+    total_tokens = sum(i.get("tokens_used", 0) for i in llm_interactions)
+
     return {
         "schema_version": "orchestrator_run.v1",
         "ok": result.get("status") == "completed",
@@ -127,10 +130,11 @@ def _build_compatible_output(
             "critic_final": {},
             "final_output": {},
             "errors": result.get("errors", []),
-            "tokens_total": 0,
+            "tokens_total": total_tokens,
             "quality": quality,
             "react_steps": react_steps,
             "bdi_states": result.get("bdi_states", {}),
+            "llm_interactions": llm_interactions,
         },
     }
 

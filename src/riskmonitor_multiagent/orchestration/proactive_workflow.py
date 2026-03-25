@@ -169,6 +169,13 @@ class ProactiveMultiAgentWorkflow:
         all_react_steps.extend(engineer_result.react_steps)
         all_react_steps.extend(analyst_result.react_steps)
         
+        all_llm_interactions = []
+        all_llm_interactions.extend(intent_result.llm_interactions)
+        all_llm_interactions.extend(orchestrator_result.llm_interactions)
+        all_llm_interactions.extend(critic_result.llm_interactions)
+        all_llm_interactions.extend(engineer_result.llm_interactions)
+        all_llm_interactions.extend(analyst_result.llm_interactions)
+        
         return {
             "status": "completed",
             "run_id": run_id,
@@ -197,6 +204,7 @@ class ProactiveMultiAgentWorkflow:
                 "engineer": engineer_result.bdi_state,
                 "analyst": analyst_result.bdi_state,
             },
+            "llm_interactions": all_llm_interactions,
             "latency_ms": latency_ms,
             "errors": [],
         }
