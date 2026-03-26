@@ -266,6 +266,9 @@ class Evaluator:
             trace.success = result.get("ok", False)
 
             result_data = result.get("result", {})
+            
+            if "result" in result_data:
+                result_data = result_data.get("result", {})
 
             trace.intent = result_data.get("intent", {})
             trace.plan_steps = result_data.get("orchestrator_plan", {}).get("plan_steps", [])

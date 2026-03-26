@@ -103,6 +103,10 @@ async def cmd_run(args: argparse.Namespace) -> int:
         logger.error(f"No cases found for category: {args.category}")
         return 1
     
+    if args.limit and args.limit > 0:
+        cases = cases[:args.limit]
+        logger.info(f"Limited to {len(cases)} cases")
+    
     logger.info(f"Running evaluation with {len(cases)} cases")
     
     evaluator = Evaluator(
@@ -376,6 +380,7 @@ def main() -> int:
     run_parser = subparsers.add_parser("run", help="Run evaluation")
     run_parser.add_argument("--cases", default="all", help="Cases to run (default: all)")
     run_parser.add_argument("--category", default="all", help="Category filter (default: all)")
+    run_parser.add_argument("--limit", type=int, default=0, help="Limit number of cases (default: 0 = no limit)")
     run_parser.add_argument("--output", "-o", help="Output file path")
     run_parser.add_argument("--model", help="Model to use")
     run_parser.add_argument("--no-llm-judge", action="store_true", help="Disable LLM judge")
