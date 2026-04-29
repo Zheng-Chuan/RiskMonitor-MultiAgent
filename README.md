@@ -19,6 +19,7 @@
 
 - [docs/QUICKSTART.md](docs/QUICKSTART.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [docs/PRD.md](docs/PRD.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
 - [EVALUATION.md](EVALUATION.md)
 

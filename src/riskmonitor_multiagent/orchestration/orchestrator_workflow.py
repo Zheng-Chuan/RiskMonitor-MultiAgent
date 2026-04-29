@@ -114,10 +114,12 @@ def _build_compatible_output(
         "ok": result.get("status") == "completed",
         "latency_ms": latency_ms,
         "result": {
+            "schema_version": "orchestrator_run.v1",
             "run_id": run_id,
             "task_id": task.get("task_id"),
             "task": task,
             "intent": result.get("intent", {}),
+            "task_graph": result.get("task_graph", {}),
             "orchestrator_plan": result.get("orchestrator_plan", {}),
             "critic_plan": result.get("critic_plan", {}),
             "approval": {"required": True, "approved": True},

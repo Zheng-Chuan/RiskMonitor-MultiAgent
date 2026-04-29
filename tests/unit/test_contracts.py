@@ -21,6 +21,10 @@ from riskmonitor_multiagent.contracts.agent_messages import (
     validate_agent_command,
     validate_agent_receipt,
 )
+from riskmonitor_multiagent.contracts.task_graph import (
+    TASK_GRAPH_SCHEMA_VERSION,
+    validate_task_graph,
+)
 def test_agent_output_schemas_validate_minimal_outputs():
     syseng = {
         "schema_version": SYSTEM_ENGINEER_OUTPUT_SCHEMA_VERSION,
@@ -102,6 +106,40 @@ def test_orchestrator_normalize_backfills_step_reason():
     steps = out.get("plan_steps")
     assert isinstance(steps, list) and steps
     assert isinstance(steps[0].get("reason"), str) and steps[0].get("reason")
+    task_graph = out.get("task_graph")
+    assert isinstance(task_graph, dict)
+    assert task_graph.get("schema_version") == TASK_GRAPH_SCHEMA_VERSION
+    nodes = task_graph.get("nodes")
+    assert isinstance(nodes, list) and len(nodes) == 1
+    assert nodes[0].get("step_id") == steps[0].get("step_id")
+
+
+def test_task_graph_validate_minimal_graph():
+    graph = {
+        "schema_version": TASK_GRAPH_SCHEMA_VERSION,
+        "nodes": [
+            {
+                "step_id": "s1",
+                "parent_id": None,
+                "kind": "delegate",
+                "status": "pending",
+                "reason": "需要专家分析",
+                "evidence": {"fields": ["task.payload.content"]},
+                "target_agent": "system_engineer",
+            },
+            {
+                "step_id": "s2",
+                "parent_id": "s1",
+                "kind": "finalize",
+                "status": "pending",
+                "reason": "最后收敛输出",
+                "evidence": {"fields": ["task.payload.content"]},
+            },
+        ],
+        "edges": [{"from_step_id": "s1", "to_step_id": "s2", "condition": "always"}],
+    }
+    ok, errors = validate_task_graph(graph)
+    assert ok, errors
 
 
 def test_orchestrator_receipt_binding_mismatch_is_rejected():

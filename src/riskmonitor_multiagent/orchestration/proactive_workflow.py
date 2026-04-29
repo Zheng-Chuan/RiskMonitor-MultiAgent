@@ -182,6 +182,7 @@ class ProactiveMultiAgentWorkflow:
             "task_id": task.get("task_id"),
             "task": task,
             "intent": intent_result.output,
+            "task_graph": orchestrator_result.output.get("task_graph", {}),
             "orchestrator_plan": orchestrator_result.output,
             "critic_plan": critic_result.output,
             "engineer": engineer_result.output,

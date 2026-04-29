@@ -119,6 +119,7 @@ async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatc
     assert result.get("schema_version") == "orchestrator_run.v1"
     assert isinstance(result.get("run_id"), str) and result.get("run_id")
     assert isinstance(result.get("orchestrator_plan"), dict)
+    assert isinstance(result.get("task_graph"), dict)
     assert isinstance(result.get("critic_plan"), dict)
     assert isinstance(result.get("approval"), dict)
     assert isinstance(result.get("engineer"), dict)
@@ -130,6 +131,10 @@ async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatc
     assert isinstance(quality.get("step_reason_coverage"), float)
     assert isinstance(quality.get("evidence_missing_rate"), float)
     assert isinstance(quality.get("receipt_binding_rate"), float)
+    task_graph = result.get("task_graph") or {}
+    nodes = task_graph.get("nodes")
+    assert isinstance(nodes, list) and len(nodes) >= 1
+    assert nodes[0].get("step_id") == "s1"
 
     approval = result.get("approval") or {}
     assert approval.get("required") in {True, False}
@@ -226,6 +231,8 @@ async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_p
     approval = result.get("approval") or {}
     assert approval.get("required") is True
     assert approval.get("approved") is False
+    task_graph = result.get("task_graph") or {}
+    assert isinstance(task_graph.get("nodes"), list)
     quality = result.get("quality")
     assert isinstance(quality, dict)
 

@@ -35,6 +35,12 @@ from riskmonitor_multiagent.contracts.memory_entry import (
     normalize_memory_entry,
     validate_memory_entry,
 )
+from riskmonitor_multiagent.contracts.task_graph import (
+    TASK_GRAPH_SCHEMA_VERSION,
+    build_task_graph_from_plan_steps,
+    normalize_task_graph,
+    validate_task_graph,
+)
 
 # 向后兼容的旧名称(测试依赖这些名称)
 CRITIC_REVIEW_SCHEMA_VERSION = CRITIC_VERSION
@@ -71,4 +77,9 @@ __all__ = [
     "MEMORY_ENTRY_SCHEMA_VERSION",
     "validate_memory_entry",
     "normalize_memory_entry",
+    # TaskGraph
+    "TASK_GRAPH_SCHEMA_VERSION",
+    "build_task_graph_from_plan_steps",
+    "validate_task_graph",
+    "normalize_task_graph",
 ]

@@ -12,6 +12,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from riskmonitor_multiagent.contracts.task_graph import (
+    normalize_task_graph,
+    validate_task_graph,
+)
 from riskmonitor_multiagent.utils import is_non_empty_str, has_evidence_refs
 
 # 契约版本常量
@@ -249,6 +253,12 @@ def validate_orchestrator_output(output: dict[str, Any]) -> tuple[bool, list[str
                 if missing:
                     errors.append("receipt_binding_mismatch")
 
+    task_graph = output.get("task_graph")
+    if task_graph is not None:
+        tg_ok, tg_errors = validate_task_graph(task_graph)
+        if not tg_ok:
+            errors.extend(tg_errors)
+
     return len(errors) == 0, errors
 
 
@@ -284,8 +294,15 @@ def normalize_orchestrator_output(output: dict[str, Any]) -> dict[str, Any]:
             # 补充 reason
             if not is_non_empty_str(step.get("reason")):
                 step["reason"] = "缺少原因说明 已自动回填"
+            if not isinstance(step.get("evidence"), dict):
+                step["evidence"] = {"fields": ["plan_steps"]}
             fixed.append(step)
         out["plan_steps"] = fixed
+
+    out["task_graph"] = normalize_task_graph(
+        out.get("task_graph", {}),
+        plan_steps=out.get("plan_steps") if isinstance(out.get("plan_steps"), list) else [],
+    )
 
     # 修复 degraded
     if out.get("degraded"):
