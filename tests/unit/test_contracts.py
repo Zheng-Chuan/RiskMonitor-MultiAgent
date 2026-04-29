@@ -23,6 +23,8 @@ from riskmonitor_multiagent.contracts.agent_messages import (
 )
 from riskmonitor_multiagent.contracts.task_graph import (
     TASK_GRAPH_SCHEMA_VERSION,
+    append_replan_subgraph,
+    build_task_graph_from_plan_steps,
     validate_task_graph,
 )
 def test_agent_output_schemas_validate_minimal_outputs():
@@ -140,6 +142,52 @@ def test_task_graph_validate_minimal_graph():
     }
     ok, errors = validate_task_graph(graph)
     assert ok, errors
+
+
+def test_task_graph_finalize_depends_on_all_prior_branches():
+    graph = build_task_graph_from_plan_steps(
+        [
+            {"kind": "delegate", "step_id": "s1", "reason": "系统侧", "target_agent": "system_engineer"},
+            {"kind": "delegate", "step_id": "s2", "reason": "业务侧", "target_agent": "risk_analyst"},
+            {"kind": "finalize", "step_id": "s3", "reason": "汇总输出"},
+        ]
+    )
+    edges = graph.get("edges") or []
+    refs = {(edge.get("from_step_id"), edge.get("to_step_id")) for edge in edges}
+    assert ("s1", "s3") in refs
+    assert ("s2", "s3") in refs
+    assert ("s1", "s2") not in refs
+
+
+def test_append_replan_subgraph_inserts_replan_node_and_rewires_new_steps():
+    base = build_task_graph_from_plan_steps(
+        [
+            {"kind": "delegate", "step_id": "s1", "reason": "系统侧", "target_agent": "system_engineer"},
+            {"kind": "finalize", "step_id": "s2", "reason": "初版汇总"},
+        ]
+    )
+    new = build_task_graph_from_plan_steps(
+        [
+            {"kind": "delegate", "step_id": "s1", "reason": "改走业务侧", "target_agent": "risk_analyst"},
+            {"kind": "finalize", "step_id": "s2", "reason": "重规划后汇总"},
+        ]
+    )
+    merged = append_replan_subgraph(base, new, reason="critic rejected", replan_index=1)
+
+    ok, errors = validate_task_graph(merged)
+    assert ok, errors
+
+    nodes = merged.get("nodes") or []
+    step_ids = {node.get("step_id") for node in nodes}
+    assert "rp1" in step_ids
+    assert "rp1_s1" in step_ids
+    assert "rp1_s2" in step_ids
+
+    edges = merged.get("edges") or []
+    refs = {(edge.get("from_step_id"), edge.get("to_step_id")) for edge in edges}
+    assert ("s2", "rp1") in refs
+    assert ("rp1", "rp1_s1") in refs
+    assert ("rp1_s1", "rp1_s2") in refs
 
 
 def test_orchestrator_receipt_binding_mismatch_is_rejected():

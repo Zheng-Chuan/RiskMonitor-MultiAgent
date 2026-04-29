@@ -149,32 +149,32 @@
 
 #### Checklist
 
-- [ ] Checkpoint 7.1.1 `TaskGraph` 契约落地
+- [x] Checkpoint 7.1.1 `TaskGraph` 契约落地
   - 实现项: 新增 `task_graph.py` 或等价契约文件. 定义 `TaskNode` `TaskEdge` `TaskGraph` `TaskExecutionState` 结构. 节点至少支持 `tool_call` `delegate` `ask_human` `analyze` `finalize` `stop` `replan`.
   - 验收方法: 运行 TaskGraph 契约单测和负例单测.
   - 验收证据: 单测报告. 契约样例 JSON. 非法节点类型和非法依赖被拒绝的错误输出.
   - 通过标准: 契约单测全部通过. 非法输入全部被拒绝. 图结构可稳定序列化和反序列化.
-- [ ] Checkpoint 7.1.2 计划输出改为显式任务图
+- [x] Checkpoint 7.1.2 计划输出改为显式任务图
   - 实现项: `Orchestrator` 不再只输出线性 `plan_steps`. 必须输出带节点 ID 和依赖边的任务图. 每个节点都包含 `step_id` `parent_id` `status` `reason` `evidence`.
   - 验收方法: 运行 3 个规划类 benchmark case 和 1 组负例 case.
   - 验收证据: `results/` 中的任务图产物. trace 中的节点和边. 负例中的 schema error.
   - 通过标准: 3 个 benchmark case 全部生成合法任务图. 每个节点字段完整率为 100%.
-- [ ] Checkpoint 7.1.3 任务图调度器替代固定五段式执行
+- [x] Checkpoint 7.1.3 任务图调度器替代固定五段式执行
   - 实现项: 保留当前工作流入口, 但内部执行器切换为任务图调度器. 调度器支持就绪节点选择, 条件分支, 并行 fan out 和收敛.
   - 验收方法: 运行 `make test` 中新增的调度器集成测试. 再运行 2 个 medium case 和 2 个 complex case.
   - 验收证据: trace 中的节点状态流转. 并行节点时间线. 调度器日志.
   - 通过标准: fixed workflow 逻辑不再承担主执行职责. 4 个 case 均由任务图调度器驱动完成.
-- [ ] Checkpoint 7.1.4 真实 replan 闭环
+- [x] Checkpoint 7.1.4 真实 replan 闭环
   - 实现项: 在 `TOOL_FAILED` `NEW_EVIDENCE` `CRITIC_REJECTED` 事件后支持局部重规划. 新增节点必须带 `replan_from_step_id`.
   - 验收方法: 运行 3 个 complex replan benchmark case.
   - 验收证据: trace 中 `replan_count >= 1`. 新增 step 与旧 step 的父子关系. Critic 审查记录.
   - 通过标准: 3 个 case 全部出现真实 replan. 最终输出引用 replan 后新增 receipt.
-- [ ] Checkpoint 7.1.5 失败恢复和 step 级重试
+- [x] Checkpoint 7.1.5 失败恢复和 step 级重试
   - 实现项: 支持 step 级 retry 和从失败节点恢复. 不允许整任务默认重跑.
   - 验收方法: 运行 2 个故障注入 case. 一个是工具超时. 一个是参数错误修复后恢复.
   - 验收证据: trace 中的 retry 记录和 resume 记录. 上游成功节点未重复执行的日志.
   - 通过标准: 2 个 case 均从失败 step 继续. 已成功上游 step 的重复执行次数为 0.
-- [ ] Checkpoint 7.1.6 并行子任务真实落地
+- [x] Checkpoint 7.1.6 并行子任务真实落地
   - 实现项: 至少支持 `SystemEngineer` 和 `RiskAnalyst` 的并行 delegation. 最终由 `Moderator` 或 `Orchestrator` 汇总.
   - 验收方法: 运行 2 个并行协作 benchmark case.
   - 验收证据: trace 中同时进行的子任务时间线. 汇总节点的输入来源字段.

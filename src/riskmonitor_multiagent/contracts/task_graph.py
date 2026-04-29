@@ -109,14 +109,12 @@ def build_task_graph_from_plan_steps(plan_steps: list[dict[str, Any]]) -> dict[s
     """从线性 plan_steps 构建最小 TaskGraph."""
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
-    previous_step_id: str | None = None
+    prior_step_ids: list[str] = []
 
     for index, raw_step in enumerate(plan_steps):
         step = dict(raw_step) if isinstance(raw_step, dict) else {}
         step_id = str(step.get("step_id") or f"s{index + 1}")
         parent_id = step.get("parent_id")
-        if parent_id is None and previous_step_id is not None:
-            parent_id = previous_step_id
 
         node = {
             "step_id": step_id,
@@ -127,21 +125,52 @@ def build_task_graph_from_plan_steps(plan_steps: list[dict[str, Any]]) -> dict[s
             "evidence": step.get("evidence") if isinstance(step.get("evidence"), dict) else {"fields": ["plan_steps"]},
         }
 
-        for key in ("target_agent", "instruction", "tool_name", "params", "condition", "replan_from_step_id"):
+        for key in (
+            "target_agent",
+            "instruction",
+            "tool_name",
+            "params",
+            "condition",
+            "replan_from_step_id",
+            "timeout_ms",
+            "retry_budget",
+            "output_ref",
+            "attempt_count",
+            "last_error",
+            "failure_classification",
+        ):
             if key in step:
                 node[key] = step.get(key)
 
         nodes.append(node)
 
-        if previous_step_id is not None:
+        if is_non_empty_str(parent_id):
             edges.append(
                 {
-                    "from_step_id": previous_step_id,
+                    "from_step_id": str(parent_id),
                     "to_step_id": step_id,
                     "condition": "always",
                 }
             )
-        previous_step_id = step_id
+        elif str(node["kind"]) == "finalize":
+            for prior_step_id in prior_step_ids:
+                edges.append(
+                    {
+                        "from_step_id": prior_step_id,
+                        "to_step_id": step_id,
+                        "condition": "always",
+                    }
+                )
+        elif str(node["kind"]) == "stop" and prior_step_ids:
+            edges.append(
+                {
+                    "from_step_id": prior_step_ids[-1],
+                    "to_step_id": step_id,
+                    "condition": "always",
+                }
+            )
+
+        prior_step_ids.append(step_id)
 
     return {
         "schema_version": TASK_GRAPH_SCHEMA_VERSION,
@@ -174,31 +203,184 @@ def normalize_task_graph(graph: dict[str, Any], *, plan_steps: list[dict[str, An
             "reason": node.get("reason") or "缺少原因说明 已自动回填",
             "evidence": node.get("evidence") if isinstance(node.get("evidence"), dict) else {"fields": ["task_graph"]},
         }
-        for key in ("target_agent", "instruction", "tool_name", "params", "condition", "replan_from_step_id"):
+        for key in (
+            "target_agent",
+            "instruction",
+            "tool_name",
+            "params",
+            "condition",
+            "replan_from_step_id",
+            "timeout_ms",
+            "retry_budget",
+            "output_ref",
+            "attempt_count",
+            "last_error",
+            "failure_classification",
+        ):
             if key in node:
                 normalized_node[key] = node.get(key)
         normalized["nodes"].append(normalized_node)
 
     if not normalized["edges"]:
-        prev_step_id: str | None = None
+        prior_step_ids: list[str] = []
         for node in normalized["nodes"]:
             step_id = str(node["step_id"])
-            if prev_step_id is not None:
+            parent_id = node.get("parent_id")
+            kind = str(node.get("kind") or "analyze")
+            if is_non_empty_str(parent_id):
                 normalized["edges"].append(
                     {
-                        "from_step_id": prev_step_id,
+                        "from_step_id": str(parent_id),
                         "to_step_id": step_id,
                         "condition": "always",
                     }
                 )
-            prev_step_id = step_id
+            elif kind == "finalize":
+                for prior_step_id in prior_step_ids:
+                    normalized["edges"].append(
+                        {
+                            "from_step_id": prior_step_id,
+                            "to_step_id": step_id,
+                            "condition": "always",
+                        }
+                    )
+            elif kind == "stop" and prior_step_ids:
+                normalized["edges"].append(
+                    {
+                        "from_step_id": prior_step_ids[-1],
+                        "to_step_id": step_id,
+                        "condition": "always",
+                    }
+                )
+            prior_step_ids.append(step_id)
 
     return normalized
+
+
+def append_replan_subgraph(
+    base_graph: dict[str, Any],
+    replan_graph: dict[str, Any],
+    *,
+    reason: str,
+    replan_index: int = 1,
+) -> dict[str, Any]:
+    """把新的重规划子图接到原任务图后面."""
+    base = normalize_task_graph(
+        base_graph,
+        plan_steps=base_graph.get("plan_steps") if isinstance(base_graph, dict) and isinstance(base_graph.get("plan_steps"), list) else [],
+    )
+    new = normalize_task_graph(
+        replan_graph,
+        plan_steps=replan_graph.get("plan_steps") if isinstance(replan_graph, dict) and isinstance(replan_graph.get("plan_steps"), list) else [],
+    )
+
+    existing_nodes = [dict(node) for node in base.get("nodes", []) if isinstance(node, dict)]
+    existing_edges = [dict(edge) for edge in base.get("edges", []) if isinstance(edge, dict)]
+
+    replan_step_id = f"rp{replan_index}"
+    existing_step_ids = {str(node.get("step_id")) for node in existing_nodes if is_non_empty_str(node.get("step_id"))}
+    while replan_step_id in existing_step_ids:
+        replan_index += 1
+        replan_step_id = f"rp{replan_index}"
+
+    outgoing_counts: dict[str, int] = {}
+    incoming_counts: dict[str, int] = {}
+    for edge in existing_edges:
+        from_step_id = edge.get("from_step_id")
+        to_step_id = edge.get("to_step_id")
+        if is_non_empty_str(from_step_id):
+            outgoing_counts[str(from_step_id)] = outgoing_counts.get(str(from_step_id), 0) + 1
+        if is_non_empty_str(to_step_id):
+            incoming_counts[str(to_step_id)] = incoming_counts.get(str(to_step_id), 0) + 1
+
+    terminal_step_ids = [
+        str(node["step_id"])
+        for node in existing_nodes
+        if is_non_empty_str(node.get("step_id")) and outgoing_counts.get(str(node["step_id"]), 0) == 0
+    ]
+
+    replan_node = {
+        "step_id": replan_step_id,
+        "parent_id": terminal_step_ids[-1] if terminal_step_ids else None,
+        "kind": "replan",
+        "status": "pending",
+        "reason": reason or "critic rejected previous plan",
+        "evidence": {"fields": ["critic_plan.issues", "critic_plan.suggested_fixes"]},
+    }
+    existing_nodes.append(replan_node)
+    for terminal_step_id in terminal_step_ids:
+        existing_edges.append(
+            {
+                "from_step_id": terminal_step_id,
+                "to_step_id": replan_step_id,
+                "condition": "critic_rejected",
+            }
+        )
+
+    renamed_nodes: list[dict[str, Any]] = []
+    step_id_map: dict[str, str] = {}
+    for index, raw_node in enumerate(new.get("nodes", []), start=1):
+        node = dict(raw_node)
+        old_step_id = str(node.get("step_id") or f"s{index}")
+        new_step_id = f"{replan_step_id}_{old_step_id}"
+        step_id_map[old_step_id] = new_step_id
+        node["step_id"] = new_step_id
+        parent_id = node.get("parent_id")
+        if is_non_empty_str(parent_id):
+            node["parent_id"] = step_id_map.get(str(parent_id), f"{replan_step_id}_{parent_id}")
+        else:
+            node["parent_id"] = replan_step_id
+        node["replan_from_step_id"] = replan_step_id
+        renamed_nodes.append(node)
+
+    existing_nodes.extend(renamed_nodes)
+
+    new_edges = [dict(edge) for edge in new.get("edges", []) if isinstance(edge, dict)]
+    incoming_new_counts: dict[str, int] = {}
+    for edge in new_edges:
+        to_step_id = edge.get("to_step_id")
+        if is_non_empty_str(to_step_id):
+            incoming_new_counts[str(to_step_id)] = incoming_new_counts.get(str(to_step_id), 0) + 1
+        from_step_id = edge.get("from_step_id")
+        to_step_id = edge.get("to_step_id")
+        if is_non_empty_str(from_step_id) and is_non_empty_str(to_step_id):
+            existing_edges.append(
+                {
+                    "from_step_id": step_id_map[str(from_step_id)],
+                    "to_step_id": step_id_map[str(to_step_id)],
+                    "condition": edge.get("condition") or "always",
+                }
+            )
+
+    entry_step_ids: list[str] = []
+    for node in renamed_nodes:
+        step_id = str(node.get("step_id") or "")
+        old_step_id = step_id.replace(f"{replan_step_id}_", "", 1)
+        if incoming_new_counts.get(old_step_id, 0) == 0:
+            entry_step_ids.append(step_id)
+    if not entry_step_ids and renamed_nodes:
+        entry_step_ids = [str(renamed_nodes[0]["step_id"])]
+
+    for entry_step_id in entry_step_ids:
+        existing_edges.append(
+            {
+                "from_step_id": replan_step_id,
+                "to_step_id": entry_step_id,
+                "condition": "always",
+            }
+        )
+
+    return {
+        "schema_version": TASK_GRAPH_SCHEMA_VERSION,
+        "nodes": existing_nodes,
+        "edges": existing_edges,
+    }
 
 
 __all__ = [
     "TASK_GRAPH_SCHEMA_VERSION",
     "build_task_graph_from_plan_steps",
+    "append_replan_subgraph",
     "normalize_task_graph",
     "validate_task_graph",
 ]

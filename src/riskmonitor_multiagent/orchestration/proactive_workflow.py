@@ -12,12 +12,15 @@ import time
 from typing import Any, Optional
 
 from riskmonitor_multiagent.proactive_agents import (
+    ProactiveAgentResult,
     ProactiveIntentAgent,
     ProactiveOrchestratorAgent,
     ProactiveCriticAgent,
     ProactiveSystemEngineerAgent,
     ProactiveRiskAnalystAgent,
 )
+from riskmonitor_multiagent.contracts.task_graph import append_replan_subgraph
+from riskmonitor_multiagent.orchestration.task_graph_executor import TaskGraphExecutor
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
 from riskmonitor_multiagent.utils.ids import new_run_id
 
@@ -103,27 +106,99 @@ class ProactiveMultiAgentWorkflow:
             
             intent_result = await self._intent_agent.recognize(task=task)
             logger.info(f"[ProactiveWorkflow] Intent recognized: {intent_result.output.get('primary_intent_type')}")
+            resume_request = task.get("resume") if isinstance(task.get("resume"), dict) else {}
+            is_resume = bool(resume_request)
+
+            replan_details: dict[str, Any] | None = None
+            execution_state = resume_request.get("execution_state") if is_resume else None
+            resume_from_step_id = (
+                resume_request.get("resume_from_step_id")
+                or (execution_state.get("failed_step_id") if isinstance(execution_state, dict) else None)
+            ) if is_resume else None
+
+            if is_resume:
+                orchestrator_result = self._new_placeholder_result(
+                    output=resume_request.get("task_graph") if isinstance(resume_request.get("task_graph"), dict) else {},
+                    agent_name="orchestrator",
+                )
+                critic_result = self._new_placeholder_result(
+                    output={"ok": True, "resumed": True},
+                    agent_name="critic",
+                )
+                active_task_graph = resume_request.get("task_graph") if isinstance(resume_request.get("task_graph"), dict) else {}
+                replan_details = {
+                    "trigger": "manual_resume",
+                    "reason": f"resume_from_step:{resume_from_step_id or 'unknown'}",
+                }
+            else:
+                orchestrator_result = await self._orchestrator_agent.orchestrate(
+                    task=task,
+                    context={"intent": intent_result.output},
+                )
+                logger.info(f"[ProactiveWorkflow] Plan created with {len(orchestrator_result.output.get('plan_steps', []))} steps")
+                
+                critic_result = await self._critic_agent.review(
+                    task=task,
+                    orchestrator=orchestrator_result.output,
+                )
+                logger.info(f"[ProactiveWorkflow] Review completed: ok={critic_result.output.get('ok')}")
+
+                active_task_graph = orchestrator_result.output
+                if self._should_replan(critic_result.output):
+                    logger.info("[ProactiveWorkflow] Critic rejected plan. Starting replan")
+                    replan_result = await self._orchestrator_agent.orchestrate(
+                        task=task,
+                        context={
+                            "phase": "replan",
+                            "intent": intent_result.output,
+                            "critic": critic_result.output,
+                            "prior_orchestrator_plan": orchestrator_result.output,
+                            "prior_task_graph": active_task_graph,
+                        },
+                    )
+                    active_task_graph = append_replan_subgraph(
+                        active_task_graph,
+                        replan_result.output,
+                        reason=self._build_replan_reason(critic_result.output),
+                    )
+                    replan_details = {
+                        "trigger": "critic_rejected",
+                        "reason": self._build_replan_reason(critic_result.output),
+                        "orchestrator_plan": replan_result.output,
+                    }
+                    logger.info(
+                        "[ProactiveWorkflow] Replan completed with %s nodes",
+                        len(active_task_graph.get("nodes", [])) if isinstance(active_task_graph, dict) else 0,
+                    )
             
-            orchestrator_result = await self._orchestrator_agent.orchestrate(
+            executor = TaskGraphExecutor(
+                delegate_handlers={
+                    "system_engineer": self._engineer_agent.analyze_task,
+                    "engineer": self._engineer_agent.analyze_task,
+                    "risk_analyst": self._analyst_agent.analyze_task,
+                    "analyst": self._analyst_agent.analyze_task,
+                }
+            )
+            execution_result = await executor.execute(
                 task=task,
-                context={"intent": intent_result.output},
+                task_graph=active_task_graph,
+                execution_state=execution_state,
+                resume_from_step_id=resume_from_step_id if isinstance(resume_from_step_id, str) else None,
             )
-            logger.info(f"[ProactiveWorkflow] Plan created with {len(orchestrator_result.output.get('plan_steps', []))} steps")
-            
-            critic_result = await self._critic_agent.review(
-                task=task,
-                orchestrator=orchestrator_result.output,
+            logger.info(
+                "[ProactiveWorkflow] TaskGraph execution completed with status=%s",
+                execution_result.get("status"),
             )
-            logger.info(f"[ProactiveWorkflow] Review completed: ok={critic_result.output.get('ok')}")
-            
-            engineer_task = self._engineer_agent.analyze_task(task=task)
-            analyst_task = self._analyst_agent.analyze_task(task=task)
-            
-            engineer_result, analyst_result = await asyncio.gather(
-                engineer_task,
-                analyst_task,
+
+            delegate_results = execution_result.get("delegate_results", {})
+            engineer_result = delegate_results.get("system_engineer") or delegate_results.get("engineer") or ProactiveAgentResult(
+                ok=True,
+                output={},
             )
-            logger.info(f"[ProactiveWorkflow] Specialist analysis completed")
+            analyst_result = delegate_results.get("risk_analyst") or delegate_results.get("analyst") or ProactiveAgentResult(
+                ok=True,
+                output={},
+            )
             
             result = self._build_result(
                 run_id=run_id,
@@ -133,6 +208,8 @@ class ProactiveMultiAgentWorkflow:
                 critic_result=critic_result,
                 engineer_result=engineer_result,
                 analyst_result=analyst_result,
+                execution_result=execution_result,
+                replan_details=replan_details,
                 start_time=start_time,
             )
             
@@ -157,6 +234,8 @@ class ProactiveMultiAgentWorkflow:
         critic_result: Any,
         engineer_result: Any,
         analyst_result: Any,
+        execution_result: dict[str, Any],
+        replan_details: dict[str, Any] | None,
         start_time: float,
     ) -> dict[str, Any]:
         """构建结果."""
@@ -177,16 +256,19 @@ class ProactiveMultiAgentWorkflow:
         all_llm_interactions.extend(analyst_result.llm_interactions)
         
         return {
-            "status": "completed",
+            "status": execution_result.get("status", "completed"),
             "run_id": run_id,
             "task_id": task.get("task_id"),
             "task": task,
             "intent": intent_result.output,
-            "task_graph": orchestrator_result.output.get("task_graph", {}),
+            "task_graph": execution_result.get("task_graph", orchestrator_result.output.get("task_graph", {})),
+            "task_graph_execution": execution_result.get("task_graph_execution", {}),
             "orchestrator_plan": orchestrator_result.output,
             "critic_plan": critic_result.output,
+            "replan": replan_details or {},
             "engineer": engineer_result.output,
             "analyst": analyst_result.output,
+            "final_output": execution_result.get("final_output", {}),
             "react_steps": [
                 {
                     "step_id": s.step_id,
@@ -207,8 +289,43 @@ class ProactiveMultiAgentWorkflow:
             },
             "llm_interactions": all_llm_interactions,
             "latency_ms": latency_ms,
-            "errors": [],
+            "errors": execution_result.get("task_graph_execution", {}).get("errors", []),
         }
+
+    def _new_placeholder_result(self, *, output: dict[str, Any], agent_name: str) -> ProactiveAgentResult:
+        """构造恢复执行时的占位结果."""
+        return ProactiveAgentResult(
+            ok=True,
+            output=output if isinstance(output, dict) else {},
+            meta={"agent_name": agent_name, "placeholder": True},
+        )
+
+    def _should_replan(self, critic_output: dict[str, Any]) -> bool:
+        """判断是否需要重规划."""
+        if not isinstance(critic_output, dict):
+            return False
+        if critic_output.get("ok") is False:
+            return True
+        return False
+
+    def _build_replan_reason(self, critic_output: dict[str, Any]) -> str:
+        """构造重规划原因."""
+        if not isinstance(critic_output, dict):
+            return "critic rejected previous plan"
+
+        issues = critic_output.get("issues")
+        if isinstance(issues, list) and issues:
+            first_issue = issues[0]
+            if isinstance(first_issue, str) and first_issue.strip():
+                return first_issue.strip()
+
+        fixes = critic_output.get("suggested_fixes")
+        if isinstance(fixes, list) and fixes:
+            first_fix = fixes[0]
+            if isinstance(first_fix, str) and first_fix.strip():
+                return first_fix.strip()
+
+        return "critic rejected previous plan"
 
 
 _proactive_workflow: Optional[ProactiveMultiAgentWorkflow] = None

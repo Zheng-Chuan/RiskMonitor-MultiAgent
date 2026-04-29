@@ -37,6 +37,7 @@ from riskmonitor_multiagent.contracts.memory_entry import (
 )
 from riskmonitor_multiagent.contracts.task_graph import (
     TASK_GRAPH_SCHEMA_VERSION,
+    append_replan_subgraph,
     build_task_graph_from_plan_steps,
     normalize_task_graph,
     validate_task_graph,
@@ -79,6 +80,7 @@ __all__ = [
     "normalize_memory_entry",
     # TaskGraph
     "TASK_GRAPH_SCHEMA_VERSION",
+    "append_replan_subgraph",
     "build_task_graph_from_plan_steps",
     "validate_task_graph",
     "normalize_task_graph",
