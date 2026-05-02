@@ -26,6 +26,16 @@ from eval.core.report import ReportGenerator
 from eval.comparison.benchmark import HistoryComparator, BenchmarkComparator
 
 logger = logging.getLogger(__name__)
+_PRIMARY_BENCHMARK_CATEGORIES = {"simple", "medium", "complex", "recovery", "approval", "memory", "safety"}
+_PRIMARY_BENCHMARK_FILES = {
+    "simple": "queries.jsonl",
+    "medium": "analysis.jsonl",
+    "complex": "multi_step.jsonl",
+    "recovery": "recovery.jsonl",
+    "approval": "approval.jsonl",
+    "memory": "memory.jsonl",
+    "safety": "safety.jsonl",
+}
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -49,7 +59,20 @@ def load_all_cases(benchmarks_dir: str = "eval/benchmarks") -> list[Any]:
         logger.error(f"Benchmarks directory not found: {benchmarks_dir}")
         return cases
     
-    for jsonl_file in benchmarks_path.rglob("*.jsonl"):
+    jsonl_files = list(benchmarks_path.rglob("*.jsonl"))
+    category_dirs = {
+        jsonl_file.parent.name
+        for jsonl_file in jsonl_files
+    }
+    if _PRIMARY_BENCHMARK_CATEGORIES.issubset(category_dirs):
+        jsonl_files = [
+            jsonl_file
+            for jsonl_file in jsonl_files
+            if jsonl_file.parent.name in _PRIMARY_BENCHMARK_CATEGORIES
+            and jsonl_file.name == _PRIMARY_BENCHMARK_FILES.get(jsonl_file.parent.name)
+        ]
+
+    for jsonl_file in jsonl_files:
         logger.info(f"Loading cases from {jsonl_file}")
         with open(jsonl_file, "r", encoding="utf-8") as f:
             for line in f:
@@ -89,6 +112,18 @@ async def run_workflow_runner(task: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
+def _build_eval_task(task: dict[str, Any], *, baseline_mode: str, memory_enabled: bool, benchmark_config: dict[str, Any]) -> dict[str, Any]:
+    """为评测运行构造任务."""
+    built = dict(task)
+    built["memory_enabled"] = memory_enabled
+    built["baseline_mode"] = baseline_mode
+    built["benchmark_config"] = benchmark_config
+    if baseline_mode == "single_agent":
+        # 先把 baseline 模式显式打到任务里 便于 trace 和报告复现实验
+        built["single_agent_mode"] = True
+    return built
+
+
 async def cmd_run(args: argparse.Namespace) -> int:
     """运行评估."""
     setup_logging(args.verbose)
@@ -113,16 +148,34 @@ async def cmd_run(args: argparse.Namespace) -> int:
         model=args.model,
         llm_judge_enabled=not args.no_llm_judge,
     )
-    
+
+    memory_enabled = args.baseline_mode != "memory_off" and not args.disable_memory
     config = {
         "model": args.model,
         "category": args.category,
         "llm_judge_enabled": not args.no_llm_judge,
+        "baseline_mode": args.baseline_mode,
+        "memory_enabled": memory_enabled,
+        "dataset_version": args.dataset_version,
+        "benchmark_config": {
+            "dataset_version": args.dataset_version,
+            "baseline_mode": args.baseline_mode,
+            "memory_enabled": memory_enabled,
+        },
     }
-    
+
+    async def _workflow_runner(task: dict[str, Any]) -> dict[str, Any]:
+        eval_task = _build_eval_task(
+            task,
+            baseline_mode=args.baseline_mode,
+            memory_enabled=memory_enabled,
+            benchmark_config=config["benchmark_config"],
+        )
+        return await run_workflow_runner(eval_task)
+
     result = await evaluator.run_evaluation(
         cases=cases,
-        workflow_runner=run_workflow_runner,
+        workflow_runner=_workflow_runner,
         config=config,
     )
     
@@ -205,6 +258,60 @@ def cmd_compare(args: argparse.Namespace) -> int:
     
     print("=" * 60)
     
+    return 0
+
+
+def cmd_baseline_compare(args: argparse.Namespace) -> int:
+    """对比主系统和 baseline 结果."""
+    setup_logging(args.verbose)
+
+    primary_path = Path(args.primary)
+    baseline_path = Path(args.baseline)
+    if not primary_path.exists():
+        logger.error(f"Primary result not found: {primary_path}")
+        return 1
+    if not baseline_path.exists():
+        logger.error(f"Baseline result not found: {baseline_path}")
+        return 1
+
+    with open(primary_path, "r", encoding="utf-8") as f:
+        primary = json.load(f)
+    with open(baseline_path, "r", encoding="utf-8") as f:
+        baseline = json.load(f)
+
+    primary_metrics = primary.get("aggregates", {}).get("behavioral_metrics", primary.get("behavior_metrics", {}))
+    baseline_metrics = baseline.get("aggregates", {}).get("behavioral_metrics", baseline.get("behavior_metrics", {}))
+    tracked_metrics = [
+        "task_success_rate",
+        "tool_success_rate",
+        "tool_selection_accuracy",
+        "receipt_binding_rate",
+        "approval_correctness",
+        "replan_success_rate",
+        "memory_hit_rate",
+        "memory_usefulness",
+        "resume_success_rate",
+        "dangerous_action_block_rate",
+        "message_trace_completeness",
+        "factuality_score",
+        "evidence_coverage",
+    ]
+
+    print("\n" + "=" * 60)
+    print("Baseline Comparison")
+    print("=" * 60)
+    print(f"Primary: {primary_path}")
+    print(f"Baseline: {baseline_path}")
+    print()
+
+    for metric_name in tracked_metrics:
+        primary_value = float(primary_metrics.get(metric_name, 0.0))
+        baseline_value = float(baseline_metrics.get(metric_name, 0.0))
+        diff = primary_value - baseline_value
+        sign = "+" if diff >= 0 else ""
+        print(f"{metric_name}: {primary_value:.4f} vs {baseline_value:.4f} ({sign}{diff:.4f})")
+
+    print("=" * 60)
     return 0
 
 
@@ -352,6 +459,11 @@ def cmd_gate(args: argparse.Namespace) -> int:
         print("\n失败原因:")
         for reason in gate_result.reasons:
             print(f"  - {reason}")
+
+    if gate_result.warnings:
+        print("\n告警项:")
+        for warning in gate_result.warnings:
+            print(f"  - {warning}")
     
     print("\n指标摘要:")
     for metric, value in gate_result.metrics_summary.items():
@@ -385,10 +497,17 @@ def main() -> int:
     run_parser.add_argument("--model", help="Model to use")
     run_parser.add_argument("--no-llm-judge", action="store_true", help="Disable LLM judge")
     run_parser.add_argument("--benchmarks-dir", default="eval/benchmarks", help="Benchmarks directory")
+    run_parser.add_argument("--baseline-mode", choices=["primary", "single_agent", "memory_off"], default="primary", help="Baseline mode")
+    run_parser.add_argument("--disable-memory", action="store_true", help="Disable memory regardless of baseline mode")
+    run_parser.add_argument("--dataset-version", default="benchmark.v2", help="Dataset version tag")
     
     compare_parser = subparsers.add_parser("compare", help="Compare with history")
     compare_parser.add_argument("--current", required=True, help="Current result file")
     compare_parser.add_argument("--history", help="History result file (optional)")
+
+    baseline_compare_parser = subparsers.add_parser("baseline-compare", help="Compare with baseline result")
+    baseline_compare_parser.add_argument("--primary", required=True, help="Primary result file")
+    baseline_compare_parser.add_argument("--baseline", required=True, help="Baseline result file")
     
     benchmark_parser = subparsers.add_parser("benchmark", help="Compare with benchmarks")
     benchmark_parser.add_argument("--result", required=True, help="Result file")
@@ -408,6 +527,8 @@ def main() -> int:
         return asyncio.run(cmd_run(args))
     elif args.command == "compare":
         return cmd_compare(args)
+    elif args.command == "baseline-compare":
+        return cmd_baseline_compare(args)
     elif args.command == "benchmark":
         return cmd_benchmark(args)
     elif args.command == "report":

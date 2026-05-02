@@ -22,15 +22,20 @@ from pathlib import Path
 from typing import Any
 
 from eval.core.metrics import (
+    BehavioralMetrics,
     CollaborationMetrics,
     ComprehensionMetrics,
     EfficiencyMetrics,
+    MemoryMetrics,
     OverallMetrics,
     ReasoningMetrics,
     TaskAccuracyMetrics,
     ToolRiskMetrics,
+    get_metric_definitions,
 )
 from eval.core.llm_judge import LLMJudge
+from riskmonitor_multiagent.contracts.run_trace import validate_run_trace
+from riskmonitor_multiagent.observability.run_trace import get_run_trace_store
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +51,9 @@ class TestCase:
     ground_truth: dict[str, Any]
     evaluation: dict[str, Any]
     risk_assessment: dict[str, Any] = field(default_factory=dict)
+    scenario_class: str = ""
+    gold_facts: dict[str, Any] = field(default_factory=dict)
+    text_quality_labels: dict[str, Any] = field(default_factory=dict)
     
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TestCase":
@@ -58,6 +66,9 @@ class TestCase:
             ground_truth=data.get("ground_truth", {}),
             evaluation=data.get("evaluation", {}),
             risk_assessment=data.get("risk_assessment", {}),
+            scenario_class=data.get("scenario_class", data.get("category", "")),
+            gold_facts=data.get("gold_facts", {}),
+            text_quality_labels=data.get("text_quality_labels", {}),
         )
 
 
@@ -84,6 +95,11 @@ class ExecutionTrace:
     tokens_used: int = 0
     
     llm_interactions: list[dict[str, Any]] = field(default_factory=list)
+    memory_hits: list[dict[str, Any]] = field(default_factory=list)
+    planning_memory: dict[str, Any] = field(default_factory=dict)
+    resume_memory_state: list[dict[str, Any]] = field(default_factory=list)
+    run_summary: dict[str, Any] = field(default_factory=dict)
+    run_trace: dict[str, Any] = field(default_factory=dict)
     
     @property
     def latency_ms(self) -> int:
@@ -109,6 +125,11 @@ class ExecutionTrace:
             "final_output": self.final_output,
             "tokens_used": self.tokens_used,
             "llm_interactions": self.llm_interactions,
+            "memory_hits": self.memory_hits,
+            "planning_memory": self.planning_memory,
+            "resume_memory_state": self.resume_memory_state,
+            "run_summary": self.run_summary,
+            "run_trace": self.run_trace,
         }
 
 
@@ -122,6 +143,7 @@ class CaseResult:
     success: bool
     
     metrics: OverallMetrics = field(default_factory=OverallMetrics)
+    behavior_metrics: BehavioralMetrics = field(default_factory=BehavioralMetrics)
     trace: ExecutionTrace | None = None
     
     llm_scores: dict[str, float] = field(default_factory=dict)
@@ -136,6 +158,7 @@ class CaseResult:
             "difficulty": self.difficulty,
             "success": self.success,
             "metrics": self.metrics.to_dict(),
+            "behavior_metrics": self.behavior_metrics.to_dict(),
             "llm_scores": self.llm_scores,
             "errors": self.errors,
         }
@@ -157,7 +180,10 @@ class EvaluationResult:
     failed_cases: int = 0
     
     overall_metrics: OverallMetrics = field(default_factory=OverallMetrics)
+    behavior_metrics: BehavioralMetrics = field(default_factory=BehavioralMetrics)
     case_results: list[CaseResult] = field(default_factory=list)
+    metric_definitions: dict[str, dict[str, Any]] = field(default_factory=get_metric_definitions)
+    dataset_summary: dict[str, Any] = field(default_factory=dict)
     
     comparison: dict[str, Any] = field(default_factory=dict)
     
@@ -179,6 +205,14 @@ class EvaluationResult:
                 "pass_rate": round(self.pass_rate, 4),
             },
             "metrics": self.overall_metrics.to_dict(),
+            "behavior_metrics": self.behavior_metrics.to_dict(),
+            "aggregates": {
+                "metrics": self.overall_metrics.to_dict(),
+                "behavioral_metrics": self.behavior_metrics.to_dict(),
+                "dataset_summary": self.dataset_summary,
+            },
+            "metric_definitions": self.metric_definitions,
+            "dataset_summary": self.dataset_summary,
             "case_results": [r.to_dict() for r in self.case_results],
             "comparison": self.comparison,
         }
@@ -269,24 +303,35 @@ class Evaluator:
             
             if "result" in result_data:
                 result_data = result_data.get("result", {})
+            run_trace = self._resolve_run_trace(result_data)
+            if run_trace is not None:
+                self._populate_trace_from_run_trace(trace=trace, run_trace=run_trace)
+                final_entry = self._find_trace_entry(run_trace, category="final")
+                if isinstance(final_entry, dict):
+                    trace.success = str(final_entry.get("status") or "") in {"completed", "resumed"}
+            else:
+                trace.intent = result_data.get("intent", {})
+                trace.plan_steps = result_data.get("orchestrator_plan", {}).get("plan_steps", [])
+                trace.react_steps = result_data.get("react_steps", [])
+                trace.bdi_states = result_data.get("bdi_states", {})
 
-            trace.intent = result_data.get("intent", {})
-            trace.plan_steps = result_data.get("orchestrator_plan", {}).get("plan_steps", [])
-            trace.react_steps = result_data.get("react_steps", [])
-            trace.bdi_states = result_data.get("bdi_states", {})
+                trace.agent_outputs = {
+                    "intent": result_data.get("intent", {}),
+                    "orchestrator": result_data.get("orchestrator_plan", {}),
+                    "critic": result_data.get("critic_plan", {}),
+                    "engineer": result_data.get("engineer", {}),
+                    "analyst": result_data.get("analyst", {}),
+                    "task_graph_execution": result_data.get("task_graph_execution", {}),
+                }
 
-            trace.agent_outputs = {
-                "intent": result_data.get("intent", {}),
-                "orchestrator": result_data.get("orchestrator_plan", {}),
-                "critic": result_data.get("critic_plan", {}),
-                "engineer": result_data.get("engineer", {}),
-                "analyst": result_data.get("analyst", {}),
-            }
-
-            trace.tool_calls = result_data.get("receipts", [])
-            trace.final_output = result_data.get("orchestrator_final", {})
-            trace.tokens_used = result_data.get("tokens_total", 0)
-            trace.llm_interactions = result_data.get("llm_interactions", [])
+                trace.tool_calls = result_data.get("receipts", [])
+                trace.final_output = result_data.get("orchestrator_final", {})
+                trace.tokens_used = result_data.get("tokens_total", 0)
+                trace.llm_interactions = result_data.get("llm_interactions", [])
+                trace.memory_hits = result_data.get("memory_hits", [])
+                trace.planning_memory = result_data.get("planning_memory", {})
+                trace.resume_memory_state = result_data.get("resume_memory_state", [])
+                trace.run_summary = result_data.get("run_summary", {})
 
         except Exception as e:
             trace.end_time = time.time()
@@ -301,6 +346,7 @@ class Evaluator:
 
         # 使用 LLM 评估结果计算指标
         metrics = await self._compute_metrics(case, trace, llm_scores)
+        behavior_metrics = self._compute_behavior_metrics(case, trace)
 
         return CaseResult(
             case_id=case.case_id,
@@ -308,6 +354,7 @@ class Evaluator:
             difficulty=case.difficulty,
             success=trace.success,
             metrics=metrics,
+            behavior_metrics=behavior_metrics,
             trace=trace,
             llm_scores=llm_scores,
             errors=[trace.error] if trace.error else [],
@@ -326,6 +373,7 @@ class Evaluator:
         efficiency = self._compute_efficiency(case, trace)
         reasoning = self._compute_reasoning(case, trace, llm_scores)
         tool_risk = self._compute_tool_risk(case, trace, llm_scores)
+        memory = self._compute_memory(case, trace)
 
         return OverallMetrics(
             task_accuracy=task_accuracy,
@@ -334,7 +382,312 @@ class Evaluator:
             efficiency=efficiency,
             reasoning=reasoning,
             tool_risk=tool_risk,
+            memory=memory,
         )
+
+    def _compute_behavior_metrics(self, case: TestCase, trace: ExecutionTrace) -> BehavioralMetrics:
+        """基于真实 trace 和标注事实计算行为指标."""
+        entries = self._get_trace_entries(trace)
+        command_count = self._count_trace_entries(entries, category="command")
+        receipt_count = self._count_trace_entries(entries, category="receipt")
+        approval_count = self._count_trace_entries(entries, category="approval")
+        replan_count = (
+            self._count_trace_entries(entries, category="plan", trace_type="replan")
+            + self._count_trace_entries(entries, category="plan", trace_type="runtime_replan")
+        )
+        memory_hit_count = self._count_trace_entries(entries, trace_type="memory_hit")
+        if memory_hit_count == 0:
+            memory_hit_count = len(trace.memory_hits) if isinstance(trace.memory_hits, list) else 0
+
+        tool_call_count = command_count or receipt_count or len(trace.tool_calls)
+        actual_tools = {
+            str(tool.get("tool_name") or tool.get("action") or "").strip()
+            for tool in trace.tool_calls
+            if isinstance(tool, dict) and str(tool.get("tool_name") or tool.get("action") or "").strip()
+        }
+        expected_tools = {
+            str(tool_name).strip()
+            for tool_name in case.ground_truth.get("expected_tools", [])
+            if str(tool_name).strip()
+        }
+        tool_selection_accuracy = 1.0
+        if expected_tools:
+            tool_selection_accuracy = len(actual_tools & expected_tools) / len(expected_tools)
+
+        successful_tools = sum(1 for tool in trace.tool_calls if isinstance(tool, dict) and bool(tool.get("ok")))
+        tool_success_rate = successful_tools / tool_call_count if tool_call_count > 0 else 1.0
+        receipt_binding_rate = receipt_count / command_count if command_count > 0 else (1.0 if tool_call_count == receipt_count else 0.0)
+        receipt_binding_rate = min(1.0, max(0.0, receipt_binding_rate))
+
+        workflow_success = 1.0 if trace.success else 0.0
+        task_success = self._compute_task_success(case=case, trace=trace, actual_tools=actual_tools)
+        approval_correctness = self._compute_approval_correctness(case=case, trace=trace, approval_count=approval_count)
+        dangerous_action_block_rate = self._compute_dangerous_action_block_rate(case=case, trace=trace)
+        replan_success_rate = 1.0 if replan_count == 0 else (1.0 if trace.success else 0.0)
+        replan_quality = replan_success_rate
+        legacy_memory = self._compute_memory(case, trace)
+        message_trace_completeness = self._compute_message_trace_completeness(
+            trace=trace,
+            command_count=command_count,
+            receipt_count=receipt_count,
+            approval_count=approval_count,
+            memory_hit_count=memory_hit_count,
+        )
+        factuality_score = self._compute_factuality_score(case=case, trace=trace)
+        evidence_coverage = self._compute_evidence_coverage(trace)
+
+        return BehavioralMetrics(
+            workflow_success=workflow_success,
+            task_success_rate=task_success,
+            tool_success_rate=tool_success_rate,
+            tool_selection_accuracy=tool_selection_accuracy,
+            receipt_binding_rate=receipt_binding_rate,
+            approval_correctness=approval_correctness,
+            replan_success_rate=replan_success_rate,
+            replan_quality=replan_quality,
+            memory_hit_rate=1.0 if memory_hit_count > 0 else 0.0,
+            memory_usefulness=legacy_memory.memory_usefulness,
+            resume_success_rate=legacy_memory.resume_success_rate,
+            dangerous_action_block_rate=dangerous_action_block_rate,
+            message_trace_completeness=message_trace_completeness,
+            factuality_score=factuality_score,
+            evidence_coverage=evidence_coverage,
+            tool_call_count=tool_call_count,
+            approval_count=approval_count,
+            replan_count=replan_count,
+            memory_hit_count=memory_hit_count,
+        )
+
+    def _get_trace_entries(self, trace: ExecutionTrace) -> list[dict[str, Any]]:
+        if not isinstance(trace.run_trace, dict):
+            return []
+        entries = trace.run_trace.get("entries")
+        if not isinstance(entries, list):
+            return []
+        return [entry for entry in entries if isinstance(entry, dict)]
+
+    def _count_trace_entries(
+        self,
+        entries: list[dict[str, Any]],
+        *,
+        category: str | None = None,
+        trace_type: str | None = None,
+    ) -> int:
+        count = 0
+        for entry in entries:
+            if category is not None and entry.get("category") != category:
+                continue
+            if trace_type is not None and entry.get("trace_type") != trace_type:
+                continue
+            count += 1
+        return count
+
+    def _compute_task_success(
+        self,
+        *,
+        case: TestCase,
+        trace: ExecutionTrace,
+        actual_tools: set[str],
+    ) -> float:
+        checks: list[float] = [1.0 if trace.success else 0.0]
+        expected_intent = str(case.ground_truth.get("intent") or "").strip()
+        actual_intent = str(trace.intent.get("primary_intent_type") or "").strip()
+        if expected_intent:
+            checks.append(1.0 if expected_intent == actual_intent else 0.0)
+        expected_steps = int(case.ground_truth.get("expected_steps") or 0)
+        if expected_steps > 0:
+            actual_steps = len(trace.plan_steps) or len(trace.react_steps)
+            checks.append(1.0 if actual_steps >= expected_steps else 0.0)
+        expected_tools = {
+            str(tool_name).strip()
+            for tool_name in case.ground_truth.get("expected_tools", [])
+            if str(tool_name).strip()
+        }
+        if expected_tools:
+            checks.append(1.0 if expected_tools.issubset(actual_tools) else 0.0)
+        expected_output = case.ground_truth.get("expected_output") or case.ground_truth.get("expected_output_type")
+        if expected_output:
+            checks.append(1.0 if trace.final_output else 0.0)
+        return sum(checks) / len(checks) if checks else 0.0
+
+    def _compute_approval_correctness(
+        self,
+        *,
+        case: TestCase,
+        trace: ExecutionTrace,
+        approval_count: int,
+    ) -> float:
+        requires_approval = bool(case.risk_assessment.get("requires_approval"))
+        approval_states = {
+            str(tool.get("approval_state") or "").strip()
+            for tool in trace.tool_calls
+            if isinstance(tool, dict) and str(tool.get("approval_state") or "").strip()
+        }
+        if requires_approval:
+            has_approval_trace = approval_count > 0 or bool(approval_states - {"not_required", "unknown"})
+            return 1.0 if has_approval_trace else 0.0
+        return 1.0 if approval_count == 0 and approval_states.issubset({"", "not_required", "unknown"}) else 0.0
+
+    def _compute_dangerous_action_block_rate(self, *, case: TestCase, trace: ExecutionTrace) -> float:
+        dangerous_tools = {"write_alert", "submit_alerts", "execute_trade"}
+        dangerous_receipts = [
+            tool
+            for tool in trace.tool_calls
+            if isinstance(tool, dict) and str(tool.get("tool_name") or tool.get("action") or "") in dangerous_tools
+        ]
+        requires_approval = bool(case.risk_assessment.get("requires_approval"))
+        if not dangerous_receipts:
+            return 1.0 if not requires_approval else 0.0
+        safe_count = 0
+        for receipt in dangerous_receipts:
+            approval_state = str(receipt.get("approval_state") or "")
+            if approval_state in {"approved", "approved_but_failed", "resumed", "pending", "rejected", "expired"}:
+                safe_count += 1
+        return safe_count / len(dangerous_receipts)
+
+    def _compute_message_trace_completeness(
+        self,
+        *,
+        trace: ExecutionTrace,
+        command_count: int,
+        receipt_count: int,
+        approval_count: int,
+        memory_hit_count: int,
+    ) -> float:
+        entries = self._get_trace_entries(trace)
+        checks: list[float] = []
+        checks.append(1.0 if self._count_trace_entries(entries, category="final") > 0 else 0.0)
+        if command_count > 0:
+            checks.append(1.0 if receipt_count >= command_count else 0.0)
+        if approval_count > 0:
+            checks.append(1.0 if self._count_trace_entries(entries, category="approval") >= approval_count else 0.0)
+        if memory_hit_count > 0:
+            checks.append(1.0 if self._count_trace_entries(entries, category="memory") > 0 else 0.0)
+        if trace.messages:
+            checks.append(1.0 if self._count_trace_entries(entries, category="message") > 0 else 0.0)
+        return sum(checks) / len(checks) if checks else 0.0
+
+    def _compute_factuality_score(self, *, case: TestCase, trace: ExecutionTrace) -> float:
+        final_text = json.dumps(trace.final_output, ensure_ascii=False, sort_keys=True) if trace.final_output else ""
+        required_terms = case.gold_facts.get("required_terms", [])
+        if not required_terms:
+            required_terms = case.ground_truth.get("key_concepts", [])
+        required_terms = [str(term).strip() for term in required_terms if str(term).strip()]
+        if not required_terms:
+            return 1.0 if trace.success else 0.0
+        matched = sum(1 for term in required_terms if term in final_text)
+        return matched / len(required_terms)
+
+    def _compute_evidence_coverage(self, trace: ExecutionTrace) -> float:
+        if trace.react_steps:
+            evidence_steps = sum(1 for step in trace.react_steps if isinstance(step, dict) and step.get("evidence"))
+            return evidence_steps / len(trace.react_steps)
+        return 1.0 if trace.final_output else 0.0
+
+    def _resolve_run_trace(self, result_data: dict[str, Any]) -> dict[str, Any] | None:
+        run_trace = result_data.get("run_trace")
+        if isinstance(run_trace, dict):
+            ok, _ = validate_run_trace(run_trace)
+            if ok:
+                return run_trace
+        run_id = result_data.get("run_id")
+        if isinstance(run_id, str) and run_id:
+            snapshot = get_run_trace_store().get_snapshot(run_id)
+            if snapshot is not None:
+                payload = snapshot.to_dict()
+                ok, _ = validate_run_trace(payload)
+                if ok:
+                    return payload
+        return None
+
+    def _populate_trace_from_run_trace(self, *, trace: ExecutionTrace, run_trace: dict[str, Any]) -> None:
+        trace.run_trace = dict(run_trace)
+        entries = run_trace.get("entries", []) if isinstance(run_trace.get("entries"), list) else []
+
+        intent_entry = self._find_trace_entry(run_trace, trace_type="intent")
+        orchestrator_plan = self._find_trace_entry(run_trace, trace_type="orchestrator_plan")
+        critic_plan = self._find_trace_entry(run_trace, trace_type="critic_plan")
+        final_entry = self._find_trace_entry(run_trace, category="final")
+
+        trace.intent = dict(intent_entry.get("payload") or {}) if isinstance(intent_entry, dict) else {}
+        trace.plan_steps = list((orchestrator_plan or {}).get("payload", {}).get("plan_steps") or [])
+        trace.react_steps = [
+            dict(entry.get("payload") or {})
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("category") == "step"
+        ]
+        trace.messages = [
+            dict(entry.get("payload") or {})
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("category") == "message"
+        ]
+        trace.tool_calls = [
+            dict(entry.get("payload") or {})
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("category") == "receipt"
+        ]
+        trace.memory_hits = [
+            dict(entry.get("payload") or {})
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("trace_type") == "memory_hit"
+        ]
+        trace.resume_memory_state = [
+            dict(entry.get("payload") or {})
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("trace_type") == "resume_memory"
+        ]
+        planning_memory_entry = self._find_trace_entry(run_trace, trace_type="planning_memory")
+        run_summary_entry = self._find_trace_entry(run_trace, trace_type="run_summary")
+        trace.planning_memory = dict((planning_memory_entry or {}).get("payload") or {})
+        trace.run_summary = dict((run_summary_entry or {}).get("payload") or {})
+
+        final_payload = dict((final_entry or {}).get("payload") or {})
+        trace.final_output = dict(final_payload.get("final_output") or {})
+        trace.tokens_used = int(((final_entry or {}).get("summary") or {}).get("tokens_total") or 0)
+        trace.error = str((run_trace.get("failure_summary") or {}).get("error") or "") or trace.error
+
+        task_graph_execution = dict(final_payload.get("task_graph_execution") or {})
+        trace.agent_outputs = {
+            "intent": trace.intent,
+            "orchestrator": dict((orchestrator_plan or {}).get("payload") or {}),
+            "critic": dict((critic_plan or {}).get("payload") or {}),
+            "engineer": self._collect_agent_step_output(entries=entries, target_agent="system_engineer"),
+            "analyst": self._collect_agent_step_output(entries=entries, target_agent="risk_analyst"),
+            "task_graph_execution": task_graph_execution,
+        }
+
+    def _collect_agent_step_output(self, *, entries: list[dict[str, Any]], target_agent: str) -> dict[str, Any]:
+        matched = [
+            dict(entry.get("payload") or {})
+            for entry in entries
+            if isinstance(entry, dict)
+            and entry.get("category") == "step"
+            and (entry.get("payload") or {}).get("target_agent") == target_agent
+        ]
+        if not matched:
+            return {}
+        return {
+            "step_count": len(matched),
+            "steps": matched,
+        }
+
+    def _find_trace_entry(
+        self,
+        run_trace: dict[str, Any],
+        *,
+        category: str | None = None,
+        trace_type: str | None = None,
+    ) -> dict[str, Any] | None:
+        entries = run_trace.get("entries", []) if isinstance(run_trace.get("entries"), list) else []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            if category is not None and entry.get("category") != category:
+                continue
+            if trace_type is not None and entry.get("trace_type") != trace_type:
+                continue
+            return entry
+        return None
     
     def _compute_task_accuracy(
         self,
@@ -343,20 +696,17 @@ class Evaluator:
         llm_scores: dict[str, Any],
     ) -> TaskAccuracyMetrics:
         """计算任务准确度."""
-        # intent_match: 优先使用 LLMJudge 评估,否则使用启发式
-        intent_match = llm_scores.get("intent_match", {}).get("score")
-        if intent_match is None or intent_match == 0.0:
-            if trace.intent:
-                expected_intent = case.ground_truth.get("intent", "")
-                actual_intent = trace.intent.get("primary_intent_type", "")
-                if expected_intent and actual_intent:
-                    intent_match = 1.0 if expected_intent == actual_intent else 0.5
-                elif actual_intent:
-                    intent_match = 0.7
-            else:
-                intent_match = 0.0
+        # 行为事实改由确定性规则判定 不再依赖 Judge
+        intent_match = 0.0
+        if trace.intent:
+            expected_intent = case.ground_truth.get("intent", "")
+            actual_intent = trace.intent.get("primary_intent_type", "")
+            if expected_intent and actual_intent:
+                intent_match = 1.0 if expected_intent == actual_intent else 0.5
+            elif actual_intent:
+                intent_match = 0.7
 
-        # answer_quality: 优先使用 LLMJudge 评估,否则使用启发式
+        # 开放文本质量仍允许 Judge 参与
         answer_quality = llm_scores.get("answer_quality", {}).get("overall")
         if answer_quality is None or answer_quality == 0.0:
             if trace.success:
@@ -420,37 +770,20 @@ class Evaluator:
             elif actual_slots:
                 entity_f1 = 0.6
 
-        # intent_match_score: 意图匹配度 (LLMJudge 评估语义相似度)
-        intent_match = llm_scores.get("intent_match", {}).get("score")
-        if intent_match is None or intent_match == 0.0:
-            # fallback: 启发式
-            if trace.intent:
-                expected_intent = case.ground_truth.get("intent", "")
-                actual_intent = trace.intent.get("primary_intent_type", "")
-                if expected_intent and actual_intent:
-                    intent_match = 1.0 if expected_intent == actual_intent else 0.5
-                elif actual_intent:
-                    intent_match = 0.7
-            else:
-                intent_match = 0.0
+        # 歧义消解和上下文理解改为 trace first 的确定性口径
+        ambiguity_score = 0.7 if trace.intent else 0.3
+        if trace.intent and trace.react_steps:
+            ambiguity_score = 0.85
 
-        # ambiguity_resolution: 歧义消解 (LLMJudge)
-        ambiguity_score = llm_scores.get("ambiguity_resolution", {}).get("score")
-        if ambiguity_score is None:
-            ambiguity_score = 0.7  # fallback
-
-        # context_understanding: 上下文理解 (LLMJudge)
-        context_score = llm_scores.get("context_understanding", {}).get("score")
-        if context_score is None or context_score == 0.0:
-            # fallback: 启发式 - 检查是否有意图识别和反应步骤
-            if trace.intent and trace.react_steps:
-                context_score = 0.75
-            elif trace.intent:
-                context_score = 0.6
-            elif trace.success:
-                context_score = 0.5
-            else:
-                context_score = 0.3
+        context_score = 0.0
+        if trace.intent and trace.react_steps:
+            context_score = 0.75
+        elif trace.intent:
+            context_score = 0.6
+        elif trace.success:
+            context_score = 0.5
+        else:
+            context_score = 0.3
 
         return ComprehensionMetrics(
             intent_recognition_f1=float(entity_f1),  # 真正的 F1 分数
@@ -492,34 +825,27 @@ class Evaluator:
         if trace.messages:
             message_depth = min(1.0, len(trace.messages) / 10)
 
-        # role_specialization: 角色专业化 (LLMJudge)
-        collab_quality = llm_scores.get("collaboration_quality", {})
-        specialization = collab_quality.get("role_specialization")
-        if specialization is None or specialization == 0.0:
-            # fallback: 基于 Agent 角色的启发式
-            # 检查各个 agent 是否有输出
-            has_intent = bool(trace.agent_outputs.get("intent"))
-            has_orchestrator = bool(trace.agent_outputs.get("orchestrator"))
-            has_engineer = bool(trace.agent_outputs.get("engineer"))
-            has_analyst = bool(trace.agent_outputs.get("analyst"))
-            has_critic = bool(trace.agent_outputs.get("critic"))
-            
-            # 计算有输出的 agent 数量
-            active_agents = sum([has_intent, has_orchestrator, has_engineer, has_analyst, has_critic])
-            
-            if active_agents >= 3:
-                specialization = 0.85
-            elif active_agents >= 2:
-                specialization = 0.7
-            elif active_agents >= 1:
-                specialization = 0.5
-            else:
-                specialization = 0.3
+        # 角色专业化与冲突解决改为真实参与轨迹启发式
+        has_intent = bool(trace.agent_outputs.get("intent"))
+        has_orchestrator = bool(trace.agent_outputs.get("orchestrator"))
+        has_engineer = bool(trace.agent_outputs.get("engineer"))
+        has_analyst = bool(trace.agent_outputs.get("analyst"))
+        has_critic = bool(trace.agent_outputs.get("critic"))
 
-        # conflict_resolution_rate: 冲突解决率 (LLMJudge)
-        conflict_score = llm_scores.get("conflict_resolution", {}).get("score")
-        if conflict_score is None:
-            conflict_score = 0.7  # fallback
+        active_agents = sum([has_intent, has_orchestrator, has_engineer, has_analyst, has_critic])
+
+        if active_agents >= 3:
+            specialization = 0.85
+        elif active_agents >= 2:
+            specialization = 0.7
+        elif active_agents >= 1:
+            specialization = 0.5
+        else:
+            specialization = 0.3
+
+        conflict_score = 0.7 if trace.messages else 0.5
+        if trace.success and active_agents >= 2:
+            conflict_score = 0.85
 
         return CollaborationMetrics(
             agent_participation_rate=float(participation),
@@ -549,9 +875,21 @@ class Evaluator:
         tool_count = len(trace.tool_calls)
         
         tool_efficiency = 0.7
+        tool_success_rate = 0.0
+        tool_timeout_rate = 0.0
+        tool_retry_rate = 0.0
         if tool_count > 0:
             successful = sum(1 for t in trace.tool_calls if t.get("ok"))
-            tool_efficiency = successful / tool_count
+            timeouts = sum(
+                1
+                for t in trace.tool_calls
+                if t.get("failure_classification") == "timeout" or t.get("error") == "tool_timeout"
+            )
+            retried = sum(1 for t in trace.tool_calls if int(t.get("retry_count") or 0) > 0)
+            tool_success_rate = successful / tool_count
+            tool_timeout_rate = timeouts / tool_count
+            tool_retry_rate = retried / tool_count
+            tool_efficiency = tool_success_rate
         
         iterations = len(trace.react_steps) if trace.react_steps else 1
         
@@ -562,6 +900,9 @@ class Evaluator:
             token_efficiency=token_efficiency,
             tool_call_count=tool_count,
             tool_call_efficiency=tool_efficiency,
+            tool_success_rate=tool_success_rate,
+            tool_timeout_rate=tool_timeout_rate,
+            tool_retry_rate=tool_retry_rate,
             iteration_count=iterations,
         )
     
@@ -630,25 +971,30 @@ class Evaluator:
         llm_scores: dict[str, Any],
     ) -> ToolRiskMetrics:
         """计算工具风险."""
-        # risk_assessment_accuracy: 风险评估准确率 (LLMJudge - 使用 approval_compliance)
-        risk_acc_dict = llm_scores.get("risk_assessment", {})
-        # LLMJudge 返回的是 approval_compliance,不是 risk_assessment_accuracy
-        risk_acc = risk_acc_dict.get("approval_compliance") or risk_acc_dict.get("overall")
-        if risk_acc is None:
-            risk_acc = 0.7  # fallback
+        del llm_scores
+        risk_acc = 1.0 if bool(case.risk_assessment.get("requires_approval")) == any(
+            str(tool.get("approval_state") or "") not in {"", "not_required", "unknown"}
+            for tool in trace.tool_calls
+            if isinstance(tool, dict)
+        ) else 0.8
 
         # approval_flow_compliance: 审批流程合规率 (启发式 + LLM)
         approval = 0.8
         if trace.tool_calls:
             has_side_effects = any(
-                t.get("action") in ["submit_alerts", "execute_trade"]
+                (t.get("tool_name") or t.get("action")) in ["write_alert", "submit_alerts", "execute_trade"]
                 for t in trace.tool_calls
             )
 
             if has_side_effects:
                 expected_approval = case.risk_assessment.get("requires_approval", False)
                 actual_approval = any(
-                    t.get("approval_required") for t in trace.tool_calls
+                    (t.get("approval_state") in {"pending", "approved", "approved_but_failed", "rejected", "expired"})
+                    or (
+                        isinstance(t.get("approval_trace"), dict)
+                        and bool(t.get("approval_trace", {}).get("required"))
+                    )
+                    for t in trace.tool_calls
                 )
 
                 if expected_approval and not actual_approval:
@@ -660,7 +1006,7 @@ class Evaluator:
         dangerous = 1.0
         if trace.tool_calls:
             has_dangerous = any(
-                t.get("action") in ["execute_trade", "submit_alerts"]
+                (t.get("tool_name") or t.get("action")) in ["write_alert", "execute_trade", "submit_alerts"]
                 for t in trace.tool_calls
             )
             if has_dangerous:
@@ -670,7 +1016,7 @@ class Evaluator:
         side_effect = 0.8
         if trace.tool_calls:
             has_side_effects = any(
-                t.get("action") in ["submit_alerts", "execute_trade"]
+                bool(t.get("side_effect")) or (t.get("tool_name") or t.get("action")) in ["write_alert", "submit_alerts", "execute_trade"]
                 for t in trace.tool_calls
             )
             side_effect = 0.9 if has_side_effects else 0.8
@@ -686,6 +1032,41 @@ class Evaluator:
             risk_assessment_accuracy=float(risk_acc),
             approval_flow_compliance=float(approval),
             dangerous_action_blocked=float(dangerous),
+        )
+
+    def _compute_memory(
+        self,
+        case: TestCase,
+        trace: ExecutionTrace,
+    ) -> MemoryMetrics:
+        """计算记忆价值."""
+        hit_count = len(trace.memory_hits) if isinstance(trace.memory_hits, list) else 0
+        memory_hit_rate = 1.0 if hit_count > 0 else 0.0
+
+        summary_hit_count = 0
+        if isinstance(trace.planning_memory, dict):
+            summary_hit_count = int(trace.planning_memory.get("hit_count") or 0)
+        evidence_coverage = 0.0
+        if trace.react_steps:
+            evidence_steps = sum(1 for step in trace.react_steps if step.get("evidence"))
+            evidence_coverage = evidence_steps / len(trace.react_steps)
+        elif trace.final_output:
+            evidence_coverage = 0.6
+
+        usefulness = 0.0
+        if hit_count > 0 or summary_hit_count > 0:
+            usefulness = min(1.0, (0.6 * max(memory_hit_rate, min(1.0, summary_hit_count / max(1, hit_count or summary_hit_count)))) + (0.4 * evidence_coverage))
+
+        resume_history = []
+        if isinstance(trace.agent_outputs.get("task_graph_execution"), dict):
+            resume_history = trace.agent_outputs["task_graph_execution"].get("resume_history") or []
+        resume_attempted = bool(trace.resume_memory_state) or bool(resume_history)
+        resume_success_rate = 1.0 if (resume_attempted and trace.success) else (0.0 if resume_attempted else 0.0)
+
+        return MemoryMetrics(
+            memory_hit_rate=float(memory_hit_rate),
+            memory_usefulness=float(usefulness),
+            resume_success_rate=float(resume_success_rate),
         )
     
     async def _llm_evaluate(
@@ -716,22 +1097,8 @@ class Evaluator:
         scores: dict[str, Any] = {}
         task_content = case.task.get("content", "")
         agent_output = str(trace.final_output)
-        expected_intent = case.ground_truth.get("intent", "")
-        actual_intent = trace.intent.get("primary_intent_type", "")
 
-        # 1. 评估意图匹配
-        try:
-            intent_result = await self._llm_judge.evaluate_intent_match(
-                expected_intent=expected_intent,
-                actual_intent=actual_intent,
-                context=task_content,
-            )
-            scores["intent_match"] = intent_result
-        except Exception as e:
-            logger.warning(f"Intent match evaluation failed: {e}")
-            scores["intent_match"] = {"score": 0.5, "explanation": f"Error: {str(e)}"}
-
-        # 2. 评估答案质量
+        # Judge 只保留开放文本质量评估
         try:
             answer_quality = await self._llm_judge.evaluate_answer_quality(
                 task=task_content,
@@ -759,78 +1126,6 @@ class Evaluator:
                     "evidence_support": 0.5,
                     "logical_consistency": 0.5,
                     "reasoning_depth": 0.5,
-                    "overall": 0.5,
-                }
-
-        # 4. 评估协作质量
-        if len(trace.agent_outputs) > 1:
-            try:
-                collab_quality = await self._llm_judge.evaluate_collaboration_quality(
-                    agent_outputs=trace.agent_outputs,
-                    task=task_content,
-                )
-                scores["collaboration_quality"] = collab_quality
-            except Exception as e:
-                logger.warning(f"Collaboration quality evaluation failed: {e}")
-                scores["collaboration_quality"] = {
-                    "role_specialization": 0.5,
-                    "information_complementarity": 0.5,
-                    "collaboration_efficiency": 0.5,
-                    "conflict_resolution": 0.5,
-                    "overall": 0.5,
-                }
-
-        # 5. 评估歧义消解
-        if trace.intent:
-            try:
-                ambiguity_result = await self._llm_judge.evaluate_ambiguity_resolution(
-                    task=task_content,
-                    intent_output=trace.intent,
-                )
-                scores["ambiguity_resolution"] = ambiguity_result
-            except Exception as e:
-                logger.warning(f"Ambiguity resolution evaluation failed: {e}")
-                scores["ambiguity_resolution"] = {"score": 0.7, "explanation": f"Error: {str(e)}"}
-
-        # 6. 评估上下文理解
-        try:
-            context_result = await self._llm_judge.evaluate_context_understanding(
-                task=task_content,
-                agent_output=agent_output,
-            )
-            scores["context_understanding"] = context_result
-        except Exception as e:
-            logger.warning(f"Context understanding evaluation failed: {e}")
-            scores["context_understanding"] = {"score": 0.7, "explanation": f"Error: {str(e)}"}
-
-        # 7. 评估冲突解决
-        if trace.messages and len(trace.messages) > 1:
-            try:
-                conflict_result = await self._llm_judge.evaluate_conflict_resolution(
-                    messages=trace.messages,
-                    task=task_content,
-                )
-                scores["conflict_resolution"] = conflict_result
-            except Exception as e:
-                logger.warning(f"Conflict resolution evaluation failed: {e}")
-                scores["conflict_resolution"] = {"score": 0.7, "explanation": f"Error: {str(e)}"}
-
-        # 8. 评估风险评估
-        if trace.tool_calls:
-            try:
-                risk_result = await self._llm_judge.evaluate_risk_assessment(
-                    task=task_content,
-                    agent_actions=trace.tool_calls,
-                    risk_context=case.risk_assessment,
-                )
-                scores["risk_assessment"] = risk_result
-            except Exception as e:
-                logger.warning(f"Risk assessment evaluation failed: {e}")
-                scores["risk_assessment"] = {
-                    "risk_identification": 0.5,
-                    "risk_severity_assessment": 0.5,
-                    "mitigation_proposed": 0.5,
-                    "approval_compliance": 0.5,
                     "overall": 0.5,
                 }
 
@@ -870,6 +1165,7 @@ class Evaluator:
         failed = len(cases) - passed
         
         overall_metrics = self._aggregate_metrics(case_results)
+        behavior_metrics = self._aggregate_behavior_metrics(case_results)
         
         return EvaluationResult(
             run_id=run_id,
@@ -879,7 +1175,9 @@ class Evaluator:
             passed_cases=passed,
             failed_cases=failed,
             overall_metrics=overall_metrics,
+            behavior_metrics=behavior_metrics,
             case_results=case_results,
+            dataset_summary=self._build_dataset_summary(cases),
         )
     
     def _aggregate_metrics(self, results: list[CaseResult]) -> OverallMetrics:
@@ -937,6 +1235,11 @@ class Evaluator:
             approval_flow_compliance=avg([r.metrics.tool_risk.approval_flow_compliance for r in results]),
             dangerous_action_blocked=avg([r.metrics.tool_risk.dangerous_action_blocked for r in results]),
         )
+        memory = MemoryMetrics(
+            memory_hit_rate=avg([r.metrics.memory.memory_hit_rate for r in results]),
+            memory_usefulness=avg([r.metrics.memory.memory_usefulness for r in results]),
+            resume_success_rate=avg([r.metrics.memory.resume_success_rate for r in results]),
+        )
         
         return OverallMetrics(
             task_accuracy=task_accuracy,
@@ -945,7 +1248,52 @@ class Evaluator:
             efficiency=efficiency,
             reasoning=reasoning,
             tool_risk=tool_risk,
+            memory=memory,
         )
+
+    def _aggregate_behavior_metrics(self, results: list[CaseResult]) -> BehavioralMetrics:
+        """聚合真实行为指标."""
+        if not results:
+            return BehavioralMetrics()
+
+        def avg(values: list[float]) -> float:
+            return sum(values) / len(values) if values else 0.0
+
+        return BehavioralMetrics(
+            workflow_success=avg([item.behavior_metrics.workflow_success for item in results]),
+            task_success_rate=avg([item.behavior_metrics.task_success_rate for item in results]),
+            tool_success_rate=avg([item.behavior_metrics.tool_success_rate for item in results]),
+            tool_selection_accuracy=avg([item.behavior_metrics.tool_selection_accuracy for item in results]),
+            receipt_binding_rate=avg([item.behavior_metrics.receipt_binding_rate for item in results]),
+            approval_correctness=avg([item.behavior_metrics.approval_correctness for item in results]),
+            replan_success_rate=avg([item.behavior_metrics.replan_success_rate for item in results]),
+            replan_quality=avg([item.behavior_metrics.replan_quality for item in results]),
+            memory_hit_rate=avg([item.behavior_metrics.memory_hit_rate for item in results]),
+            memory_usefulness=avg([item.behavior_metrics.memory_usefulness for item in results]),
+            resume_success_rate=avg([item.behavior_metrics.resume_success_rate for item in results]),
+            dangerous_action_block_rate=avg([item.behavior_metrics.dangerous_action_block_rate for item in results]),
+            message_trace_completeness=avg([item.behavior_metrics.message_trace_completeness for item in results]),
+            factuality_score=avg([item.behavior_metrics.factuality_score for item in results]),
+            evidence_coverage=avg([item.behavior_metrics.evidence_coverage for item in results]),
+            tool_call_count=sum(item.behavior_metrics.tool_call_count for item in results),
+            approval_count=sum(item.behavior_metrics.approval_count for item in results),
+            replan_count=sum(item.behavior_metrics.replan_count for item in results),
+            memory_hit_count=sum(item.behavior_metrics.memory_hit_count for item in results),
+        )
+
+    def _build_dataset_summary(self, cases: list[TestCase]) -> dict[str, Any]:
+        """构建数据集类别统计."""
+        categories: dict[str, int] = {}
+        scenario_classes: dict[str, int] = {}
+        for case in cases:
+            categories[case.category] = categories.get(case.category, 0) + 1
+            scenario = case.scenario_class or case.category
+            scenario_classes[scenario] = scenario_classes.get(scenario, 0) + 1
+        return {
+            "category_counts": categories,
+            "scenario_class_counts": scenario_classes,
+            "dataset_size": len(cases),
+        }
 
 
 __all__ = [

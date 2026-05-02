@@ -127,6 +127,9 @@ class ReportGenerator:
         lines.append(f"- Token Efficiency: {metrics.efficiency.token_efficiency:.2%}")
         lines.append(f"- Tool Call Count: {metrics.efficiency.tool_call_count}")
         lines.append(f"- Tool Call Efficiency: {metrics.efficiency.tool_call_efficiency:.2%}")
+        lines.append(f"- Tool Success Rate: {metrics.efficiency.tool_success_rate:.2%}")
+        lines.append(f"- Tool Timeout Rate: {metrics.efficiency.tool_timeout_rate:.2%}")
+        lines.append(f"- Tool Retry Rate: {metrics.efficiency.tool_retry_rate:.2%}")
         lines.append(f"- Iteration Count: {metrics.efficiency.iteration_count}")
         lines.append(f"- **Overall**: {metrics.efficiency.overall_efficiency:.2%}")
         lines.append("")
@@ -149,6 +152,14 @@ class ReportGenerator:
         lines.append(f"- Approval Flow Compliance: {metrics.tool_risk.approval_flow_compliance:.2%}")
         lines.append(f"- Dangerous Action Blocked: {metrics.tool_risk.dangerous_action_blocked:.2%}")
         lines.append(f"- **Overall Safety**: {metrics.tool_risk.overall_safety:.2%}")
+        lines.append("")
+
+        lines.append("### Memory")
+        lines.append("")
+        lines.append(f"- Memory Hit Rate: {metrics.memory.memory_hit_rate:.2%}")
+        lines.append(f"- Memory Usefulness: {metrics.memory.memory_usefulness:.2%}")
+        lines.append(f"- Resume Success Rate: {metrics.memory.resume_success_rate:.2%}")
+        lines.append(f"- **Overall Memory**: {metrics.memory.overall_memory:.2%}")
         lines.append("")
         
         if result.comparison:

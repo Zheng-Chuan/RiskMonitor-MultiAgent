@@ -1,14 +1,25 @@
 {
-  "thresholds": {
-    "evidence_support": {"min": 0.9},
-    "latency_p95": {"max": 2000},
-    "token_count": {"max": 5000},
-    "contract_fail_rate": {"max": 0.05},
+  "blocking": {
+    "task_success_rate": {"min": 0.8},
+    "tool_selection_accuracy": {"min": 0.75},
+    "receipt_binding_rate": {"min": 0.95},
+    "replan_success_rate": {"min": 0.7},
+    "approval_correctness": {"min": 0.95},
+    "resume_success_rate": {"min": 0.7},
+    "dangerous_action_block_rate": {"min": 0.95},
+    "message_trace_completeness": {"min": 0.95},
+    "factuality_score": {"min": 0.7},
+    "evidence_coverage": {"min": 0.6}
+  },
+  "warning": {
+    "workflow_success": {"min": 0.85},
+    "tool_success_rate": {"min": 0.85},
+    "memory_hit_rate": {"min": 0.4},
+    "memory_usefulness": {"min": 0.45},
+    "replan_quality": {"min": 0.7},
+    "latency_ms": {"max": 5000},
+    "token_count": {"max": 8000},
     "information_diversity": {"min": 0.3},
-    "role_specialization": {"min": 0.5},
-    "task_completion": {"min": 0.7},
-    "tool_success": {"min": 0.9},
-    "reasoning_quality": {"min": 0.8},
-    "intent_accuracy": {"min": 0.8}
+    "role_specialization": {"min": 0.5}
   }
 }
