@@ -42,12 +42,25 @@ def validate_agent_receipt(rcp: dict[str, Any]) -> tuple[bool, list[str]]:
         errors.append("bad_run_id")
     if not isinstance(rcp.get("command_id"), str) or not rcp["command_id"].strip():
         errors.append("bad_command_id")
+    if not isinstance(rcp.get("tool_name"), str) or not rcp["tool_name"].strip():
+        errors.append("bad_tool_name")
     if not isinstance(rcp.get("ok"), bool):
         errors.append("bad_ok")
     if rcp.get("target_agent") not in {"system_engineer", "risk_analyst", "manager"}:
         errors.append("bad_target_agent")
+    inputs = rcp.get("inputs")
+    if inputs is not None and not isinstance(inputs, dict):
+        errors.append("bad_inputs")
+    status = rcp.get("status")
+    if not isinstance(status, str) or not status.strip():
+        errors.append("bad_status")
     if not isinstance(rcp.get("latency_ms"), (int, float)):
         errors.append("bad_latency_ms")
+    if not isinstance(rcp.get("side_effect"), bool):
+        errors.append("bad_side_effect")
+    approval_state = rcp.get("approval_state")
+    if approval_state is not None and not isinstance(approval_state, str):
+        errors.append("bad_approval_state")
     evidence = rcp.get("evidence")
     if evidence is not None and not isinstance(evidence, dict):
         errors.append("bad_evidence")
@@ -57,6 +70,9 @@ def validate_agent_receipt(rcp: dict[str, Any]) -> tuple[bool, list[str]]:
     error = rcp.get("error")
     if error is not None and not isinstance(error, str):
         errors.append("bad_error")
+    outputs = rcp.get("outputs")
+    if outputs is not None and not isinstance(outputs, dict):
+        errors.append("bad_outputs")
     output = rcp.get("output")
     if output is not None and not isinstance(output, dict):
         errors.append("bad_output")

@@ -4,7 +4,6 @@ import time
 from typing import Any
 
 from riskmonitor_multiagent.data_access.health_checks import check_mysql_ready
-from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore
 from riskmonitor_multiagent.services.prometheus_metrics_service import get_metrics_summary
 
 
@@ -30,6 +29,8 @@ def observe_mysql_health() -> dict[str, Any]:
 def observe_chroma_health() -> dict[str, Any]:
     start = time.monotonic()
     try:
+        from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore
+
         store = ChromaVectorStore()
         _ = store.query_alerts(query_text="health_check", top_k=1)
         ok = True

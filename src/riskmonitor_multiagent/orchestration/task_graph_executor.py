@@ -17,8 +17,12 @@ import time
 from collections.abc import Mapping
 from typing import Any, Awaitable, Callable
 
+from riskmonitor_multiagent.contracts.agent_messages import validate_agent_receipt
 from riskmonitor_multiagent.contracts.task_graph import normalize_task_graph
+from riskmonitor_multiagent.orchestration.tool_executor import execute_agent_command, new_agent_command
+from riskmonitor_multiagent.orchestration.tool_registry import get_tool_meta
 from riskmonitor_multiagent.proactive_agents import ProactiveAgentResult
+from riskmonitor_multiagent.utils.ids import new_command_id, new_run_id
 
 DelegateHandler = Callable[..., Awaitable[ProactiveAgentResult]]
 
@@ -47,6 +51,7 @@ class TaskGraphExecutor:
         completed = self._extract_completed_steps(prior_state)
         node_outputs = self._extract_node_outputs(prior_state)
         delegate_results = self._restore_delegate_results(prior_state)
+        receipts = self._extract_receipts(prior_state)
         execution_trace = list(prior_state.get("trace", [])) if isinstance(prior_state.get("trace"), list) else []
         retry_records = list(prior_state.get("retry_records", [])) if isinstance(prior_state.get("retry_records"), list) else []
         errors = list(prior_state.get("errors", [])) if isinstance(prior_state.get("errors"), list) else []
@@ -129,12 +134,29 @@ class TaskGraphExecutor:
                     node["evidence"] = node_result["evidence"]
                 if "output_ref" in node_result:
                     node["output_ref"] = node_result["output_ref"]
+                if isinstance(node_result.get("command_id"), str) and node_result.get("command_id"):
+                    node["command_id"] = node_result["command_id"]
                 if isinstance(node_result.get("error"), str) and node_result.get("error"):
                     node["last_error"] = node_result["error"]
                 if isinstance(node_result.get("failure_classification"), str) and node_result.get("failure_classification"):
                     node["failure_classification"] = node_result["failure_classification"]
                 if isinstance(node_result.get("retry_records"), list):
                     retry_records.extend(node_result["retry_records"])
+                if isinstance(node_result.get("receipt"), dict):
+                    receipt = dict(node_result["receipt"])
+                    receipts = [
+                        existing
+                        for existing in receipts
+                        if not (
+                            isinstance(existing, dict)
+                            and (
+                                str(existing.get("command_id") or "") == str(receipt.get("command_id") or "")
+                                or str(existing.get("step_id") or "") == step_id
+                            )
+                        )
+                    ]
+                    receipt["step_id"] = step_id
+                    receipts.append(receipt)
 
                 execution_trace.append(
                     {
@@ -142,6 +164,8 @@ class TaskGraphExecutor:
                         "kind": node.get("kind"),
                         "status": node_result["status"],
                         "target_agent": node.get("target_agent"),
+                        "tool_name": node_result.get("tool_name") or node.get("tool_name"),
+                        "command_id": node_result.get("command_id"),
                         "error": node_result.get("error"),
                         "attempt_count": node_result.get("attempt_count", 1),
                         "failure_classification": node_result.get("failure_classification"),
@@ -149,6 +173,7 @@ class TaskGraphExecutor:
                         "finished_at_ms": node_result.get("finished_at_ms"),
                         "latency_ms": node_result.get("latency_ms"),
                         "input_sources": node_result.get("input_sources", []),
+                        "receipt_command_ids": node_result.get("receipt_command_ids", []),
                     }
                 )
 
@@ -178,7 +203,7 @@ class TaskGraphExecutor:
                 break
 
         if not final_output:
-            final_output = self._build_fallback_final_output(task=task, delegate_results=delegate_results)
+            final_output = self._build_fallback_final_output(task=task, delegate_results=delegate_results, receipts=receipts)
 
         return {
             "status": status,
@@ -201,9 +226,11 @@ class TaskGraphExecutor:
                 "retry_records": retry_records,
                 "resume_history": resume_history,
                 "resume_ready": failed_step_id is not None,
+                "receipts": receipts,
                 "trace": execution_trace,
             },
             "delegate_results": delegate_results,
+            "receipts": receipts,
             "final_output": final_output,
         }
 
@@ -327,6 +354,113 @@ class TaskGraphExecutor:
                 "error": None if result.ok else f"delegate_failed:{target_agent}",
             }
 
+        if kind == "tool_call":
+            tool_name = str(node.get("tool_name") or "").strip()
+            if not tool_name:
+                return {
+                    "status": "failed",
+                    "error": "missing_tool_name",
+                    "failure_classification": "validation",
+                }
+
+            meta = get_tool_meta(tool_name)
+            if meta is None:
+                return {
+                    "status": "failed",
+                    "error": f"unknown_tool:{tool_name}",
+                    "failure_classification": "dependency",
+                }
+
+            params = dict(node.get("params")) if isinstance(node.get("params"), dict) else {}
+            target_agent = str(node.get("target_agent") or meta.owner or "").strip()
+            if not target_agent:
+                return {
+                    "status": "failed",
+                    "error": f"missing_target_agent_for_tool:{tool_name}",
+                    "failure_classification": "validation",
+                }
+
+            command_id = str(node.get("command_id") or new_command_id())
+            run_id = task.get("run_id") if isinstance(task.get("run_id"), str) and task.get("run_id") else None
+            if not run_id:
+                run_id = task.get("task_id") if isinstance(task.get("task_id"), str) and task.get("task_id") else new_run_id("task_graph")
+            timeout_ms = node.get("timeout_ms") if isinstance(node.get("timeout_ms"), int) and node.get("timeout_ms") > 0 else meta.default_timeout_ms
+            expected_output_schema = (
+                str(node.get("expected_output_schema"))
+                if isinstance(node.get("expected_output_schema"), str) and node.get("expected_output_schema")
+                else "tool_result.v1"
+            )
+            command = new_agent_command(
+                run_id=str(run_id),
+                command_id=command_id,
+                target_agent=target_agent,
+                action=tool_name,
+                params=params,
+                timeout_ms=int(timeout_ms),
+                expected_output_schema=expected_output_schema,
+            )
+            receipt = execute_agent_command(command)
+            ok_receipt, receipt_errors = validate_agent_receipt(receipt)
+            if not ok_receipt:
+                return {
+                    "status": "failed",
+                    "error": "invalid_tool_receipt",
+                    "failure_classification": "runtime",
+                    "command_id": command_id,
+                    "tool_name": tool_name,
+                    "receipt": {
+                        "schema_version": receipt.get("schema_version"),
+                        "run_id": receipt.get("run_id"),
+                        "command_id": receipt.get("command_id"),
+                        "tool_name": tool_name,
+                        "status": "failed",
+                        "ok": False,
+                        "latency_ms": float(receipt.get("latency_ms") or 0.0),
+                        "error": "invalid_tool_receipt",
+                        "inputs": params,
+                        "outputs": None,
+                        "output": None,
+                        "evidence": {"receipt_errors": receipt_errors},
+                        "artifacts": [],
+                        "target_agent": target_agent,
+                        "side_effect": bool(meta.capability == "side_effect"),
+                        "approval_state": "unknown",
+                    },
+                }
+
+            receipt_command_id = (
+                str(receipt.get("command_id"))
+                if isinstance(receipt.get("command_id"), str) and receipt.get("command_id")
+                else command_id
+            )
+            output_payload = {
+                "tool_name": tool_name,
+                "command_id": receipt_command_id,
+                "summary": f"tool {tool_name} completed cmd:{receipt_command_id}",
+                "receipt_command_ids": [receipt_command_id],
+                "result": receipt.get("outputs"),
+                "approval_state": receipt.get("approval_state"),
+            }
+            error = receipt.get("error")
+            status = "completed" if receipt.get("ok") is True else "failed"
+            failure_classification = None if status == "completed" else self._classify_receipt_error(receipt)
+            return {
+                "status": status,
+                "output": output_payload,
+                "output_ref": command_id,
+                "evidence": {
+                    "task_graph_step_id": step_id,
+                    "receipt_command_ids": [receipt_command_id],
+                    "tool_name": tool_name,
+                },
+                "error": error,
+                "failure_classification": failure_classification,
+                "command_id": receipt_command_id,
+                "tool_name": tool_name,
+                "receipt": receipt,
+                "receipt_command_ids": [receipt_command_id],
+            }
+
         if kind == "finalize":
             final_output = self._build_finalize_output(task=task, node=node, node_outputs=node_outputs)
             return {
@@ -415,6 +549,12 @@ class TaskGraphExecutor:
             if isinstance(step_id, str) and isinstance(payload, dict)
         }
 
+    def _extract_receipts(self, state: dict[str, Any]) -> list[dict[str, Any]]:
+        raw = state.get("receipts")
+        if not isinstance(raw, list):
+            return []
+        return [dict(receipt) for receipt in raw if isinstance(receipt, dict)]
+
     def _restore_delegate_results(self, state: dict[str, Any]) -> dict[str, ProactiveAgentResult]:
         raw = state.get("delegate_outputs")
         if not isinstance(raw, Mapping):
@@ -471,12 +611,18 @@ class TaskGraphExecutor:
     ) -> dict[str, Any]:
         sections: list[str] = []
         sources: list[str] = []
+        receipt_command_ids: list[str] = []
 
         for output_ref, payload in node_outputs.items():
             if not isinstance(payload, dict):
                 continue
             summary = payload.get("summary")
             report = payload.get("report")
+            ids = payload.get("receipt_command_ids")
+            if isinstance(ids, list):
+                for receipt_id in ids:
+                    if isinstance(receipt_id, str) and receipt_id and receipt_id not in receipt_command_ids:
+                        receipt_command_ids.append(receipt_id)
             if isinstance(summary, str) and summary.strip():
                 sections.append(summary.strip())
                 sources.append(output_ref)
@@ -492,6 +638,7 @@ class TaskGraphExecutor:
         return {
             "summary": "\n".join(sections),
             "sources": sources,
+            "receipt_command_ids": receipt_command_ids,
             "finalize_reason": node.get("reason"),
             "task_graph_completed": True,
         }
@@ -501,17 +648,37 @@ class TaskGraphExecutor:
         *,
         task: dict[str, Any],
         delegate_results: dict[str, ProactiveAgentResult],
+        receipts: list[dict[str, Any]],
     ) -> dict[str, Any]:
         node_outputs = {
             name: result.output
             for name, result in delegate_results.items()
             if isinstance(result.output, dict)
         }
+        for receipt in receipts:
+            if not isinstance(receipt, dict):
+                continue
+            command_id = receipt.get("command_id")
+            if isinstance(command_id, str) and command_id:
+                node_outputs[command_id] = {
+                    "summary": f"tool {receipt.get('tool_name')} completed cmd:{command_id}",
+                    "receipt_command_ids": [command_id],
+                }
         return self._build_finalize_output(
             task=task,
             node={"reason": "自动生成最终结论"},
             node_outputs=node_outputs,
         )
+
+    def _classify_receipt_error(self, receipt: dict[str, Any]) -> str:
+        error = str(receipt.get("error") or "")
+        if error in {"approval_required", "approval_reason_required", "rbac_denied", "policy_denied"}:
+            return "permission"
+        if error == "invalid_command":
+            return "validation"
+        if error in {"unknown_action", "handler_missing"}:
+            return "dependency"
+        return "runtime"
 
 
 __all__ = ["TaskGraphExecutor"]

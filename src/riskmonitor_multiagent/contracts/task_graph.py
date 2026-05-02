@@ -85,6 +85,8 @@ def validate_task_graph(graph: dict[str, Any]) -> tuple[bool, list[str]]:
 
         if str(kind) == "delegate" and not is_non_empty_str(node.get("target_agent")):
             errors.append("bad_task_graph_delegate_target_agent")
+        if str(kind) == "tool_call" and not is_non_empty_str(node.get("tool_name")):
+            errors.append("bad_task_graph_tool_name")
 
     edges = graph.get("edges", [])
     if not isinstance(edges, list):
@@ -129,6 +131,8 @@ def build_task_graph_from_plan_steps(plan_steps: list[dict[str, Any]]) -> dict[s
             "target_agent",
             "instruction",
             "tool_name",
+            "command_id",
+            "expected_output_schema",
             "params",
             "condition",
             "replan_from_step_id",
@@ -207,6 +211,8 @@ def normalize_task_graph(graph: dict[str, Any], *, plan_steps: list[dict[str, An
             "target_agent",
             "instruction",
             "tool_name",
+            "command_id",
+            "expected_output_schema",
             "params",
             "condition",
             "replan_from_step_id",

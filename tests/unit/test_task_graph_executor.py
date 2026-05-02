@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from unittest.mock import patch
 from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -179,6 +180,75 @@ def test_task_graph_executor_records_parallel_timeline_for_delegate_branches():
     assert s2.get("finished_at_ms") is not None
     assert s1["started_at_ms"] <= s2["finished_at_ms"]
     assert s2["started_at_ms"] <= s1["finished_at_ms"]
+
+
+def test_task_graph_executor_runs_tool_call_via_tool_executor_and_emits_receipt():
+    executor = TaskGraphExecutor(delegate_handlers={})
+    graph = {
+        "schema_version": "task_graph.v1",
+        "nodes": [
+            {
+                "step_id": "s1",
+                "kind": "tool_call",
+                "reason": "先采集系统指标",
+                "status": "pending",
+                "tool_name": "collect_metrics",
+                "target_agent": "system_engineer",
+                "params": {},
+                "evidence": {"fields": ["task.payload.content"]},
+            },
+            {
+                "step_id": "s2",
+                "parent_id": "s1",
+                "kind": "finalize",
+                "reason": "汇总工具结果",
+                "status": "pending",
+                "evidence": {"fields": ["task.payload.content"]},
+            },
+        ],
+        "edges": [
+            {"from_step_id": "s1", "to_step_id": "s2", "condition": "always"},
+        ],
+    }
+
+    fake_receipt = {
+        "schema_version": "agent_receipt.v1",
+        "run_id": "tg-tool-1",
+        "command_id": "cmd-tool-1",
+        "target_agent": "system_engineer",
+        "tool_name": "collect_metrics",
+        "inputs": {},
+        "outputs": {"action": "collect_metrics", "result": {"cpu": 0.7}},
+        "status": "completed",
+        "ok": True,
+        "latency_ms": 8.5,
+        "evidence": {"action": "collect_metrics"},
+        "artifacts": [{"kind": "tool_result", "action": "collect_metrics"}],
+        "error": None,
+        "output": {"action": "collect_metrics", "result": {"cpu": 0.7}},
+        "side_effect": False,
+        "approval_state": "not_required",
+    }
+
+    with patch(
+        "riskmonitor_multiagent.orchestration.task_graph_executor.execute_agent_command",
+        return_value=fake_receipt,
+    ):
+        result = asyncio.run(
+            executor.execute(
+                task={"task_id": "tg-tool-1", "payload": {"content": "采集系统指标并汇总"}},
+                task_graph=graph,
+            )
+        )
+
+    assert result.get("status") == "completed"
+    receipts = result.get("receipts") or []
+    assert len(receipts) == 1
+    assert receipts[0].get("command_id") == "cmd-tool-1"
+    assert receipts[0].get("tool_name") == "collect_metrics"
+    final_output = result.get("final_output") or {}
+    assert "cmd-tool-1" in (final_output.get("receipt_command_ids") or [])
+    assert "tool collect_metrics completed cmd:cmd-tool-1" in final_output.get("summary", "")
 
 
 def test_task_graph_executor_supports_replan_marker_node():

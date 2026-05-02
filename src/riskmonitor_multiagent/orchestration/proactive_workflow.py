@@ -266,6 +266,7 @@ class ProactiveMultiAgentWorkflow:
             "orchestrator_plan": orchestrator_result.output,
             "critic_plan": critic_result.output,
             "replan": replan_details or {},
+            "receipts": execution_result.get("receipts", []),
             "engineer": engineer_result.output,
             "analyst": analyst_result.output,
             "final_output": execution_result.get("final_output", {}),

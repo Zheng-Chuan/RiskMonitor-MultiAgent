@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from unittest.mock import patch
 from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -323,3 +324,89 @@ def test_proactive_workflow_runs_parallel_delegate_branches_and_finalize():
     assert s1["started_at_ms"] <= s2["finished_at_ms"]
     assert s2["started_at_ms"] <= s1["finished_at_ms"]
     assert set(s3.get("input_sources") or []) == {"s1", "s2"}
+
+
+def test_proactive_workflow_surfaces_tool_receipts_from_task_graph():
+    workflow = ProactiveMultiAgentWorkflow()
+
+    async def _noop():
+        return None
+
+    async def _fake_intent(*, task):
+        return ProactiveAgentResult(
+            ok=True,
+            output={"primary_intent_type": "tool_execution"},
+        )
+
+    async def _fake_orchestrate(*, task, context=None):
+        return ProactiveAgentResult(
+            ok=True,
+            output={
+                "plan_steps": [
+                    {
+                        "kind": "tool_call",
+                        "step_id": "s1",
+                        "reason": "采集系统指标",
+                        "tool_name": "collect_metrics",
+                        "target_agent": "system_engineer",
+                        "params": {},
+                    },
+                    {
+                        "kind": "finalize",
+                        "step_id": "s2",
+                        "reason": "汇总工具结果",
+                        "instruction": "输出结论",
+                    },
+                ],
+            },
+        )
+
+    async def _fake_critic(*, task, orchestrator):
+        return ProactiveAgentResult(
+            ok=True,
+            output={"ok": True, "issues": [], "suggested_fixes": []},
+        )
+
+    fake_receipt = {
+        "schema_version": "agent_receipt.v1",
+        "run_id": "workflow-tool-1",
+        "command_id": "cmd-tool-2",
+        "target_agent": "system_engineer",
+        "tool_name": "collect_metrics",
+        "inputs": {},
+        "outputs": {"action": "collect_metrics", "result": {"cpu": 0.5}},
+        "status": "completed",
+        "ok": True,
+        "latency_ms": 5.0,
+        "evidence": {"action": "collect_metrics"},
+        "artifacts": [{"kind": "tool_result", "action": "collect_metrics"}],
+        "error": None,
+        "output": {"action": "collect_metrics", "result": {"cpu": 0.5}},
+        "side_effect": False,
+        "approval_state": "not_required",
+    }
+
+    workflow.start_agents = _noop
+    workflow._intent_agent.recognize = _fake_intent
+    workflow._orchestrator_agent.orchestrate = _fake_orchestrate
+    workflow._critic_agent.review = _fake_critic
+
+    with patch(
+        "riskmonitor_multiagent.orchestration.task_graph_executor.execute_agent_command",
+        return_value=fake_receipt,
+    ):
+        result = asyncio.run(
+            workflow.run(
+                {
+                    "task_id": "workflow-tool-1",
+                    "source": "human",
+                    "payload": {"content": "采集系统指标并汇总"},
+                }
+            )
+        )
+
+    assert result.get("status") == "completed"
+    receipts = result.get("receipts") or []
+    assert len(receipts) == 1
+    assert receipts[0].get("command_id") == "cmd-tool-2"
+    assert "cmd-tool-2" in ((result.get("final_output") or {}).get("receipt_command_ids") or [])

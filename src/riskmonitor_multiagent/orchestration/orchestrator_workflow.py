@@ -127,7 +127,7 @@ def _build_compatible_output(
             "engineer": result.get("engineer", {}),
             "analyst": result.get("analyst", {}),
             "artifacts": {},
-            "receipts": [],
+            "receipts": result.get("receipts", []),
             "pending_questions": [],
             "orchestrator_final": result.get("final_output", {}),
             "critic_final": {},

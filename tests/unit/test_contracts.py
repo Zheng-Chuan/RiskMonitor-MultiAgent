@@ -68,11 +68,17 @@ def test_agent_command_and_receipt_validate_minimal_messages():
         "run_id": "run-1",
         "command_id": "cmd-1",
         "target_agent": "system_engineer",
+        "tool_name": "collect_metrics",
+        "inputs": {"tool": "get_service_metrics"},
+        "outputs": {"ok": True},
+        "status": "completed",
         "ok": True,
         "latency_ms": 12.3,
         "evidence": {"tool": "get_service_metrics"},
         "artifacts": [{"kind": "metrics_snapshot", "ref": "in_memory"}],
         "error": None,
+        "side_effect": False,
+        "approval_state": "not_required",
         "output": {"ok": True},
     }
     ok, errors = validate_agent_receipt(rcp)
@@ -142,6 +148,26 @@ def test_task_graph_validate_minimal_graph():
     }
     ok, errors = validate_task_graph(graph)
     assert ok, errors
+
+
+def test_task_graph_tool_call_requires_tool_name():
+    graph = {
+        "schema_version": TASK_GRAPH_SCHEMA_VERSION,
+        "nodes": [
+            {
+                "step_id": "s1",
+                "kind": "tool_call",
+                "status": "pending",
+                "reason": "采集指标",
+                "evidence": {"fields": ["task.payload.content"]},
+                "params": {},
+            }
+        ],
+        "edges": [],
+    }
+    ok, errors = validate_task_graph(graph)
+    assert ok is False
+    assert "bad_task_graph_tool_name" in errors
 
 
 def test_task_graph_finalize_depends_on_all_prior_branches():
