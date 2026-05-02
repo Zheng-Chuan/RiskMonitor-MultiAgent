@@ -265,6 +265,59 @@ def test_evaluator_computes_behavior_metrics_from_real_trace():
     assert behavior.dangerous_action_block_rate == 1.0
 
 
+def test_evaluator_accepts_direct_workflow_output():
+    evaluator = Evaluator(llm_judge_enabled=False)
+    case = EvalTestCase(
+        case_id="case-direct-output-1",
+        category="trace",
+        difficulty="medium",
+        task={"task_id": "task-direct-output-1"},
+        ground_truth={"intent": "investigate", "expected_steps": 1},
+        evaluation={},
+    )
+
+    run_trace = build_run_trace_snapshot(
+        result={
+            "status": "completed",
+            "run_id": "run-direct-output-1",
+            "entry_type": "user_task",
+            "task_id": "task-direct-output-1",
+            "run_context": {"entry_type": "user_task"},
+            "intent": {"primary_intent_type": "investigate"},
+            "orchestrator_plan": {"plan_steps": [{"step_id": "s1", "reason": "直接读取 trace"}]},
+            "task_graph": {"schema_version": "task_graph.v1", "nodes": [{"step_id": "s1"}], "edges": []},
+            "task_graph_execution": {
+                "trace": [
+                    {"step_id": "s1", "kind": "tool_call", "status": "completed", "started_at_ms": 1, "finished_at_ms": 2, "target_agent": "system_engineer"}
+                ],
+                "resume_history": [],
+            },
+            "receipts": [],
+            "memory_hits": [],
+            "planning_memory": {"hit_count": 0},
+            "run_summary": {"text": "done"},
+            "final_output": {"summary": "直接输出也能被评测消费"},
+            "errors": [],
+            "tokens_total": 8,
+        }
+    ).to_dict()
+
+    async def _fake_runner(*, task):
+        del task
+        return {
+            "ok": True,
+            "run_id": "run-direct-output-1",
+            "run_trace": run_trace,
+        }
+
+    case_result = asyncio.run(evaluator.evaluate_case(case, _fake_runner))
+
+    assert case_result.success is True
+    assert case_result.trace is not None
+    assert case_result.trace.run_trace.get("run_id") == "run-direct-output-1"
+    assert case_result.trace.final_output.get("summary") == "直接输出也能被评测消费"
+
+
 def test_behavior_metrics_do_not_change_when_llm_scores_change():
     evaluator = Evaluator(llm_judge_enabled=False)
     case = EvalTestCase(

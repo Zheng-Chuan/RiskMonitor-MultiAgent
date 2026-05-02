@@ -58,7 +58,3 @@ def test_quantity_validation():
     for qty in valid_quantities:
         assert qty % 100 == 0
         assert qty > 0
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

@@ -85,6 +85,14 @@ class ReportGenerator:
         lines.append(f"- **Pass Rate**: {result.pass_rate:.2%}")
         lines.append(f"- **Overall Score**: {result.overall_metrics.overall_score:.2%}")
         lines.append("")
+
+        if result.dataset_summary:
+            lines.append("## Dataset Summary")
+            lines.append("")
+            lines.append(f"- Dataset Size: {result.dataset_summary.get('dataset_size', 0)}")
+            for category, count in sorted((result.dataset_summary.get("scenario_class_counts") or {}).items()):
+                lines.append(f"- {category}: {count}")
+            lines.append("")
         
         lines.append("## Metrics Overview")
         lines.append("")
@@ -160,6 +168,27 @@ class ReportGenerator:
         lines.append(f"- Memory Usefulness: {metrics.memory.memory_usefulness:.2%}")
         lines.append(f"- Resume Success Rate: {metrics.memory.resume_success_rate:.2%}")
         lines.append(f"- **Overall Memory**: {metrics.memory.overall_memory:.2%}")
+        lines.append("")
+
+        behavior = result.behavior_metrics
+        lines.append("### Behavioral Metrics")
+        lines.append("")
+        lines.append(f"- Workflow Success: {behavior.workflow_success:.2%}")
+        lines.append(f"- Task Success Rate: {behavior.task_success_rate:.2%}")
+        lines.append(f"- Tool Selection Accuracy: {behavior.tool_selection_accuracy:.2%}")
+        lines.append(f"- Receipt Binding Rate: {behavior.receipt_binding_rate:.2%}")
+        lines.append(f"- Approval Correctness: {behavior.approval_correctness:.2%}")
+        lines.append(f"- Replan Success Rate: {behavior.replan_success_rate:.2%}")
+        lines.append(f"- Memory Hit Rate: {behavior.memory_hit_rate:.2%}")
+        lines.append(f"- Dangerous Action Block Rate: {behavior.dangerous_action_block_rate:.2%}")
+        lines.append(f"- Message Trace Completeness: {behavior.message_trace_completeness:.2%}")
+        lines.append(f"- Factuality Score: {behavior.factuality_score:.2%}")
+        lines.append(f"- Evidence Coverage: {behavior.evidence_coverage:.2%}")
+        lines.append(f"- Tool Call Count: {behavior.tool_call_count}")
+        lines.append(f"- Approval Count: {behavior.approval_count}")
+        lines.append(f"- Replan Count: {behavior.replan_count}")
+        lines.append(f"- Memory Hit Count: {behavior.memory_hit_count}")
+        lines.append(f"- **Overall Behavior**: {behavior.overall_behavior:.2%}")
         lines.append("")
         
         if result.comparison:

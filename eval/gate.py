@@ -86,23 +86,8 @@ def evaluate_with_custom_thresholds(
     metric_definitions = summary.get("metric_definitions", {})
     decision_log: list[dict[str, Any]] = []
 
-    blocking_config = thresholds.get("blocking")
-    warning_config = thresholds.get("warning")
-    if blocking_config is None and warning_config is None:
-        legacy_thresholds = thresholds.get("thresholds", {})
-        blocking_config = {
-            name: config
-            for name, config in legacy_thresholds.items()
-            if name in DEFAULT_BLOCKING_THRESHOLDS
-        }
-        warning_config = {
-            name: config
-            for name, config in legacy_thresholds.items()
-            if name not in DEFAULT_BLOCKING_THRESHOLDS
-        }
-
-    blocking_config = blocking_config or DEFAULT_BLOCKING_THRESHOLDS
-    warning_config = warning_config or DEFAULT_WARNING_THRESHOLDS
+    blocking_config = thresholds.get("blocking") or DEFAULT_BLOCKING_THRESHOLDS
+    warning_config = thresholds.get("warning") or DEFAULT_WARNING_THRESHOLDS
 
     for metric_name, config in blocking_config.items():
         actual_value = _lookup_metric(metric_name, behavior_metrics=behavior_metrics, legacy_metrics=legacy_metrics)
@@ -167,14 +152,12 @@ def evaluate_with_custom_thresholds(
 
 
 def _resolve_metrics(summary: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    aggregates = summary.get("aggregates", {})
     behavior_metrics = summary.get("behavior_metrics")
-    if not isinstance(behavior_metrics, dict):
-        behavior_metrics = aggregates.get("behavioral_metrics", {})
     legacy_metrics = summary.get("metrics")
-    if not isinstance(legacy_metrics, dict):
-        legacy_metrics = aggregates.get("metrics", {})
-    return behavior_metrics or {}, legacy_metrics or {}
+    return (
+        behavior_metrics if isinstance(behavior_metrics, dict) else {},
+        legacy_metrics if isinstance(legacy_metrics, dict) else {},
+    )
 
 
 def _lookup_metric(

@@ -114,23 +114,26 @@ async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatc
     out = await run_orchestrator_workflow(task=task)
     assert out.get("ok") is True
 
-    result = out.get("result")
+    result = out
     assert isinstance(result, dict)
-    assert result.get("schema_version") == "orchestrator_run.v1"
     assert isinstance(result.get("run_id"), str) and result.get("run_id")
     assert isinstance(result.get("orchestrator_plan"), dict)
     assert isinstance(result.get("task_graph"), dict)
     assert isinstance(result.get("critic_plan"), dict)
     assert isinstance(result.get("approval"), dict)
-    assert isinstance(result.get("engineer"), dict)
-    assert isinstance(result.get("analyst"), dict)
-    assert isinstance(result.get("orchestrator_final"), dict)
-    assert isinstance(result.get("critic_final"), dict)
+    assert isinstance(result.get("final_output"), dict)
+    assert isinstance(result.get("run_trace"), dict)
     quality = result.get("quality")
     assert isinstance(quality, dict)
     assert isinstance(quality.get("step_reason_coverage"), float)
     assert isinstance(quality.get("evidence_missing_rate"), float)
     assert isinstance(quality.get("receipt_binding_rate"), float)
+    assert isinstance(quality.get("contract_fail_rate"), float)
+    assert isinstance(quality.get("tool_call_count"), int)
+    assert isinstance(quality.get("receipt_count"), int)
+    assert isinstance(quality.get("approval_count"), int)
+    assert isinstance(quality.get("replan_count"), int)
+    assert isinstance(quality.get("message_trace_completeness"), float)
     task_graph = result.get("task_graph") or {}
     nodes = task_graph.get("nodes")
     assert isinstance(nodes, list) and len(nodes) >= 1
@@ -226,7 +229,7 @@ async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_p
     out = await run_orchestrator_workflow(task=task)
     assert out.get("ok") is True
 
-    result = out.get("result")
+    result = out
     assert isinstance(result, dict)
     approval = result.get("approval") or {}
     assert approval.get("required") is True
@@ -340,7 +343,7 @@ async def test_orchestrator_commands_generate_receipts_and_critic_can_see(tmp_pa
         task={"task_id": "task_cmd", "session_id": "s_cmd", "source": "human", "payload": {"content": "写入告警并检查指标"}}
     )
     assert out.get("ok") is True
-    result = out.get("result") if isinstance(out.get("result"), dict) else {}
+    result = out if isinstance(out, dict) else {}
     assert "router" not in result
     assert result.get("status") in {"completed", "pending_approval"}
     receipts = result.get("receipts")
@@ -417,7 +420,7 @@ async def test_orchestrator_unknown_step_kind_is_not_silent(tmp_path, monkeypatc
 
     monkeypatch.setattr("riskmonitor_multiagent.agents.roles.IntentAgent.recognize", _fake_intent)
     out = await run_orchestrator_workflow(task={"task_id": "task_unknown", "session_id": "s_u", "source": "human", "payload": {"content": "测试未知step"}})
-    result = out.get("result") if isinstance(out.get("result"), dict) else {}
+    result = out if isinstance(out, dict) else {}
     errors = result.get("errors") if isinstance(result.get("errors"), list) else []
     assert any(str(x).startswith("unknown_step_kind:") for x in errors)
 
@@ -499,8 +502,8 @@ async def test_multi_intent_disambiguation_written_to_shared_memory(tmp_path, mo
     monkeypatch.setattr("riskmonitor_multiagent.agents.roles.IntentAgent.recognize", _fake_intent)
     out1 = await run_orchestrator_workflow(task={"task_id": "task_m1", "session_id": "s_m", "source": "human", "payload": {"content": "查头寸并可能写告警"}})
     out2 = await run_orchestrator_workflow(task={"task_id": "task_m2", "session_id": "s_m", "source": "human", "payload": {"content": "查头寸并可能写告警"}})
-    i1 = ((out1.get("result") or {}).get("intent") or {}).get("intents")
-    i2 = ((out2.get("result") or {}).get("intent") or {}).get("intents")
+    i1 = ((out1.get("intent") or {}).get("intents"))
+    i2 = ((out2.get("intent") or {}).get("intents"))
     assert i1 == i2
 
     mem = get_memory_store()

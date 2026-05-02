@@ -206,11 +206,6 @@ class EvaluationResult:
             },
             "metrics": self.overall_metrics.to_dict(),
             "behavior_metrics": self.behavior_metrics.to_dict(),
-            "aggregates": {
-                "metrics": self.overall_metrics.to_dict(),
-                "behavioral_metrics": self.behavior_metrics.to_dict(),
-                "dataset_summary": self.dataset_summary,
-            },
             "metric_definitions": self.metric_definitions,
             "dataset_summary": self.dataset_summary,
             "case_results": [r.to_dict() for r in self.case_results],
@@ -295,14 +290,10 @@ class Evaluator:
 
         try:
             result = await workflow_runner(task=case.task)
+            result_data = self._normalize_workflow_result(result)
 
             trace.end_time = time.time()
-            trace.success = result.get("ok", False)
-
-            result_data = result.get("result", {})
-            
-            if "result" in result_data:
-                result_data = result_data.get("result", {})
+            trace.success = bool(result_data.get("ok", False))
             run_trace = self._resolve_run_trace(result_data)
             if run_trace is not None:
                 self._populate_trace_from_run_trace(trace=trace, run_trace=run_trace)
@@ -599,6 +590,24 @@ class Evaluator:
                 if ok:
                     return payload
         return None
+
+    def _normalize_workflow_result(self, result: Any) -> dict[str, Any]:
+        """兼容旧包裹结果并统一成单层 workflow 输出."""
+        if not isinstance(result, dict):
+            return {"ok": False}
+
+        result_data = result
+        wrapped_result = result.get("result")
+        if isinstance(wrapped_result, dict):
+            result_data = wrapped_result
+            nested_result = wrapped_result.get("result")
+            if isinstance(nested_result, dict):
+                result_data = nested_result
+
+        normalized = dict(result_data)
+        if "ok" not in normalized:
+            normalized["ok"] = bool(result.get("ok", result_data.get("ok", False)))
+        return normalized
 
     def _populate_trace_from_run_trace(self, *, trace: ExecutionTrace, run_trace: dict[str, Any]) -> None:
         trace.run_trace = dict(run_trace)

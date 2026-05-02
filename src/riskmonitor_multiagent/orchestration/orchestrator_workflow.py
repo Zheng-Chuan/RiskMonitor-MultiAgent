@@ -21,17 +21,7 @@ from riskmonitor_multiagent.utils.ids import new_run_id
 
 
 async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
-    """
-    运行主动多 Agent 协作工作流.
-
-    使用具备 BDI + ReAct + 后台监控的主动 Agent.
-    
-    Args:
-        task: 任务,格式同旧接口
-
-    Returns:
-        结果,格式同旧接口,便于兼容
-    """
+    """运行统一主动工作流并补充最小观测字段."""
     inc_counter("orchestrator_runs_total")
     start_time = time.time()
 
@@ -45,7 +35,7 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
         
         result = await workflow.run(task)
         
-        out = _build_compatible_output(
+        out = _build_workflow_output(
             task=task,
             run_id=run_id,
             result=result,
@@ -75,18 +65,14 @@ async def run_orchestrator_workflow(*, task: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-def _build_compatible_output(
+def _build_workflow_output(
     *,
     task: dict[str, Any],
     run_id: str,
     result: dict[str, Any],
     start_time: float,
 ) -> dict[str, Any]:
-    """
-    构建兼容旧格式的输出.
-
-    这样可以保持与现有评估体系的兼容.
-    """
+    """把 workflow 结果补成统一运行输出."""
     react_steps = result.get("react_steps", [])
     
     step_reason_coverage = 1.0
@@ -98,19 +84,50 @@ def _build_compatible_output(
         step_reason_coverage = steps_with_reason / len(react_steps)
         evidence_missing_rate = 1.0 - (steps_with_evidence / len(react_steps))
     
-    quality = {
-        "evidence_missing_rate": evidence_missing_rate,
-        "step_reason_coverage": step_reason_coverage,
-        "receipt_binding_rate": 1.0,
-        "contract_fail_rate": 0.0,
-    }
-
     latency_ms = (time.time() - start_time) * 1000
 
     llm_interactions = result.get("llm_interactions", [])
     total_tokens = sum(i.get("tokens_used", 0) for i in llm_interactions)
     approval_trace = result.get("approval_trace", [])
+    receipts = result.get("receipts", []) if isinstance(result.get("receipts"), list) else []
+    task_graph_execution = (
+        result.get("task_graph_execution")
+        if isinstance(result.get("task_graph_execution"), dict)
+        else {}
+    )
     critic_plan = result.get("critic_plan", {}) if isinstance(result.get("critic_plan"), dict) else {}
+    tool_steps = [
+        item
+        for item in task_graph_execution.get("trace", []) or []
+        if isinstance(item, dict) and item.get("kind") == "tool_call"
+    ]
+    command_count = len(tool_steps)
+    receipt_count = len([item for item in receipts if isinstance(item, dict)])
+    receipt_binding_rate = 1.0 if command_count == 0 else min(1.0, receipt_count / command_count)
+    contract_error_count = 0
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            continue
+        schema_errors = receipt.get("schema_errors")
+        if isinstance(schema_errors, list) and schema_errors:
+            contract_error_count += 1
+    contract_fail_rate = 0.0 if receipt_count == 0 else contract_error_count / receipt_count
+    quality = {
+        "evidence_missing_rate": evidence_missing_rate,
+        "step_reason_coverage": step_reason_coverage,
+        "receipt_binding_rate": receipt_binding_rate,
+        "contract_fail_rate": contract_fail_rate,
+        "tool_call_count": command_count,
+        "receipt_count": receipt_count,
+        "approval_count": len([item for item in approval_trace if isinstance(item, dict)]),
+        "replan_count": 1 if isinstance(result.get("replan"), dict) and result.get("replan") else 0,
+        "message_trace_completeness": _compute_message_trace_completeness(
+            result=result,
+            command_count=command_count,
+            receipt_count=receipt_count,
+            approval_count=len([item for item in approval_trace if isinstance(item, dict)]),
+        ),
+    }
     approval_required = any(
         isinstance(item, dict)
         and (
@@ -135,48 +152,44 @@ def _build_compatible_output(
     effective_status = result.get("status")
     if effective_status == "blocked" and approval_required:
         effective_status = "pending_approval"
-    return {
-        "schema_version": "orchestrator_run.v1",
-        "ok": effective_status == "completed",
-        "latency_ms": latency_ms,
-        "result": {
-            "schema_version": "orchestrator_run.v1",
+    output = dict(result)
+    output.update(
+        {
+            "ok": effective_status == "completed",
+            "latency_ms": latency_ms,
             "run_id": effective_run_id,
-            "entry_type": result.get("entry_type"),
-            "run_context": result.get("run_context", {}),
             "task_id": task.get("task_id"),
-            "status": effective_status,
             "task": task,
-            "route_decision": result.get("route_decision", {}),
-            "trigger": result.get("trigger", {}),
-            "intent": result.get("intent", {}),
-            "memory_hits": result.get("memory_hits", []),
-            "planning_memory": result.get("planning_memory", {}),
-            "resume_memory_state": result.get("resume_memory_state", []),
-            "run_summary": result.get("run_summary", {}),
-            "procedural_lesson": result.get("procedural_lesson", {}),
-            "task_graph": result.get("task_graph", {}),
-            "task_graph_execution": result.get("task_graph_execution", {}),
-            "orchestrator_plan": result.get("orchestrator_plan", {}),
+            "status": effective_status,
+            "task_graph_execution": task_graph_execution,
             "critic_plan": critic_plan,
-            "approval": {"required": approval_required, "approved": approval_approved},
-            "engineer": result.get("engineer", {}),
-            "analyst": result.get("analyst", {}),
-            "artifacts": {},
-            "receipts": result.get("receipts", []),
+            "receipts": receipts,
             "approval_trace": approval_trace,
-            "pending_questions": [],
-            "orchestrator_final": result.get("final_output", {}),
-            "critic_final": result.get("critic_final", {}),
-            "final_output": result.get("final_output", {}),
-            "errors": result.get("errors", []),
             "tokens_total": total_tokens,
             "quality": quality,
-            "react_steps": react_steps,
-            "bdi_states": result.get("bdi_states", {}),
             "llm_interactions": llm_interactions,
-        },
-    }
+            "approval": {"required": approval_required, "approved": approval_approved},
+        }
+    )
+    return output
+
+
+def _compute_message_trace_completeness(
+    *,
+    result: dict[str, Any],
+    command_count: int,
+    receipt_count: int,
+    approval_count: int,
+) -> float:
+    checks: list[float] = []
+    checks.append(1.0 if isinstance(result.get("final_output"), dict) and result.get("final_output") else 0.0)
+    if command_count > 0:
+        checks.append(1.0 if receipt_count >= command_count else 0.0)
+    if approval_count > 0:
+        checks.append(1.0 if approval_count == len([item for item in result.get("approval_trace", []) or [] if isinstance(item, dict)]) else 0.0)
+    if isinstance(result.get("run_trace"), dict):
+        checks.append(1.0)
+    return sum(checks) / len(checks) if checks else 0.0
 
 
 __all__ = ["run_orchestrator_workflow"]

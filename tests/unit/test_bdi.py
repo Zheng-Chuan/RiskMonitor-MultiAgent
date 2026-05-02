@@ -226,7 +226,3 @@ class TestBaseProactiveAgent:
         assert len(interactions) == 1
         assert interactions[0]["interaction_type"] == "thought"
         assert interactions[0]["latency_ms"] == 100
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

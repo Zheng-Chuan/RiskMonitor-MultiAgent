@@ -367,11 +367,11 @@ class BaseProactiveAgent:
             try:
                 # 如果有目标 Agent,发送消息
                 if intention.target_agent:
-                    from riskmonitor_multiagent.orchestration.multiagent_workflow import get_multi_agent_workflow
+                    from riskmonitor_multiagent.orchestration.proactive_workflow import get_proactive_workflow
 
                     proactive_event = self._build_proactive_event(intention=intention)
 
-                    workflow = get_multi_agent_workflow()
+                    workflow = get_proactive_workflow()
                     candidate_agents = list(
                         dict.fromkeys(
                             [
@@ -381,7 +381,7 @@ class BaseProactiveAgent:
                             ]
                         )
                     )
-                    await workflow.run_system_event(
+                    await workflow.start_from_event(
                         event=proactive_event,
                         candidate_agents=candidate_agents,
                     )

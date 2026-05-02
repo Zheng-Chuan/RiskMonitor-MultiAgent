@@ -494,12 +494,12 @@
 
 #### Checklist
 
-- [ ] 修正 README, ARCHITECTURE, ROADMAP 中已完成状态的口径
-- [ ] 梳理唯一主流程和唯一工具执行入口
-- [ ] 补齐 `write_alert` 等危险工具的评测覆盖
-- [ ] 让评测结果中真实记录工具调用数
-- [ ] 文档中不再把未完成能力标成已完成
-- [ ] 最新评测结果可看到真实 receipt
+- [x] 修正 README, ARCHETECTURE, PRD 中已完成状态的口径
+- [x] 梳理唯一主流程和唯一工具执行入口
+- [x] 补齐 `write_alert` 等危险工具的评测覆盖
+- [x] 让评测结果中真实记录工具调用数
+- [x] 文档中不再把未完成能力标成已完成
+- [x] 最新评测结果可看到真实 receipt
 
 ### Phase 1. 真实执行闭环
 
@@ -509,12 +509,12 @@
 
 #### Checklist
 
-- [ ] 实现任务图模型
-- [ ] 打通统一 command receipt 闭环
-- [ ] 增加 step 级 trace
-- [ ] 实现基础 replan
-- [ ] Medium 和 Complex case 中真实工具调用稳定发生
-- [ ] 最终输出引用 receipt 的比例大于 95%
+- [x] 实现任务图模型
+- [x] 打通统一 command receipt 闭环
+- [x] 增加 step 级 trace
+- [x] 实现基础 replan
+- [x] Medium 和 Complex case 中真实工具调用稳定发生
+- [x] 最终输出引用 receipt 的比例大于 95%
 
 ### Phase 2. 记忆闭环和恢复执行
 
@@ -524,12 +524,12 @@
 
 #### Checklist
 
-- [ ] 实现三层记忆模型
-- [ ] 接入 semantic retrieval
-- [ ] 实现 run resume 和 step resume
-- [ ] 增加 memory 质量评测
-- [ ] 有记忆版本优于无记忆 baseline
-- [ ] 中断后恢复成功率大于 80%
+- [x] 实现三层记忆模型
+- [x] 接入 semantic retrieval
+- [x] 实现 run resume 和 step resume
+- [x] 增加 memory 质量评测
+- [x] 有记忆版本优于无记忆 baseline
+- [x] 中断后恢复成功率大于 80%
 
 ### Phase 3. 事件驱动和主动协作
 
@@ -539,12 +539,12 @@
 
 #### Checklist
 
-- [ ] 增加 `ModeratorAgent`
-- [ ] 定义标准事件协议
-- [ ] 让 Message Bus 成为主流程一部分
-- [ ] 实现主动感知和冲突仲裁
-- [ ] 至少 2 类复杂任务依赖事件触发和动态协作
-- [ ] 协作指标基于真实消息而非默认值
+- [x] 增加 `ModeratorAgent`
+- [x] 定义标准事件协议
+- [x] 让 Message Bus 成为主流程一部分
+- [x] 实现主动感知和冲突仲裁
+- [x] 至少 2 类复杂任务依赖事件触发和动态协作
+- [x] 协作指标基于真实消息而非默认值
 
 ### Phase 4. 评测和门禁生产化
 
@@ -554,12 +554,12 @@
 
 #### Checklist
 
-- [ ] 重构 benchmark
-- [ ] 建立人工标注校准集
-- [ ] 让评测基于 trace 驱动
-- [ ] 实现更严格的 quality gate
-- [ ] 42 个 case 在新评测口径下重新跑通
-- [ ] 结果可复现, 可解释, 可对比
+- [x] 重构 benchmark
+- [x] 建立人工标注校准集
+- [x] 让评测基于 trace 驱动
+- [x] 实现更严格的 quality gate
+- [x] 42 个 case 在新评测口径下重新跑通
+- [x] 结果可复现, 可解释, 可对比
 
 ---
 
@@ -567,22 +567,22 @@
 
 ### 9.1 功能需求
 
-- [ ] FR-1: 系统必须支持任务图级规划和执行
-- [ ] FR-2: 系统必须支持真实工具调用回执
-- [ ] FR-3: 系统必须支持 step 级审批和恢复
-- [ ] FR-4: 系统必须支持消息驱动协作
-- [ ] FR-5: 系统必须支持语义记忆检索和经验沉淀
-- [ ] FR-6: 系统必须支持任务失败后的恢复执行
-- [ ] FR-7: 系统必须支持 trace 回放
-- [ ] FR-8: 系统必须支持基于真实行为事件的评测
+- [x] FR-1: 系统必须支持任务图级规划和执行
+- [x] FR-2: 系统必须支持真实工具调用回执
+- [x] FR-3: 系统必须支持 step 级审批和恢复
+- [x] FR-4: 系统必须支持消息驱动协作
+- [x] FR-5: 系统必须支持语义记忆检索和经验沉淀
+- [x] FR-6: 系统必须支持任务失败后的恢复执行
+- [x] FR-7: 系统必须支持 trace 回放
+- [x] FR-8: 系统必须支持基于真实行为事件的评测
 
 ### 9.2 非功能需求
 
-- [ ] NFR-1: 所有关键状态都必须可持久化
-- [ ] NFR-2: 所有副作用动作都必须可审计
-- [ ] NFR-3: 所有最终结论都必须可追溯到输入, receipt 或 memory
-- [ ] NFR-4: 评测结果必须可复现
-- [ ] NFR-5: 每个阶段都要有单测, 集成测试, benchmark 样例
+- [x] NFR-1: 所有关键状态都必须可持久化
+- [x] NFR-2: 所有副作用动作都必须可审计
+- [x] NFR-3: 所有最终结论都必须可追溯到输入, receipt 或 memory
+- [x] NFR-4: 评测结果必须可复现
+- [x] NFR-5: 每个阶段都要有单测, 集成测试, benchmark 样例
 
 ---
 
@@ -612,7 +612,7 @@
 - 真实工具调用, 审批, 回执, 恢复都有 case 证明
 - 记忆检索已经真实参与规划和恢复
 - 评测结果中关键计数项全部来自真实事件
-- 文档, README, ROADMAP, PRD, RESUME 的能力口径保持一致
+- README, ARCHETECTURE, PRD 的能力口径保持一致
 
 ---
 
@@ -637,5 +637,5 @@
 ## 13. 相关文档
 
 - [README.md](../README.md)
-- [ARCHITECTURE.md](./ARCHITECTURE.md)
-- [ROADMAP.md](./ROADMAP.md)
+- [ARCHETECTURE.md](./ARCHETECTURE.md)
+- [PRD.md](./PRD.md)

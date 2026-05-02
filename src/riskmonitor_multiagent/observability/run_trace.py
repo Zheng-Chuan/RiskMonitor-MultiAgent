@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from riskmonitor_multiagent import config
@@ -52,16 +54,22 @@ class RunTraceSnapshot:
 
 
 class RunTraceStore:
-    """内存中的 run trace 存储."""
+    """带磁盘持久化的 run trace 存储."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, base_dir: str | Path | None = None) -> None:
         self._traces: dict[str, RunTraceSnapshot] = {}
+        self._base_dir = Path(base_dir or os.getenv("RUN_TRACE_DIR", "results/run_traces")).resolve()
+        self._base_dir.mkdir(parents=True, exist_ok=True)
 
     def save_snapshot(self, snapshot: RunTraceSnapshot) -> None:
         self._traces[snapshot.run_id] = snapshot
+        self._write_snapshot(snapshot)
 
     def get_snapshot(self, run_id: str) -> RunTraceSnapshot | None:
-        return self._traces.get(run_id)
+        snapshot = self._traces.get(run_id)
+        if snapshot is not None:
+            return snapshot
+        return self._read_snapshot(run_id)
 
     def render_replay(self, run_id: str) -> str:
         snapshot = self.get_snapshot(run_id)
@@ -74,6 +82,36 @@ class RunTraceStore:
         if snapshot is None:
             raise ValueError(f"unknown_run_trace:{run_id}")
         return json.dumps(snapshot.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
+
+    def get_snapshot_path(self, run_id: str) -> Path:
+        return self._base_dir / f"{run_id}.json"
+
+    def _write_snapshot(self, snapshot: RunTraceSnapshot) -> None:
+        path = self.get_snapshot_path(snapshot.run_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(snapshot.to_dict(), ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    def _read_snapshot(self, run_id: str) -> RunTraceSnapshot | None:
+        path = self.get_snapshot_path(run_id)
+        if not path.exists():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        snapshot = RunTraceSnapshot(
+            run_id=str(payload.get("run_id") or run_id),
+            entry_type=str(payload.get("entry_type") or ""),
+            status=str(payload.get("status") or "unknown"),
+            task_id=str(payload.get("task_id") or "") or None,
+            entries=[dict(item) for item in payload.get("entries", []) if isinstance(item, dict)],
+            summary=dict(payload.get("summary") or {}),
+            version_snapshot=dict(payload.get("version_snapshot") or {}),
+            failure_summary=dict(payload.get("failure_summary") or {}),
+            schema_version=str(payload.get("schema_version") or RUN_TRACE_SCHEMA_VERSION),
+        )
+        self._traces[run_id] = snapshot
+        return snapshot
 
 
 def build_run_trace_snapshot(

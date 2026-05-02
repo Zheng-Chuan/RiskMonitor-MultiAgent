@@ -105,8 +105,7 @@ async def run_workflow_runner(task: dict[str, Any]) -> dict[str, Any]:
     try:
         from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
         
-        result = await run_orchestrator_workflow(task=task)
-        return {"ok": result.get("ok", False), "result": result}
+        return await run_orchestrator_workflow(task=task)
     except Exception as e:
         logger.exception(f"Workflow execution failed: {e}")
         return {"ok": False, "error": str(e)}
@@ -279,8 +278,8 @@ def cmd_baseline_compare(args: argparse.Namespace) -> int:
     with open(baseline_path, "r", encoding="utf-8") as f:
         baseline = json.load(f)
 
-    primary_metrics = primary.get("aggregates", {}).get("behavioral_metrics", primary.get("behavior_metrics", {}))
-    baseline_metrics = baseline.get("aggregates", {}).get("behavioral_metrics", baseline.get("behavior_metrics", {}))
+    primary_metrics = primary.get("behavior_metrics", {})
+    baseline_metrics = baseline.get("behavior_metrics", {})
     tracked_metrics = [
         "task_success_rate",
         "tool_success_rate",

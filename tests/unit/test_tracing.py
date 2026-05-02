@@ -160,7 +160,3 @@ class TestGenerateIds:
         assert span_id2 is not None
         assert span_id1 != span_id2
         assert len(span_id1) == 16
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from riskmonitor_multiagent.cli.replay import replay_run
 from riskmonitor_multiagent.observability.run_trace import (
@@ -101,7 +102,8 @@ def test_build_run_trace_snapshot_collects_unified_timeline() -> None:
     assert step_entry["payload"]["related_receipt_command_ids"] == ["cmd_001"]
 
 
-def test_replay_run_renders_timeline() -> None:
+def test_replay_run_renders_timeline(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("RUN_TRACE_DIR", str(tmp_path / "run_traces"))
     reset_run_trace_store()
     store = get_run_trace_store()
     store.save_snapshot(
@@ -130,7 +132,8 @@ def test_replay_run_renders_timeline() -> None:
     assert "run_finished" in output
 
 
-def test_replay_run_supports_json_output() -> None:
+def test_replay_run_supports_json_output(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("RUN_TRACE_DIR", str(tmp_path / "run_traces"))
     reset_run_trace_store()
     store = get_run_trace_store()
     store.save_snapshot(
@@ -154,3 +157,29 @@ def test_replay_run_supports_json_output() -> None:
     assert payload["schema_version"] == "run_trace.v2"
     assert payload["run_id"] == "run_003"
     assert payload["failure_summary"]["step_id"] == "s2"
+
+
+def test_replay_run_can_reload_snapshot_from_disk(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("RUN_TRACE_DIR", str(tmp_path / "run_traces"))
+    reset_run_trace_store()
+    store = get_run_trace_store()
+    store.save_snapshot(
+        RunTraceSnapshot(
+            run_id="run_disk_001",
+            entry_type="user_task",
+            status="completed",
+            task_id="task_disk_001",
+            entries=[
+                {"category": "final", "trace_type": "run_finished", "timestamp_ms": 2, "status": "completed", "summary": {"status": "completed"}, "payload": {}},
+            ],
+        )
+    )
+    snapshot_path = store.get_snapshot_path("run_disk_001")
+    assert Path(snapshot_path).exists()
+
+    reset_run_trace_store()
+    output = replay_run("run_disk_001", output_format="json")
+    payload = json.loads(output)
+
+    assert payload["run_id"] == "run_disk_001"
+    assert payload["entries"][0]["trace_type"] == "run_finished"

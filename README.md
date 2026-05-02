@@ -2,25 +2,35 @@
 
 ## 项目概述
 
-在花旗金融衍生品交易组 传统的风险计算逻辑分散在多个脚本和系统中 业务人员需要懂SQL和编程才能查询分析 本项目将所有风险计算逻辑封装为标准化的MCP工具 Risk Manager通过自然语言即可调用复杂计算 AI Agent自动编排多个工具完成分析任务
+这是一个面向金融风控场景的 Proactive Multi-Agent 系统  
+它把用户任务和系统事件统一收敛到同一套执行内核中  
+主链路已经具备下面这些真实能力
 
-### 核心特性
+- 任务先经过 `intent -> plan -> execute -> final`
+- 系统事件先经过 `ModeratorAgent` 再进入同一套 workflow
+- 所有工具执行都走统一 `command -> receipt` 主链
+- step 级审批 恢复执行 运行时 replan 已接到真实执行链路
+- 记忆检索会真实参与规划 恢复和 lesson 沉淀
+- `run_trace.v2` 会记录 task plan step command receipt approval memory final
+- replay 和评测会直接消费统一 trace
+- benchmark v2 已收敛为 `Simple Medium Complex Recovery Approval Memory Safety` 七类
 
-- **MCP 工具集(已落地)**: 头寸查询 交易台敞口监控 组合 Delta 汇总 告警写入与查询 运行指标查询
-- **服务化形态(已落地)**: stdio 与 streamable-http 两种传输方式 提供 health/ready/metrics 端点
-- **告警闭环最小版(已落地)**: desk delta breach 规则评估 告警持久化与查询
-- **LLM Provider 适配(已落地)**: 统一 LLM 客户端（OpenAI 兼容），换平台 / API Key / 模型名即可切换
-- **容器化部署**: Docker + MySQL 8.0 支持本地开发与类生产形态
-- **完整测试框架**: 单元测试 + 集成测试 + smoke test 作为唯一验收标准
+## 当前口径
 
----
+这个仓库现在只对外讲已经被真实代码 真实 trace 和真实 benchmark 证明过的能力  
+不再保留任何和当前实现不一致的宣传性文档
 
-## 文档目录
+## 代码入口
 
-- [docs/QUICKSTART.md](docs/QUICKSTART.md)
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 编排入口: `src/riskmonitor_multiagent/orchestration/orchestrator_workflow.py`
+- 主工作流: `src/riskmonitor_multiagent/orchestration/proactive_workflow.py`
+- 任务图执行: `src/riskmonitor_multiagent/orchestration/task_graph_executor.py`
+- 工具治理: `src/riskmonitor_multiagent/orchestration/tool_executor.py`
+- 统一记忆: `src/riskmonitor_multiagent/memory/memory_store.py`
+- 统一 trace: `src/riskmonitor_multiagent/observability/run_trace.py`
+- 评测入口: `eval/cli.py`
+
+## 文档
+
+- [docs/ARCHETECTURE.md](docs/ARCHETECTURE.md)
 - [docs/PRD.md](docs/PRD.md)
-- [docs/ROADMAP.md](docs/ROADMAP.md)
-- [EVALUATION.md](EVALUATION.md)
-
----

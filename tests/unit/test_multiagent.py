@@ -26,15 +26,6 @@ from riskmonitor_multiagent.orchestration.message_bus import (
     get_message_bus,
     reset_message_bus,
 )
-from riskmonitor_multiagent.orchestration.proactive_workflow import (
-    ProactiveMultiAgentWorkflow,
-    reset_proactive_workflow,
-)
-from riskmonitor_multiagent.orchestration.multiagent_workflow import (
-    MultiAgentCollaborationWorkflow,
-    get_multi_agent_workflow,
-    reset_multi_agent_workflow,
-)
 from riskmonitor_multiagent.proactive_agents.moderator import ModeratorAgent
 
 
@@ -43,15 +34,6 @@ def message_bus() -> MessageBus:
     """消息总线 fixture."""
     reset_message_bus()
     return get_message_bus()
-
-
-@pytest.fixture
-def workflow() -> MultiAgentCollaborationWorkflow:
-    """多 Agent 工作流 fixture."""
-    reset_message_bus()
-    reset_multi_agent_workflow()
-    reset_proactive_workflow()
-    return get_multi_agent_workflow()
 
 
 class TestMessageContract:
@@ -378,88 +360,3 @@ class TestModeratorAgent:
         arbitration_events = message_bus.get_event_history(event_type=EventType.ARBITRATION_RESOLVED.value)
         assert len(arbitration_events) == 1
 
-
-class TestMultiAgentWorkflow:
-    """测试多 Agent 工作流."""
-
-    def test_workflow_initialization(self, workflow: MultiAgentCollaborationWorkflow) -> None:
-        """测试工作流初始化."""
-        assert workflow._message_bus is not None
-        assert workflow._moderator is not None
-        assert workflow._intent_agent is not None
-        assert workflow._orchestrator_agent is not None
-        assert workflow._critic_agent is not None
-        assert workflow._system_engineer_agent is not None
-        assert workflow._risk_analyst_agent is not None
-
-    def test_global_singleton(self) -> None:
-        """测试全局单例."""
-        reset_message_bus()
-        reset_multi_agent_workflow()
-
-        workflow1 = get_multi_agent_workflow()
-        workflow2 = get_multi_agent_workflow()
-
-        assert workflow1 is workflow2
-
-    @pytest.mark.asyncio
-    async def test_workflow_route_event(self, workflow: MultiAgentCollaborationWorkflow) -> None:
-        """测试 workflow 通过 moderator 做事件路由."""
-        event = await workflow.create_task(
-            source_agent="intent",
-            payload={"task_id": "task-001", "content": "分析风险"},
-        )
-        decision = await workflow.route_event(
-            event=event,
-            candidate_agents=["risk_analyst", "orchestrator"],
-        )
-
-        assert decision.get("selected_agent") == "orchestrator"
-        history = workflow._message_bus.get_event_history()
-        assert len(history) == 2
-        assert history[0].get("event_type") == EventType.TASK_CREATED.value
-        assert history[1].get("event_type") == EventType.MODERATOR_DECISION.value
-
-    @pytest.mark.asyncio
-    async def test_workflow_runs_system_event_with_unified_workflow(
-        self,
-        workflow: MultiAgentCollaborationWorkflow,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """测试 system_event 通过统一 workflow 执行."""
-        captured: dict[str, object] = {}
-
-        async def fake_start_from_event(self, *, event: dict, candidate_agents: list[str] | None = None) -> dict:
-            captured["event"] = event
-            captured["candidate_agents"] = candidate_agents
-            return {
-                "status": "completed",
-                "run_id": "run_001",
-                "entry_type": "system_event",
-                "run_context": {"entry_type": "system_event", "run_id": "run_001"},
-            }
-
-        monkeypatch.setattr(
-            ProactiveMultiAgentWorkflow,
-            "start_from_event",
-            fake_start_from_event,
-            raising=True,
-        )
-        event = new_event(
-            event_type=EventType.RISK_BREACH_DETECTED,
-            source_agent="monitor",
-            payload={"content": "风险 breach"},
-        )
-
-        result = await workflow.run_system_event(
-            event=event,
-            candidate_agents=["orchestrator", "critic"],
-        )
-
-        assert result.get("entry_type") == "system_event"
-        assert captured["event"] == event
-        assert captured["candidate_agents"] == ["orchestrator", "critic"]
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

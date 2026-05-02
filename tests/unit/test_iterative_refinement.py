@@ -260,7 +260,3 @@ class TestGlobalSingleton:
         engine2 = get_refinement_engine()
         
         assert engine1 is engine2
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

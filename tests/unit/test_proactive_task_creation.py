@@ -13,7 +13,7 @@ async def test_proactive_agent_emits_event_and_runs_followup_task(
     emitted: dict[str, object] = {}
 
     class FakeWorkflow:
-        async def run_system_event(
+        async def start_from_event(
             self,
             *,
             event: dict,
@@ -27,9 +27,9 @@ async def test_proactive_agent_emits_event_and_runs_followup_task(
                 "run_context": {"entry_type": "system_event", "run_id": "run_001"},
             }
 
-    import riskmonitor_multiagent.orchestration.multiagent_workflow as workflow_module
+    import riskmonitor_multiagent.orchestration.proactive_workflow as workflow_module
 
-    monkeypatch.setattr(workflow_module, "get_multi_agent_workflow", lambda: FakeWorkflow(), raising=True)
+    monkeypatch.setattr(workflow_module, "get_proactive_workflow", lambda: FakeWorkflow(), raising=True)
 
     agent.add_intention(
         description="主动告警:系统错误率异常",
