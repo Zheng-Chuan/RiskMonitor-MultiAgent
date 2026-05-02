@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from riskmonitor_multiagent.contracts.agent_messages import (
     AGENT_COMMAND_SCHEMA_VERSION,
     AGENT_RECEIPT_SCHEMA_VERSION,
     validate_agent_command,
+)
+from riskmonitor_multiagent.contracts.approval import (
+    ensure_approval_transition,
+    normalize_approval_request,
 )
 from riskmonitor_multiagent.data_access import alerts_repository
 from riskmonitor_multiagent.data_access import positions_repository
@@ -46,6 +51,7 @@ _ANALYST_ALLOWLIST: dict[str, Callable[[dict[str, Any]], ToolResult]] = {}
 _MANAGER_ALLOWLIST: dict[str, Callable[[dict[str, Any]], ToolResult]] = {}
 
 RBAC_POLICY_VERSION = "rbac_policy.v1"
+_RUN_BUDGET_STATE: dict[str, dict[str, int]] = {}
 
 _SEVERITY_RANK = {"INFO": 1, "WARNING": 2, "CRITICAL": 3}
 
@@ -310,6 +316,62 @@ def _is_approved(params: dict[str, Any]) -> bool:
     return approval.get("approved") is True
 
 
+def _approval_state_from_params(params: dict[str, Any]) -> str | None:
+    approval = params.get("approval")
+    if not isinstance(approval, dict):
+        return None
+    state = approval.get("state")
+    return str(state).strip().lower() if isinstance(state, str) and state.strip() else None
+
+
+def _derive_command_impact_scope(params: dict[str, Any]) -> list[str]:
+    impact_scope: list[str] = []
+    approval = params.get("approval") if isinstance(params.get("approval"), dict) else {}
+    raw_scope = approval.get("impact_scope")
+    if isinstance(raw_scope, list):
+        impact_scope.extend(str(item).strip() for item in raw_scope if isinstance(item, str) and item.strip())
+    elif isinstance(raw_scope, str) and raw_scope.strip():
+        impact_scope.append(raw_scope.strip())
+
+    alert = params.get("alert") if isinstance(params.get("alert"), dict) else {}
+    if isinstance(alert.get("desk"), str) and alert.get("desk"):
+        impact_scope.append(f"desk:{alert['desk']}")
+    if isinstance(params.get("desk"), str) and params.get("desk"):
+        impact_scope.append(f"desk:{params['desk']}")
+    if isinstance(params.get("trader_id"), str) and params.get("trader_id"):
+        impact_scope.append(f"trader:{params['trader_id']}")
+    if not impact_scope:
+        impact_scope.append("system")
+    return list(dict.fromkeys(impact_scope))
+
+
+def _build_command_approval_request(*, cmd: dict[str, Any], meta: ToolMeta | None) -> dict[str, Any] | None:
+    if meta is None or meta.capability != "side_effect":
+        return None
+    policy = _get_side_effect_policy(meta)
+    if not policy.require_approval:
+        return None
+
+    params = cmd.get("params") if isinstance(cmd.get("params"), dict) else {}
+    approval = params.get("approval") if isinstance(params.get("approval"), dict) else {}
+    event = params.get("_event") if isinstance(params.get("_event"), dict) else {}
+    risk_level = approval.get("risk_level") or event.get("severity") or "HIGH"
+    recommended_action = approval.get("recommended_action") or f"approve command {cmd.get('action')}"
+    reason = approval.get("reason") or f"command {cmd.get('action')} requires approval"
+    return normalize_approval_request(
+        {
+            "level": "command",
+            "approval_id": f"command:{cmd.get('command_id')}",
+            "command_id": cmd.get("command_id"),
+            "tool_name": cmd.get("action"),
+            "reason": reason,
+            "risk_level": risk_level,
+            "impact_scope": _derive_command_impact_scope(params),
+            "recommended_action": recommended_action,
+        }
+    )
+
+
 def _is_allowed_by_role(*, meta: ToolMeta, target_agent: str) -> bool:
     if target_agent in ("system_engineer", "risk_analyst"):
         return meta.capability == "read_only"
@@ -326,16 +388,153 @@ def _is_allowed_by_meta(*, meta: ToolMeta, target_agent: str) -> bool:
     return True
 
 
+def _classify_failure(*, error: str | None, status: str) -> str | None:
+    if status == "completed":
+        return None
+    if error in {"approval_required", "approval_reason_required", "approval_rejected", "approval_expired", "rbac_denied", "policy_denied"}:
+        return "permission"
+    if error in {"invalid_command", "alert required", "alert_id required", "alerts required", "desk required", "trader_id required", "query required"}:
+        return "validation"
+    if error in {"unknown_action", "handler_missing"}:
+        return "dependency"
+    if error == "tool_timeout":
+        return "timeout"
+    return "runtime"
+
+
+def _resolve_retry_budget(cmd: dict[str, Any], params: dict[str, Any]) -> int:
+    retry_budget = cmd.get("retry_budget", params.get("retry_budget", 0))
+    return int(retry_budget) if isinstance(retry_budget, int) and retry_budget >= 0 else 0
+
+
+def _build_approval_trace(*, meta: ToolMeta | None, params: dict[str, Any], ok: bool, error: str | None) -> dict[str, Any]:
+    now_ms = int(time.time() * 1000)
+    if meta is None or meta.capability != "side_effect":
+        return {
+            "required": False,
+            "current_state": "not_required",
+            "history": [{"state": "not_required", "ts_ms": now_ms, "reason": "read_only_tool"}],
+        }
+
+    policy = _get_side_effect_policy(meta)
+    if not policy.require_approval:
+        return {
+            "required": False,
+            "current_state": "not_required",
+            "history": [{"state": "not_required", "ts_ms": now_ms, "reason": "policy_does_not_require_approval"}],
+        }
+
+    history: list[dict[str, Any]] = [
+        {"state": "pending", "ts_ms": now_ms, "reason": "side_effect_requires_approval"}
+    ]
+    approval = params.get("approval") if isinstance(params.get("approval"), dict) else {}
+    actor = approval.get("actor") if isinstance(approval.get("actor"), str) else approval.get("approved_by")
+
+    explicit_state = _approval_state_from_params(params)
+    if explicit_state == "rejected" or error == "approval_rejected":
+        ensure_approval_transition("pending", "rejected")
+        history.append({"state": "rejected", "ts_ms": now_ms, "reason": "approval_rejected", "actor": actor})
+        current_state = "rejected"
+    elif explicit_state == "expired" or error == "approval_expired":
+        ensure_approval_transition("pending", "expired")
+        history.append({"state": "expired", "ts_ms": now_ms, "reason": "approval_expired", "actor": actor})
+        current_state = "expired"
+    elif _is_approved(params):
+        ensure_approval_transition("pending", "approved")
+        history.append({"state": "approved", "ts_ms": now_ms, "reason": "approval_granted", "actor": actor})
+        if ok:
+            ensure_approval_transition("approved", "resumed")
+            history.append({"state": "resumed", "ts_ms": now_ms, "reason": "command_executed_after_approval", "actor": actor})
+            current_state = "resumed"
+        else:
+            current_state = "approved"
+    else:
+        current_state = "pending"
+
+    return {
+        "required": True,
+        "current_state": current_state,
+        "history": history,
+    }
+
+
+def _resolve_budget_limits(cmd: dict[str, Any], params: dict[str, Any]) -> dict[str, int]:
+    raw = params.get("_budget")
+    if not isinstance(raw, dict):
+        return {}
+    limits: dict[str, int] = {}
+    tool_call_limit = raw.get("tool_call_limit")
+    side_effect_limit = raw.get("side_effect_limit")
+    if isinstance(tool_call_limit, int) and tool_call_limit >= 0:
+        limits["tool_call_limit"] = tool_call_limit
+    if isinstance(side_effect_limit, int) and side_effect_limit >= 0:
+        limits["side_effect_limit"] = side_effect_limit
+    return limits
+
+
+def _reserve_budget(*, cmd: dict[str, Any], meta: ToolMeta) -> tuple[bool, dict[str, Any] | None]:
+    run_id = cmd.get("run_id")
+    params = cmd.get("params") if isinstance(cmd.get("params"), dict) else {}
+    if not isinstance(run_id, str) or not run_id.strip():
+        return True, None
+
+    limits = _resolve_budget_limits(cmd, params)
+    if not limits:
+        return True, None
+
+    state = _RUN_BUDGET_STATE.setdefault(run_id, {"tool_calls": 0, "side_effect_calls": 0})
+    next_tool_calls = int(state.get("tool_calls", 0)) + 1
+    next_side_effect_calls = int(state.get("side_effect_calls", 0)) + (1 if meta.capability == "side_effect" else 0)
+
+    tool_call_limit = limits.get("tool_call_limit")
+    if tool_call_limit is not None and next_tool_calls > tool_call_limit:
+        return False, {
+            "reason": "tool_budget_exceeded",
+            "budget": {
+                "tool_call_limit": tool_call_limit,
+                "tool_calls": state.get("tool_calls", 0),
+                "next_tool_calls": next_tool_calls,
+            },
+        }
+
+    side_effect_limit = limits.get("side_effect_limit")
+    if side_effect_limit is not None and next_side_effect_calls > side_effect_limit:
+        return False, {
+            "reason": "side_effect_budget_exceeded",
+            "budget": {
+                "side_effect_limit": side_effect_limit,
+                "side_effect_calls": state.get("side_effect_calls", 0),
+                "next_side_effect_calls": next_side_effect_calls,
+            },
+        }
+
+    state["tool_calls"] = next_tool_calls
+    state["side_effect_calls"] = next_side_effect_calls
+    return True, {
+        "budget": {
+            "tool_call_limit": tool_call_limit,
+            "side_effect_limit": side_effect_limit,
+            "tool_calls": state["tool_calls"],
+            "side_effect_calls": state["side_effect_calls"],
+        }
+    }
+
+
 def _resolve_approval_state(*, meta: ToolMeta, params: dict[str, Any], ok: bool, error: str | None) -> str:
     if meta.capability != "side_effect":
         return "not_required"
     if not _get_side_effect_policy(meta).require_approval:
         return "not_required"
+    explicit_state = _approval_state_from_params(params)
+    if explicit_state == "rejected" or error == "approval_rejected":
+        return "rejected"
+    if explicit_state == "expired" or error == "approval_expired":
+        return "expired"
     if _is_approved(params):
-        return "approved" if ok else "approved_but_failed"
+        return "resumed" if ok else "approved_but_failed"
     if error == "approval_required":
-        return "required"
-    return "not_approved"
+        return "pending"
+    return "pending"
 
 
 def _build_receipt(
@@ -349,18 +548,24 @@ def _build_receipt(
     error: str | None,
     outputs: dict[str, Any] | None,
     status: str,
+    retry_count: int = 0,
+    retry_budget: int = 0,
+    failure_classification: str | None = None,
 ) -> dict[str, Any]:
     tool_name = str(cmd.get("action") or "")
     params = cmd.get("params") if isinstance(cmd.get("params"), dict) else {}
     target_agent = cmd.get("target_agent")
     side_effect = bool(meta is not None and meta.capability == "side_effect")
     approval_state = _resolve_approval_state(meta=meta, params=params, ok=ok, error=error) if meta is not None else "unknown"
+    approval_trace = _build_approval_trace(meta=meta, params=params, ok=ok, error=error)
+    approval_request = _build_command_approval_request(cmd=cmd, meta=meta)
     normalized_outputs = dict(outputs) if isinstance(outputs, dict) else None
     return {
         "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
         "run_id": cmd.get("run_id"),
         "command_id": cmd.get("command_id"),
         "target_agent": target_agent,
+        "action": tool_name,
         "tool_name": tool_name,
         "inputs": dict(params),
         "outputs": normalized_outputs,
@@ -373,12 +578,53 @@ def _build_receipt(
         "output": normalized_outputs,
         "side_effect": side_effect,
         "approval_state": approval_state,
+        "approval_trace": approval_trace,
+        "approval_request": approval_request,
+        "failure_classification": failure_classification or _classify_failure(error=error, status=status),
+        "retry_count": int(retry_count),
+        "retry_budget": int(retry_budget),
+        "timeout_ms": int(cmd.get("timeout_ms") or 0),
     }
+
+
+def _execute_handler_with_timeout(
+    *,
+    handler: Callable[[dict[str, Any]], ToolResult],
+    params: dict[str, Any],
+    timeout_ms: int,
+) -> ToolResult:
+    timeout_seconds = float(timeout_ms) / 1000.0 if timeout_ms > 0 else None
+    pool = ThreadPoolExecutor(max_workers=1)
+    future = pool.submit(handler, params)
+    try:
+        if timeout_seconds is None:
+            return future.result()
+        return future.result(timeout=timeout_seconds)
+    except FutureTimeoutError:
+        future.cancel()
+        return ToolResult(
+            ok=False,
+            output={"action": params.get("_action"), "result": None},
+            evidence={"reason": "tool_timeout"},
+            artifacts=[{"kind": "tool_timeout"}],
+            error="tool_timeout",
+            latency_ms=float(timeout_ms),
+        )
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+
+def _should_retry(*, failure_classification: str | None, attempt_index: int, retry_budget: int) -> bool:
+    if attempt_index >= retry_budget:
+        return False
+    return failure_classification in {"runtime", "timeout", "dependency"}
 
 
 def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
     started = time.monotonic()
     ok_cmd, errors = validate_agent_command(cmd)
+    params = cmd.get("params") if isinstance(cmd.get("params"), dict) else {}
+    retry_budget = _resolve_retry_budget(cmd, params)
     if not ok_cmd:
         inc_counter("rm_agent_command_invalid_total")
         return _build_receipt(
@@ -391,12 +637,12 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
             error="invalid_command",
             outputs=None,
             status="failed",
+            retry_budget=retry_budget,
         )
 
     action = cmd.get("action")
-    params = cmd.get("params") if isinstance(cmd.get("params"), dict) else {}
     target = cmd.get("target_agent")
-    timeout_ms = cmd.get("timeout_ms")
+    timeout_ms = int(cmd.get("timeout_ms") or 0)
 
     meta = get_tool_meta(str(action))
     if meta is None:
@@ -411,6 +657,7 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
             error="unknown_action",
             outputs=None,
             status="failed",
+            retry_budget=retry_budget,
         )
 
     if not _is_allowed_by_role(meta=meta, target_agent=str(target)):
@@ -432,6 +679,7 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
             error="rbac_denied",
             outputs=None,
             status="failed",
+            retry_budget=retry_budget,
         )
 
     if not _is_allowed_by_meta(meta=meta, target_agent=str(target)):
@@ -455,6 +703,7 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
             error="rbac_denied",
             outputs=None,
             status="failed",
+            retry_budget=retry_budget,
         )
 
     if meta.capability == "side_effect":
@@ -481,6 +730,7 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
                 error="policy_denied",
                 outputs=None,
                 status="failed",
+                retry_budget=retry_budget,
             )
         if pol.require_reason and _is_approved(params):
             approval = params.get("approval") if isinstance(params.get("approval"), dict) else {}
@@ -504,7 +754,50 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
                     error="approval_reason_required",
                     outputs=None,
                     status="failed",
+                    retry_budget=retry_budget,
                 )
+
+        explicit_approval_state = _approval_state_from_params(params)
+        if explicit_approval_state == "rejected":
+            inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+            return _build_receipt(
+                cmd=cmd,
+                meta=meta,
+                ok=False,
+                latency_ms=0.0,
+                evidence={
+                    "action": action,
+                    "timeout_ms": timeout_ms,
+                    "reason": "approval_rejected",
+                    "capability": meta.capability,
+                    "policy_version": RBAC_POLICY_VERSION,
+                },
+                artifacts=[],
+                error="approval_rejected",
+                outputs=None,
+                status="blocked",
+                retry_budget=retry_budget,
+            )
+        if explicit_approval_state == "expired":
+            inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+            return _build_receipt(
+                cmd=cmd,
+                meta=meta,
+                ok=False,
+                latency_ms=0.0,
+                evidence={
+                    "action": action,
+                    "timeout_ms": timeout_ms,
+                    "reason": "approval_expired",
+                    "capability": meta.capability,
+                    "policy_version": RBAC_POLICY_VERSION,
+                },
+                artifacts=[],
+                error="approval_expired",
+                outputs=None,
+                status="blocked",
+                retry_budget=retry_budget,
+            )
 
     if meta.capability == "side_effect" and _get_side_effect_policy(meta).require_approval and not _is_approved(params):
         inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
@@ -525,6 +818,7 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
             error="approval_required",
             outputs=None,
             status="blocked",
+            retry_budget=retry_budget,
         )
 
     allowlist = (
@@ -555,9 +849,71 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
             error="handler_missing",
             outputs=None,
             status="failed",
+            retry_budget=retry_budget,
         )
 
-    result = handler(params)
+    allowed_budget, budget_evidence = _reserve_budget(cmd=cmd, meta=meta)
+    if not allowed_budget:
+        inc_counter("rm_agent_command_denied_total", labels={"target_agent": str(target), "action": str(action)})
+        budget_reason = budget_evidence.get("reason") if isinstance(budget_evidence, dict) else "tool_budget_exceeded"
+        evidence = {
+            "action": action,
+            "timeout_ms": timeout_ms,
+            "reason": budget_reason,
+            "capability": meta.capability,
+            "policy_version": RBAC_POLICY_VERSION,
+        }
+        if isinstance(budget_evidence, dict):
+            evidence.update(budget_evidence)
+        return _build_receipt(
+            cmd=cmd,
+            meta=meta,
+            ok=False,
+            latency_ms=0.0,
+            evidence=evidence,
+            artifacts=[],
+            error=str(budget_reason),
+            outputs=None,
+            status="failed",
+            retry_budget=retry_budget,
+        )
+
+    attempts = 0
+    retry_records: list[dict[str, Any]] = []
+    result: ToolResult | None = None
+    working_params = dict(params)
+    working_params["_action"] = str(action)
+    while attempts <= retry_budget:
+        attempts += 1
+        result = _execute_handler_with_timeout(
+            handler=handler,
+            params=working_params,
+            timeout_ms=timeout_ms,
+        )
+        failure_classification = _classify_failure(
+            error=result.error,
+            status="completed" if result.ok else "failed",
+        )
+        retry_records.append(
+            {
+                "attempt": attempts,
+                "ok": bool(result.ok),
+                "error": result.error,
+                "failure_classification": failure_classification,
+            }
+        )
+        if result.ok or not _should_retry(
+            failure_classification=failure_classification,
+            attempt_index=attempts - 1,
+            retry_budget=retry_budget,
+        ):
+            break
+
+    assert result is not None
+    evidence = dict(result.evidence)
+    if isinstance(budget_evidence, dict):
+        evidence.update(budget_evidence)
+    evidence["retry_records"] = retry_records
     if meta.capability == "side_effect":
         inc_counter(
             "rm_side_effect_executed_total",
@@ -570,11 +926,17 @@ def execute_agent_command(cmd: dict[str, Any]) -> dict[str, Any]:
         meta=meta,
         ok=bool(result.ok),
         latency_ms=float(result.latency_ms),
-        evidence=dict(result.evidence),
+        evidence=evidence,
         artifacts=list(result.artifacts),
         error=result.error,
         outputs=dict(result.output) if isinstance(result.output, dict) else None,
         status="completed" if result.ok else "failed",
+        retry_count=max(0, attempts - 1),
+        retry_budget=retry_budget,
+        failure_classification=_classify_failure(
+            error=result.error,
+            status="completed" if result.ok else "failed",
+        ),
     )
 
 
@@ -587,6 +949,7 @@ def new_agent_command(
     params: dict[str, Any],
     timeout_ms: int,
     expected_output_schema: str,
+    retry_budget: int = 0,
 ) -> dict[str, Any]:
     return {
         "schema_version": AGENT_COMMAND_SCHEMA_VERSION,
@@ -597,4 +960,5 @@ def new_agent_command(
         "params": params,
         "timeout_ms": int(timeout_ms),
         "expected_output_schema": expected_output_schema,
+        "retry_budget": int(retry_budget),
     }

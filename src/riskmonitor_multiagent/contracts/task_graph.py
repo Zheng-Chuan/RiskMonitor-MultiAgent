@@ -50,6 +50,7 @@ def validate_task_graph(graph: dict[str, Any]) -> tuple[bool, list[str]]:
         return False, errors
 
     step_ids: set[str] = set()
+    dependency_map: dict[str, set[str]] = {}
     for node in nodes:
         if not isinstance(node, dict):
             errors.append("bad_task_graph_node")
@@ -63,6 +64,7 @@ def validate_task_graph(graph: dict[str, Any]) -> tuple[bool, list[str]]:
             if sid in step_ids:
                 errors.append("duplicate_task_graph_step_id")
             step_ids.add(sid)
+            dependency_map.setdefault(sid, set())
 
         kind = node.get("kind")
         if not is_non_empty_str(kind) or str(kind) not in _ALLOWED_NODE_KINDS:
@@ -75,6 +77,8 @@ def validate_task_graph(graph: dict[str, Any]) -> tuple[bool, list[str]]:
         parent_id = node.get("parent_id")
         if parent_id is not None and not is_non_empty_str(parent_id):
             errors.append("bad_task_graph_parent_id")
+        elif is_non_empty_str(parent_id) and is_non_empty_str(step_id):
+            dependency_map.setdefault(str(step_id), set()).add(str(parent_id))
 
         if not is_non_empty_str(node.get("reason")):
             errors.append("bad_task_graph_reason")
@@ -103,8 +107,45 @@ def validate_task_graph(graph: dict[str, Any]) -> tuple[bool, list[str]]:
                 continue
             if str(from_step_id) not in step_ids or str(to_step_id) not in step_ids:
                 errors.append("unknown_task_graph_edge_ref")
+                continue
+            dependency_map.setdefault(str(to_step_id), set()).add(str(from_step_id))
+
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        step_id = node.get("step_id")
+        parent_id = node.get("parent_id")
+        if is_non_empty_str(step_id) and is_non_empty_str(parent_id) and str(parent_id) not in step_ids:
+            errors.append("unknown_task_graph_parent_id")
+
+    if not any(error in {"bad_task_graph_nodes", "bad_task_graph_node"} for error in errors):
+        if _has_cycle(step_ids=step_ids, dependency_map=dependency_map):
+            errors.append("cyclic_task_graph")
 
     return len(errors) == 0, errors
+
+
+def _has_cycle(*, step_ids: set[str], dependency_map: dict[str, set[str]]) -> bool:
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def _visit(step_id: str) -> bool:
+        if step_id in visited:
+            return False
+        if step_id in visiting:
+            return True
+        visiting.add(step_id)
+        for parent_id in dependency_map.get(step_id, set()):
+            if parent_id in step_ids and _visit(parent_id):
+                return True
+        visiting.remove(step_id)
+        visited.add(step_id)
+        return False
+
+    for step_id in step_ids:
+        if _visit(step_id):
+            return True
+    return False
 
 
 def build_task_graph_from_plan_steps(plan_steps: list[dict[str, Any]]) -> dict[str, Any]:
@@ -134,6 +175,7 @@ def build_task_graph_from_plan_steps(plan_steps: list[dict[str, Any]]) -> dict[s
             "command_id",
             "expected_output_schema",
             "params",
+            "approval",
             "condition",
             "replan_from_step_id",
             "timeout_ms",
@@ -214,6 +256,7 @@ def normalize_task_graph(graph: dict[str, Any], *, plan_steps: list[dict[str, An
             "command_id",
             "expected_output_schema",
             "params",
+            "approval",
             "condition",
             "replan_from_step_id",
             "timeout_ms",

@@ -240,13 +240,24 @@ class BaseAgent:
                     )
                     messages.append({"role": "user", "content": repair_prompt})
                 
-                resp = await client.chat_completions(
-                    messages=messages,
-                    model=self._model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    response_format=response_format,
-                )
+                try:
+                    resp = await client.chat_completions(
+                        messages=messages,
+                        model=self._model,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        response_format=response_format,
+                    )
+                except TypeError as exc:
+                    if "response_format" not in str(exc):
+                        raise
+                    # 兼容旧测试里的 fake client 签名
+                    resp = await client.chat_completions(
+                        messages=messages,
+                        model=self._model,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                    )
                 
                 # 记录成功指标
                 latency = self._elapsed_ms(started)

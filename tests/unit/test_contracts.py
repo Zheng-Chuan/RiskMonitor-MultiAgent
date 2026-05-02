@@ -59,6 +59,7 @@ def test_agent_command_and_receipt_validate_minimal_messages():
         "params": {"tool": "get_service_metrics"},
         "timeout_ms": 5000,
         "expected_output_schema": "tool_result.v1",
+        "retry_budget": 1,
     }
     ok, errors = validate_agent_command(cmd)
     assert ok, errors
@@ -79,7 +80,73 @@ def test_agent_command_and_receipt_validate_minimal_messages():
         "error": None,
         "side_effect": False,
         "approval_state": "not_required",
+        "approval_trace": {
+            "required": False,
+            "current_state": "not_required",
+            "history": [{"state": "not_required", "ts_ms": 1, "reason": "read_only_tool"}],
+        },
+        "failure_classification": None,
+        "retry_count": 0,
+        "retry_budget": 1,
+        "timeout_ms": 5000,
         "output": {"ok": True},
+    }
+    ok, errors = validate_agent_receipt(rcp)
+    assert ok, errors
+
+
+def test_agent_receipt_missing_required_fields_is_rejected():
+    rcp = {
+        "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
+        "run_id": "run-1",
+        "command_id": "cmd-1",
+        "target_agent": "system_engineer",
+        "tool_name": "collect_metrics",
+        "inputs": {},
+        "status": "completed",
+        "ok": True,
+        "latency_ms": 12.3,
+        "evidence": {},
+        "artifacts": [],
+        "error": None,
+        "side_effect": False,
+        "approval_state": "not_required",
+        "output": {"ok": True},
+    }
+    ok, errors = validate_agent_receipt(rcp)
+    assert ok is False
+    assert "bad_outputs" in errors
+    assert "bad_approval_trace" in errors
+    assert "bad_retry_count" in errors
+
+
+def test_agent_receipt_allows_blocked_with_null_outputs():
+    rcp = {
+        "schema_version": AGENT_RECEIPT_SCHEMA_VERSION,
+        "run_id": "run-2",
+        "command_id": "cmd-2",
+        "target_agent": "risk_analyst",
+        "tool_name": "submit_alerts",
+        "inputs": {"alert_id": "a-1"},
+        "outputs": None,
+        "status": "blocked",
+        "ok": False,
+        "latency_ms": 4.2,
+        "evidence": {"reason": "approval_required"},
+        "artifacts": [],
+        "error": "approval_required",
+        "side_effect": True,
+        "approval_state": "pending",
+        "approval_trace": {
+            "required": True,
+            "current_state": "pending",
+            "history": [],
+        },
+        "failure_classification": "permission",
+        "retry_count": 0,
+        "retry_budget": 0,
+        "timeout_ms": 1000,
+        "output": None,
     }
     ok, errors = validate_agent_receipt(rcp)
     assert ok, errors
@@ -168,6 +235,44 @@ def test_task_graph_tool_call_requires_tool_name():
     ok, errors = validate_task_graph(graph)
     assert ok is False
     assert "bad_task_graph_tool_name" in errors
+
+
+def test_task_graph_rejects_unknown_parent_id():
+    graph = {
+        "schema_version": TASK_GRAPH_SCHEMA_VERSION,
+        "nodes": [
+            {
+                "step_id": "s1",
+                "parent_id": "missing",
+                "kind": "delegate",
+                "status": "pending",
+                "reason": "需要专家分析",
+                "evidence": {"fields": ["task.payload.content"]},
+                "target_agent": "system_engineer",
+            }
+        ],
+        "edges": [],
+    }
+    ok, errors = validate_task_graph(graph)
+    assert ok is False
+    assert "unknown_task_graph_parent_id" in errors
+
+
+def test_task_graph_rejects_cycle_dependency():
+    graph = {
+        "schema_version": TASK_GRAPH_SCHEMA_VERSION,
+        "nodes": [
+            {"step_id": "s1", "kind": "delegate", "status": "pending", "reason": "系统侧", "target_agent": "system_engineer", "evidence": {"fields": ["task.payload.content"]}},
+            {"step_id": "s2", "kind": "delegate", "status": "pending", "reason": "业务侧", "target_agent": "risk_analyst", "evidence": {"fields": ["task.payload.content"]}},
+        ],
+        "edges": [
+            {"from_step_id": "s1", "to_step_id": "s2", "condition": "always"},
+            {"from_step_id": "s2", "to_step_id": "s1", "condition": "always"},
+        ],
+    }
+    ok, errors = validate_task_graph(graph)
+    assert ok is False
+    assert "cyclic_task_graph" in errors
 
 
 def test_task_graph_finalize_depends_on_all_prior_branches():

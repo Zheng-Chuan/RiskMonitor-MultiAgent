@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any
 
@@ -108,29 +109,65 @@ def _build_compatible_output(
 
     llm_interactions = result.get("llm_interactions", [])
     total_tokens = sum(i.get("tokens_used", 0) for i in llm_interactions)
+    approval_trace = result.get("approval_trace", [])
+    critic_plan = result.get("critic_plan", {}) if isinstance(result.get("critic_plan"), dict) else {}
+    approval_required = any(
+        isinstance(item, dict)
+        and (
+            item.get("approval_state") in {"pending", "approved", "approved_but_failed", "rejected", "expired"}
+            or (
+                isinstance(item.get("approval_trace"), dict)
+                and bool(item.get("approval_trace", {}).get("required"))
+            )
+        )
+        for item in approval_trace
+    ) or bool(critic_plan.get("require_human_approval"))
+    approval_approved = not approval_required
+    if approval_required and approval_trace:
+        approval_approved = not any(
+            isinstance(item, dict) and item.get("approval_state") in {"pending", "rejected", "expired"}
+            for item in approval_trace
+        )
+    elif approval_required:
+        approval_approved = os.getenv("HITL_AUTO_APPROVE", "1").strip() not in {"0", "false", "False"}
 
+    effective_run_id = result.get("run_id") if isinstance(result.get("run_id"), str) and result.get("run_id") else run_id
+    effective_status = result.get("status")
+    if effective_status == "blocked" and approval_required:
+        effective_status = "pending_approval"
     return {
         "schema_version": "orchestrator_run.v1",
-        "ok": result.get("status") == "completed",
+        "ok": effective_status == "completed",
         "latency_ms": latency_ms,
         "result": {
             "schema_version": "orchestrator_run.v1",
-            "run_id": run_id,
+            "run_id": effective_run_id,
+            "entry_type": result.get("entry_type"),
+            "run_context": result.get("run_context", {}),
             "task_id": task.get("task_id"),
+            "status": effective_status,
             "task": task,
+            "route_decision": result.get("route_decision", {}),
+            "trigger": result.get("trigger", {}),
             "intent": result.get("intent", {}),
+            "memory_hits": result.get("memory_hits", []),
+            "planning_memory": result.get("planning_memory", {}),
+            "resume_memory_state": result.get("resume_memory_state", []),
+            "run_summary": result.get("run_summary", {}),
+            "procedural_lesson": result.get("procedural_lesson", {}),
             "task_graph": result.get("task_graph", {}),
             "task_graph_execution": result.get("task_graph_execution", {}),
             "orchestrator_plan": result.get("orchestrator_plan", {}),
-            "critic_plan": result.get("critic_plan", {}),
-            "approval": {"required": True, "approved": True},
+            "critic_plan": critic_plan,
+            "approval": {"required": approval_required, "approved": approval_approved},
             "engineer": result.get("engineer", {}),
             "analyst": result.get("analyst", {}),
             "artifacts": {},
             "receipts": result.get("receipts", []),
+            "approval_trace": approval_trace,
             "pending_questions": [],
             "orchestrator_final": result.get("final_output", {}),
-            "critic_final": {},
+            "critic_final": result.get("critic_final", {}),
             "final_output": result.get("final_output", {}),
             "errors": result.get("errors", []),
             "tokens_total": total_tokens,

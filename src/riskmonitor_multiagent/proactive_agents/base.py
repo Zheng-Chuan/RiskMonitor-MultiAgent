@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
 from riskmonitor_multiagent.agents.base import AgentResult, BaseAgent
+from riskmonitor_multiagent.contracts.event import EventType, new_event
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
 
 logger = logging.getLogger(__name__)
@@ -366,21 +367,28 @@ class BaseProactiveAgent:
             try:
                 # 如果有目标 Agent,发送消息
                 if intention.target_agent:
-                    from riskmonitor_multiagent.orchestration.message_bus import get_message_bus
-                    message_bus = get_message_bus()
-                    
-                    await message_bus.send_request(
-                        from_agent=self._name,
-                        to_agent=intention.target_agent,
-                        content={
-                            "type": "proactive_alert",
-                            "intention": intention.description,
-                            "tool_name": intention.tool_name,
-                            "tool_params": intention.tool_params,
-                        },
+                    from riskmonitor_multiagent.orchestration.multiagent_workflow import get_multi_agent_workflow
+
+                    proactive_event = self._build_proactive_event(intention=intention)
+
+                    workflow = get_multi_agent_workflow()
+                    candidate_agents = list(
+                        dict.fromkeys(
+                            [
+                                intention.target_agent,
+                                "critic",
+                                "orchestrator",
+                            ]
+                        )
                     )
-                    
-                    logger.info(f"[{self._name}] Sent proactive alert to {intention.target_agent}")
+                    await workflow.run_system_event(
+                        event=proactive_event,
+                        candidate_agents=candidate_agents,
+                    )
+
+                    logger.info(
+                        f"[{self._name}] Sent proactive event to unified workflow via {intention.target_agent}"
+                    )
                 
                 # 更新状态为 completed
                 self.update_intention_status(intention.intention_id, "completed")
@@ -388,6 +396,44 @@ class BaseProactiveAgent:
             except Exception as e:
                 logger.exception(f"[{self._name}] Failed to execute intention: {e}")
                 self.update_intention_status(intention.intention_id, "failed")
+
+    def _build_proactive_event(self, *, intention: Intention) -> dict[str, Any]:
+        """把主动意图转换为统一系统事件."""
+        tool_params = dict(intention.tool_params or {})
+        event_type = EventType.TASK_CREATED
+        if tool_params.get("metric_name") == "error_rate":
+            event_type = EventType.RISK_BREACH_DETECTED
+
+        task_payload = {
+            "task_id": f"proactive_{intention.intention_id}",
+            "session_id": f"proactive_{self._name}",
+            "content": intention.description,
+            "task": {
+                "task_id": f"proactive_{intention.intention_id}",
+                "session_id": f"proactive_{self._name}",
+                "source": "system_event",
+                "payload": {
+                    "content": intention.description,
+                    "proactive_intention_id": intention.intention_id,
+                    "tool_name": intention.tool_name,
+                    "tool_params": tool_params,
+                },
+            },
+            "trigger_reason": intention.description,
+            "trigger_evidence": {
+                "source_agent": self._name,
+                "tool_name": intention.tool_name,
+                "tool_params": tool_params,
+            },
+            "target_agent": intention.target_agent,
+        }
+        return new_event(
+            event_type=event_type,
+            source_agent=self._name,
+            target_agent=intention.target_agent,
+            payload=task_payload,
+            priority="high" if event_type == EventType.RISK_BREACH_DETECTED else "normal",
+        )
     
     async def run_with_react(
         self,

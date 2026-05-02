@@ -39,6 +39,15 @@ def test_query_positions_by_trader_uses_tool_executor_path():
         },
         "side_effect": False,
         "approval_state": "not_required",
+        "approval_trace": {
+            "required": False,
+            "current_state": "not_required",
+            "history": [{"state": "not_required", "ts_ms": 1, "reason": "read_only_tool"}],
+        },
+        "failure_classification": None,
+        "retry_count": 0,
+        "retry_budget": 0,
+        "timeout_ms": 1000,
     }
 
     with patch(
@@ -79,6 +88,18 @@ def test_submit_alerts_uses_tool_executor_path():
         },
         "side_effect": True,
         "approval_state": "approved",
+        "approval_trace": {
+            "required": True,
+            "current_state": "approved",
+            "history": [
+                {"state": "pending", "ts_ms": 1, "reason": "side_effect_requires_approval"},
+                {"state": "approved", "ts_ms": 2, "reason": "approval_granted"},
+            ],
+        },
+        "failure_classification": None,
+        "retry_count": 0,
+        "retry_budget": 0,
+        "timeout_ms": 1000,
     }
 
     with patch(

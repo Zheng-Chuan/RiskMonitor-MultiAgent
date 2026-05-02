@@ -18,6 +18,11 @@ from collections.abc import Mapping
 from typing import Any, Awaitable, Callable
 
 from riskmonitor_multiagent.contracts.agent_messages import validate_agent_receipt
+from riskmonitor_multiagent.contracts.approval import (
+    build_approval_summary_text,
+    normalize_approval_record,
+    normalize_approval_request,
+)
 from riskmonitor_multiagent.contracts.task_graph import normalize_task_graph
 from riskmonitor_multiagent.orchestration.tool_executor import execute_agent_command, new_agent_command
 from riskmonitor_multiagent.orchestration.tool_registry import get_tool_meta
@@ -25,13 +30,20 @@ from riskmonitor_multiagent.proactive_agents import ProactiveAgentResult
 from riskmonitor_multiagent.utils.ids import new_command_id, new_run_id
 
 DelegateHandler = Callable[..., Awaitable[ProactiveAgentResult]]
+NodeResultHandler = Callable[..., Awaitable[None]]
 
 
 class TaskGraphExecutor:
     """执行最小 TaskGraph."""
 
-    def __init__(self, *, delegate_handlers: dict[str, DelegateHandler]) -> None:
+    def __init__(
+        self,
+        *,
+        delegate_handlers: dict[str, DelegateHandler],
+        on_node_completed: NodeResultHandler | None = None,
+    ) -> None:
         self._delegate_handlers = dict(delegate_handlers)
+        self._on_node_completed = on_node_completed
 
     async def execute(
         self,
@@ -52,6 +64,7 @@ class TaskGraphExecutor:
         node_outputs = self._extract_node_outputs(prior_state)
         delegate_results = self._restore_delegate_results(prior_state)
         receipts = self._extract_receipts(prior_state)
+        approval_records = self._extract_approval_records(prior_state)
         execution_trace = list(prior_state.get("trace", [])) if isinstance(prior_state.get("trace"), list) else []
         retry_records = list(prior_state.get("retry_records", [])) if isinstance(prior_state.get("retry_records"), list) else []
         errors = list(prior_state.get("errors", [])) if isinstance(prior_state.get("errors"), list) else []
@@ -83,6 +96,7 @@ class TaskGraphExecutor:
         final_output: dict[str, Any] = {}
         status = "completed"
         failed_step_id: str | None = None
+        blocked_step_id: str | None = None
 
         for node in nodes:
             step_id = str(node["step_id"])
@@ -157,6 +171,17 @@ class TaskGraphExecutor:
                     ]
                     receipt["step_id"] = step_id
                     receipts.append(receipt)
+                if isinstance(node_result.get("approval_record"), dict):
+                    approval_record = dict(node_result["approval_record"])
+                    approval_records = [
+                        existing
+                        for existing in approval_records
+                        if not (
+                            isinstance(existing, dict)
+                            and str(existing.get("approval_id") or "") == str(approval_record.get("approval_id") or "")
+                        )
+                    ]
+                    approval_records.append(approval_record)
 
                 execution_trace.append(
                     {
@@ -174,8 +199,15 @@ class TaskGraphExecutor:
                         "latency_ms": node_result.get("latency_ms"),
                         "input_sources": node_result.get("input_sources", []),
                         "receipt_command_ids": node_result.get("receipt_command_ids", []),
+                        "approval_record": node_result.get("approval_record"),
                     }
                 )
+                if self._on_node_completed is not None:
+                    await self._on_node_completed(
+                        node=dict(node),
+                        trace_entry=dict(execution_trace[-1]),
+                        node_result=dict(node_result),
+                    )
 
                 if node_result["status"] == "completed":
                     completed.add(step_id)
@@ -190,6 +222,15 @@ class TaskGraphExecutor:
                     should_stop = True
                     status = "stopped"
                     final_output = node_result.get("final_output") or {}
+                elif node_result["status"] == "blocked":
+                    should_stop = True
+                    status = "blocked"
+                    blocked_step_id = step_id
+                    if isinstance(node_result.get("output"), dict):
+                        node_outputs[step_id] = node_result["output"]
+                    err = node_result.get("error")
+                    if isinstance(err, str) and err:
+                        errors.append(err)
                 else:
                     status = "failed"
                     err = node_result.get("error")
@@ -216,6 +257,7 @@ class TaskGraphExecutor:
                 "status": status,
                 "completed_steps": sorted(completed),
                 "failed_step_id": failed_step_id,
+                "blocked_step_id": blocked_step_id,
                 "errors": errors,
                 "node_outputs": node_outputs,
                 "delegate_outputs": {
@@ -227,10 +269,12 @@ class TaskGraphExecutor:
                 "resume_history": resume_history,
                 "resume_ready": failed_step_id is not None,
                 "receipts": receipts,
+                "approval_records": approval_records,
                 "trace": execution_trace,
             },
             "delegate_results": delegate_results,
             "receipts": receipts,
+            "approval_records": approval_records,
             "final_output": final_output,
         }
 
@@ -328,6 +372,9 @@ class TaskGraphExecutor:
     ) -> dict[str, Any]:
         kind = str(node.get("kind") or "")
         step_id = str(node.get("step_id") or "")
+        step_approval_result = self._check_step_approval(node=node)
+        if step_approval_result is not None:
+            return step_approval_result
 
         if kind == "delegate":
             target_agent = str(node.get("target_agent") or "").strip()
@@ -341,6 +388,11 @@ class TaskGraphExecutor:
                     "task_graph_node": node,
                     "step_id": step_id,
                     "upstream_outputs": dict(node_outputs),
+                    "resume_context": (
+                        dict(task.get("resume_context", {}))
+                        if isinstance(task.get("resume_context"), dict)
+                        else {}
+                    ),
                 },
             )
             result.meta = dict(result.meta or {})
@@ -372,6 +424,9 @@ class TaskGraphExecutor:
                 }
 
             params = dict(node.get("params")) if isinstance(node.get("params"), dict) else {}
+            task_budget = task.get("tool_budget") if isinstance(task.get("tool_budget"), dict) else {}
+            if task_budget and "_budget" not in params:
+                params["_budget"] = dict(task_budget)
             target_agent = str(node.get("target_agent") or meta.owner or "").strip()
             if not target_agent:
                 return {
@@ -385,6 +440,7 @@ class TaskGraphExecutor:
             if not run_id:
                 run_id = task.get("task_id") if isinstance(task.get("task_id"), str) and task.get("task_id") else new_run_id("task_graph")
             timeout_ms = node.get("timeout_ms") if isinstance(node.get("timeout_ms"), int) and node.get("timeout_ms") > 0 else meta.default_timeout_ms
+            retry_budget = node.get("retry_budget") if isinstance(node.get("retry_budget"), int) and node.get("retry_budget") >= 0 else 0
             expected_output_schema = (
                 str(node.get("expected_output_schema"))
                 if isinstance(node.get("expected_output_schema"), str) and node.get("expected_output_schema")
@@ -398,6 +454,7 @@ class TaskGraphExecutor:
                 params=params,
                 timeout_ms=int(timeout_ms),
                 expected_output_schema=expected_output_schema,
+                retry_budget=int(retry_budget),
             )
             receipt = execute_agent_command(command)
             ok_receipt, receipt_errors = validate_agent_receipt(receipt)
@@ -425,6 +482,11 @@ class TaskGraphExecutor:
                         "target_agent": target_agent,
                         "side_effect": bool(meta.capability == "side_effect"),
                         "approval_state": "unknown",
+                        "approval_trace": {"required": bool(meta.capability == "side_effect"), "current_state": "unknown", "history": []},
+                        "failure_classification": "runtime",
+                        "retry_count": 0,
+                        "retry_budget": int(retry_budget),
+                        "timeout_ms": int(timeout_ms),
                     },
                 }
 
@@ -440,10 +502,12 @@ class TaskGraphExecutor:
                 "receipt_command_ids": [receipt_command_id],
                 "result": receipt.get("outputs"),
                 "approval_state": receipt.get("approval_state"),
+                "approval_trace": receipt.get("approval_trace"),
             }
             error = receipt.get("error")
-            status = "completed" if receipt.get("ok") is True else "failed"
+            status = "completed" if receipt.get("ok") is True else ("blocked" if receipt.get("status") == "blocked" else "failed")
             failure_classification = None if status == "completed" else self._classify_receipt_error(receipt)
+            approval_record = self._build_command_approval_record(step_id=step_id, receipt=receipt)
             return {
                 "status": status,
                 "output": output_payload,
@@ -452,12 +516,14 @@ class TaskGraphExecutor:
                     "task_graph_step_id": step_id,
                     "receipt_command_ids": [receipt_command_id],
                     "tool_name": tool_name,
+                    "approval_state": receipt.get("approval_state"),
                 },
                 "error": error,
                 "failure_classification": failure_classification,
                 "command_id": receipt_command_id,
                 "tool_name": tool_name,
                 "receipt": receipt,
+                "approval_record": approval_record,
                 "receipt_command_ids": [receipt_command_id],
             }
 
@@ -498,7 +564,7 @@ class TaskGraphExecutor:
                 "evidence": {"task_graph_step_id": step_id},
             }
 
-        return {"status": "failed", "error": f"unsupported_task_graph_kind:{kind or 'unknown'}"}
+        return {"status": "failed", "error": f"unknown_step_kind:{kind or 'unknown'}"}
 
     def _resolve_retry_budget(self, *, task: dict[str, Any], node: dict[str, Any]) -> int:
         retry_budget = node.get("retry_budget")
@@ -554,6 +620,12 @@ class TaskGraphExecutor:
         if not isinstance(raw, list):
             return []
         return [dict(receipt) for receipt in raw if isinstance(receipt, dict)]
+
+    def _extract_approval_records(self, state: dict[str, Any]) -> list[dict[str, Any]]:
+        raw = state.get("approval_records")
+        if not isinstance(raw, list):
+            return []
+        return [dict(record) for record in raw if isinstance(record, dict)]
 
     def _restore_delegate_results(self, state: dict[str, Any]) -> dict[str, ProactiveAgentResult]:
         raw = state.get("delegate_outputs")
@@ -671,14 +743,141 @@ class TaskGraphExecutor:
         )
 
     def _classify_receipt_error(self, receipt: dict[str, Any]) -> str:
+        classification = receipt.get("failure_classification")
+        if isinstance(classification, str) and classification:
+            return classification
         error = str(receipt.get("error") or "")
         if error in {"approval_required", "approval_reason_required", "rbac_denied", "policy_denied"}:
+            return "permission"
+        if error in {"approval_rejected", "approval_expired"}:
             return "permission"
         if error == "invalid_command":
             return "validation"
         if error in {"unknown_action", "handler_missing"}:
             return "dependency"
+        if error == "tool_timeout":
+            return "timeout"
         return "runtime"
+
+    def _check_step_approval(self, *, node: dict[str, Any]) -> dict[str, Any] | None:
+        approval = node.get("approval")
+        if not isinstance(approval, dict) or approval.get("required") is not True:
+            return None
+
+        request = normalize_approval_request(
+            {
+                "level": "step",
+                "approval_id": approval.get("approval_id") or f"step:{node.get('step_id')}",
+                "step_id": node.get("step_id"),
+                "reason": approval.get("reason") or node.get("reason"),
+                "risk_level": approval.get("risk_level") or "HIGH",
+                "impact_scope": approval.get("impact_scope") or [str(node.get("target_agent") or node.get("kind") or "system")],
+                "recommended_action": approval.get("recommended_action") or "review_and_resume_step",
+            }
+        )
+        explicit_state = str(approval.get("state") or "pending").strip().lower()
+        actor = approval.get("actor") if isinstance(approval.get("actor"), str) and approval.get("actor") else None
+        note = approval.get("note") if isinstance(approval.get("note"), str) and approval.get("note") else None
+
+        if explicit_state in {"approved", "resumed"}:
+            return None
+
+        if explicit_state == "rejected":
+            record = normalize_approval_record(
+                {
+                    "request": request,
+                    "state": "rejected",
+                    "actor": actor,
+                    "note": note,
+                    "error": "approval_rejected",
+                }
+            )
+            return {
+                "status": "blocked",
+                "output": {
+                    "summary": build_approval_summary_text(record),
+                    "approval_request": request,
+                },
+                "approval_record": record,
+                "error": "approval_rejected",
+                "failure_classification": "permission",
+            }
+
+        if explicit_state == "expired":
+            record = normalize_approval_record(
+                {
+                    "request": request,
+                    "state": "expired",
+                    "actor": actor,
+                    "note": note,
+                    "error": "approval_expired",
+                }
+            )
+            return {
+                "status": "blocked",
+                "output": {
+                    "summary": build_approval_summary_text(record),
+                    "approval_request": request,
+                },
+                "approval_record": record,
+                "error": "approval_expired",
+                "failure_classification": "permission",
+            }
+
+        record = normalize_approval_record(
+            {
+                "request": request,
+                "state": "pending",
+                "actor": actor,
+                "note": note,
+                "error": "approval_required",
+            }
+        )
+        return {
+            "status": "blocked",
+            "output": {
+                "summary": build_approval_summary_text(record),
+                "approval_request": request,
+            },
+            "approval_record": record,
+            "error": "approval_required",
+            "failure_classification": "permission",
+        }
+
+    def _build_command_approval_record(self, *, step_id: str, receipt: dict[str, Any]) -> dict[str, Any] | None:
+        approval_trace = receipt.get("approval_trace")
+        if not isinstance(approval_trace, dict) or not approval_trace.get("required"):
+            return None
+        request = receipt.get("approval_request")
+        if not isinstance(request, dict):
+            request = {
+                "level": "command",
+                "approval_id": f"command:{receipt.get('command_id')}",
+                "step_id": step_id,
+                "command_id": receipt.get("command_id"),
+                "tool_name": receipt.get("tool_name"),
+                "reason": ((receipt.get("evidence") or {}).get("reason") if isinstance(receipt.get("evidence"), dict) else None) or "approval_required",
+                "risk_level": (
+                    (((receipt.get("inputs") or {}).get("_event") or {}).get("severity"))
+                    if isinstance((receipt.get("inputs") or {}).get("_event"), dict)
+                    else None
+                ) or "HIGH",
+                "impact_scope": ["system"],
+                "recommended_action": "review_and_confirm_command_execution",
+            }
+        record = normalize_approval_record(
+            {
+                "request": request,
+                "state": receipt.get("approval_state") or approval_trace.get("current_state") or "pending",
+                "actor": ((receipt.get("inputs") or {}).get("approval") or {}).get("actor") if isinstance((receipt.get("inputs") or {}).get("approval"), dict) else None,
+                "note": ((receipt.get("inputs") or {}).get("approval") or {}).get("note") if isinstance((receipt.get("inputs") or {}).get("approval"), dict) else None,
+                "error": receipt.get("error"),
+            }
+        )
+        record["step_id"] = step_id
+        record["command_id"] = receipt.get("command_id")
+        record["tool_name"] = receipt.get("tool_name")
+        return record
 
 
 __all__ = ["TaskGraphExecutor"]

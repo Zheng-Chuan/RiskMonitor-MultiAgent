@@ -3,10 +3,9 @@ from __future__ import annotations
 import math
 import re
 import time
+import warnings
 from dataclasses import dataclass
 from typing import Any
-
-import chromadb
 
 from riskmonitor_multiagent import config
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
@@ -53,6 +52,14 @@ class ChromaVectorStore:
         self._collection_name = (collection or config.get_chroma_collection()).strip() or config.get_chroma_collection()
 
     def _client(self):
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"Deprecated call to `pkg_resources\.declare_namespace\(.+\)`\.",
+                category=DeprecationWarning,
+            )
+            import chromadb
+
         persist_dir = config.get_chroma_persist_dir()
         if persist_dir:
             return chromadb.PersistentClient(path=persist_dir)

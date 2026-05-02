@@ -378,18 +378,114 @@ Write Chinese text using only English punctuation."""
         *,
         task: dict[str, Any],
         orchestrator: dict[str, Any],
+        receipts: list[dict[str, Any]] | None = None,
+        final_output: dict[str, Any] | None = None,
+        phase: str = "plan_review",
     ) -> ProactiveAgentResult:
         """评审计划(使用 ReAct 循环)."""
         self.add_belief(
             content={"plan": orchestrator.get("plan_steps", [])},
             source="orchestrator_plan",
         )
-        
+
+        if phase == "final_review":
+            output = self._build_execution_review(
+                task=task,
+                orchestrator=orchestrator,
+                receipts=receipts or [],
+                final_output=final_output or {},
+            )
+            return ProactiveAgentResult(
+                ok=bool(output.get("ok")),
+                output=output,
+                bdi_state=self.get_bdi_state(),
+                llm_interactions=self.get_llm_interactions(),
+            )
+
         return await self.run_with_react(
             task=task,
-            context={"orchestrator_plan": orchestrator},
+            context={
+                "orchestrator_plan": orchestrator,
+                "receipts": receipts or [],
+                "final_output": final_output or {},
+                "phase": phase,
+            },
             max_tokens=512,
             max_steps=4,
+        )
+
+    def _build_execution_review(
+        self,
+        *,
+        task: dict[str, Any],
+        orchestrator: dict[str, Any],
+        receipts: list[dict[str, Any]],
+        final_output: dict[str, Any],
+    ) -> dict[str, Any]:
+        from riskmonitor_multiagent.contracts import normalize_critic_review
+
+        valid_receipts = [receipt for receipt in receipts if isinstance(receipt, dict)]
+        receipt_command_ids = [
+            str(receipt.get("command_id"))
+            for receipt in valid_receipts
+            if isinstance(receipt.get("command_id"), str) and receipt.get("command_id")
+        ]
+        blocked = [receipt for receipt in valid_receipts if receipt.get("status") == "blocked"]
+        failed = [
+            receipt
+            for receipt in valid_receipts
+            if receipt.get("status") == "failed" and receipt.get("failure_classification") != "permission"
+        ]
+        issues: list[dict[str, Any]] = []
+        for receipt in blocked:
+            issues.append(
+                {
+                    "code": str(receipt.get("error") or "approval_blocked"),
+                    "message": f"命令 {receipt.get('command_id')} 因审批或权限被阻断",
+                    "severity": "HIGH",
+                }
+            )
+        for receipt in failed:
+            issues.append(
+                {
+                    "code": str(receipt.get("error") or "tool_failed"),
+                    "message": f"命令 {receipt.get('command_id')} 执行失败",
+                    "severity": "MEDIUM",
+                }
+            )
+
+        ok = not issues
+        risk_level = "LOW" if ok else ("HIGH" if blocked else "MEDIUM")
+        return normalize_critic_review(
+            {
+                "schema_version": "critic_review.v1",
+                "ok": ok,
+                "risk_level": risk_level,
+                "issues": issues,
+                "require_human_approval": bool(blocked),
+                "suggested_fixes": [
+                    "补齐审批后重试阻断命令",
+                    "修复失败工具的输入参数或依赖",
+                ]
+                if issues
+                else [],
+                "evidence": {
+                    "fields": ["receipts", "final_output"],
+                    "receipt_command_ids": receipt_command_ids,
+                    "final_receipt_command_ids": final_output.get("receipt_command_ids", []),
+                    "task_id": task.get("task_id"),
+                    "plan_step_count": len(orchestrator.get("plan_steps", [])) if isinstance(orchestrator.get("plan_steps"), list) else 0,
+                },
+                "run_summary": {
+                    "text": "执行后审查完成",
+                    "key_points": [
+                        f"receipt_count={len(valid_receipts)}",
+                        f"blocked_count={len(blocked)}",
+                        f"failed_count={len(failed)}",
+                    ],
+                    "receipt_command_ids": receipt_command_ids,
+                },
+            }
         )
 
     async def _generate_final_answer(self, task: dict[str, Any], history: list) -> dict[str, Any]:

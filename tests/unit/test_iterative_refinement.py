@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import pytest
 
+from riskmonitor_multiagent.proactive_agents.moderator import ModeratorAgent
 from riskmonitor_multiagent.orchestration.iterative_refinement import (
-    RefinementStep,
+    ArbitrationDecision,
     Conflict,
     IterativeRefinementEngine,
+    RefinementStep,
     get_refinement_engine,
     reset_refinement_engine,
 )
@@ -53,6 +55,22 @@ class TestConflict:
         assert conflict.description == "对风险等级有不同意见"
         assert conflict.resolved is False
         assert conflict.resolution is None
+
+    def test_detect_conflict(self) -> None:
+        """测试从 proposal 检测冲突."""
+        engine = IterativeRefinementEngine()
+        conflict = engine.detect_conflict(
+            proposals=[
+                {"agent": "engineer", "value": "tool_a"},
+                {"agent": "analyst", "value": "tool_b"},
+            ],
+            conflict_type="tool_selection_conflict",
+            description="工具选择不一致",
+        )
+
+        assert conflict is not None
+        assert conflict.conflict_type == "tool_selection_conflict"
+        assert conflict.candidates == ["analyst", "engineer"]
 
 
 class TestIterativeRefinementEngine:
@@ -166,6 +184,69 @@ class TestIterativeRefinementEngine:
         
         assert "Total conflicts" in trace
         assert "Unresolved conflicts" in trace
+
+    @pytest.mark.asyncio
+    async def test_arbitrate_conflict_with_moderator(self) -> None:
+        """测试通过 moderator 仲裁冲突."""
+        from riskmonitor_multiagent.orchestration.message_bus import MessageBus
+
+        engine = IterativeRefinementEngine()
+        moderator = ModeratorAgent(message_bus=MessageBus())
+        conflict = engine.detect_conflict(
+            proposals=[
+                {"agent": "system_engineer", "tool_name": "query_positions"},
+                {"agent": "risk_analyst", "tool_name": "query_alerts"},
+            ],
+            conflict_type="tool_selection_conflict",
+            description="工具选择冲突",
+        )
+
+        assert conflict is not None
+        decision = await engine.arbitrate_conflict(
+            conflict_id=conflict.conflict_id,
+            moderator=moderator,
+        )
+
+        assert isinstance(decision, ArbitrationDecision)
+        assert decision.selected_agent == "system_engineer"
+        assert decision.rule_name == "tool_selection_conflict"
+        assert isinstance(decision.discarded_candidates, list)
+        assert decision.discarded_path_reason is not None
+        assert conflict.resolved is True
+        trace = engine.get_conflict_trace()
+        assert len(trace) == 2
+        assert trace[0]["trace_type"] == "conflict_detected"
+        assert trace[1]["trace_type"] == "arbitration_resolved"
+
+    @pytest.mark.asyncio
+    async def test_arbitration_publishes_conflict_and_resolution_events(self) -> None:
+        """测试仲裁会发布冲突和解决事件."""
+        from riskmonitor_multiagent.contracts.event import EventType
+        from riskmonitor_multiagent.orchestration.message_bus import MessageBus
+
+        bus = MessageBus()
+        engine = IterativeRefinementEngine()
+        moderator = ModeratorAgent(message_bus=bus)
+        conflict = engine.detect_conflict(
+            proposals=[
+                {"agent": "critic", "summary": "high risk"},
+                {"agent": "risk_analyst", "summary": "medium risk"},
+            ],
+            conflict_type="conclusion_conflict",
+            description="结论冲突",
+        )
+
+        assert conflict is not None
+        await engine.arbitrate_conflict(
+            conflict_id=conflict.conflict_id,
+            moderator=moderator,
+        )
+
+        events = bus.get_event_history()
+        event_types = [event.get("event_type") for event in events]
+        assert EventType.CONFLICT_DETECTED.value in event_types
+        assert EventType.MODERATOR_DECISION.value in event_types
+        assert EventType.ARBITRATION_RESOLVED.value in event_types
 
 
 class TestGlobalSingleton:

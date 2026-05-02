@@ -11,6 +11,11 @@ import uuid
 from collections import defaultdict
 from typing import Any, Callable, Optional
 
+from riskmonitor_multiagent.contracts.event import (
+    EventType,
+    new_event,
+    validate_event,
+)
 from riskmonitor_multiagent.contracts.message import (
     MessageType,
     normalize_message,
@@ -34,8 +39,13 @@ class MessageBus:
 
     def __init__(self):
         self._messages: list[dict[str, Any]] = []
+        self._events: list[dict[str, Any]] = []
+        self._event_trace: list[dict[str, Any]] = []
+        self._rejected_events: list[dict[str, Any]] = []
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
         self._broadcast_subscribers: list[Callable] = []
+        self._event_subscribers: dict[str, list[Callable]] = defaultdict(list)
+        self._event_any_subscribers: list[Callable] = []
         self._lock = asyncio.Lock()
 
     async def send(
@@ -85,6 +95,91 @@ class MessageBus:
 
         logger.debug(f"Message sent: {message['message_id']} from {from_agent} to {to_agent or 'broadcast'}")
         return message
+
+    async def emit_event(
+        self,
+        *,
+        event_type: EventType,
+        source_agent: str,
+        payload: dict[str, Any] | None = None,
+        target_agent: str | None = None,
+        correlation_id: str | None = None,
+        causation_id: str | None = None,
+        priority: str = "normal",
+        requires_ack: bool = False,
+    ) -> dict[str, Any]:
+        """构造并发布事件."""
+        event = new_event(
+            event_type=event_type,
+            source_agent=source_agent,
+            payload=payload,
+            target_agent=target_agent,
+            correlation_id=correlation_id,
+            causation_id=causation_id,
+            priority=priority,
+            requires_ack=requires_ack,
+        )
+        return await self.publish_event(event)
+
+    async def publish_event(
+        self,
+        event: dict[str, Any],
+        *,
+        raise_on_error: bool = True,
+    ) -> dict[str, Any]:
+        """发布统一事件. 非法事件默认直接拒绝."""
+        is_valid, errors = validate_event(event)
+        if not is_valid:
+            rejection = {
+                "status": "rejected",
+                "errors": list(errors),
+                "event": dict(event) if isinstance(event, dict) else event,
+                "timestamp_ms": now_ms(),
+            }
+            async with self._lock:
+                self._rejected_events.append(rejection)
+                self._event_trace.append(
+                    {
+                        "trace_id": f"trace_{uuid.uuid4().hex[:12]}",
+                        "status": "rejected",
+                        "event_id": event.get("event_id") if isinstance(event, dict) else None,
+                        "event_type": event.get("event_type") if isinstance(event, dict) else None,
+                        "source_agent": event.get("source_agent") if isinstance(event, dict) else None,
+                        "target_agent": event.get("target_agent") if isinstance(event, dict) else None,
+                        "errors": list(errors),
+                        "timestamp_ms": now_ms(),
+                    }
+                )
+            logger.warning("Event validation failed: %s", errors)
+            if raise_on_error:
+                raise ValueError(f"invalid_event:{','.join(errors)}")
+            return rejection
+
+        normalized_event = dict(event)
+        delivery = await self._notify_event_subscribers(normalized_event)
+        trace_entry = {
+            "trace_id": f"trace_{uuid.uuid4().hex[:12]}",
+            "status": "accepted",
+            "event_id": normalized_event.get("event_id"),
+            "event_type": normalized_event.get("event_type"),
+            "source_agent": normalized_event.get("source_agent"),
+            "target_agent": normalized_event.get("target_agent"),
+            "subscriber_count": delivery.get("subscriber_count", 0),
+            "delivery_errors": delivery.get("delivery_errors", []),
+            "timestamp_ms": now_ms(),
+        }
+
+        async with self._lock:
+            self._events.append(normalized_event)
+            self._event_trace.append(trace_entry)
+
+        logger.debug(
+            "Event published: %s type=%s subscribers=%s",
+            normalized_event.get("event_id"),
+            normalized_event.get("event_type"),
+            delivery.get("subscriber_count", 0),
+        )
+        return normalized_event
 
     async def send_request(
         self,
@@ -226,6 +321,20 @@ class MessageBus:
         self._broadcast_subscribers.append(callback)
         logger.debug("Subscribed to broadcast")
 
+    def subscribe_event(
+        self,
+        event_type: EventType | str | None,
+        callback: Callable[[dict[str, Any]], Any],
+    ) -> None:
+        """订阅统一事件. event_type 为 None 表示订阅全部事件."""
+        if event_type is None:
+            self._event_any_subscribers.append(callback)
+            logger.debug("Subscribed to all events")
+            return
+        key = event_type.value if isinstance(event_type, EventType) else str(event_type)
+        self._event_subscribers[key].append(callback)
+        logger.debug("Subscribed to event type: %s", key)
+
     def get_messages_for_agent(
         self,
         agent_id: str,
@@ -266,6 +375,94 @@ class MessageBus:
         if limit:
             messages = messages[-limit:]
         return messages
+
+    def get_event_history(
+        self,
+        *,
+        limit: Optional[int] = None,
+        event_type: str | None = None,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """获取事件历史."""
+        events = list(self._events)
+        if event_type:
+            events = [event for event in events if event.get("event_type") == event_type]
+        if status is not None:
+            accepted_ids = {
+                trace.get("event_id")
+                for trace in self._event_trace
+                if trace.get("status") == status
+            }
+            events = [event for event in events if event.get("event_id") in accepted_ids]
+        if limit:
+            events = events[-limit:]
+        return events
+
+    def get_event_trace(
+        self,
+        *,
+        limit: Optional[int] = None,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """获取事件 trace sink 记录."""
+        trace = list(self._event_trace)
+        if status:
+            trace = [item for item in trace if item.get("status") == status]
+        if limit:
+            trace = trace[-limit:]
+        return trace
+
+    def get_rejected_events(
+        self,
+        limit: Optional[int] = None,
+    ) -> list[dict[str, Any]]:
+        """获取被拒绝的非法事件."""
+        rejected = list(self._rejected_events)
+        if limit:
+            rejected = rejected[-limit:]
+        return rejected
+
+    def get_related_event_history(
+        self,
+        *,
+        root_event_id: str | None = None,
+        run_id: str | None = None,
+        limit: Optional[int] = None,
+    ) -> list[dict[str, Any]]:
+        """获取与某个 run 或根事件相关的事件历史."""
+        events = [
+            event
+            for event in self._events
+            if self._is_related_event(event=event, root_event_id=root_event_id, run_id=run_id)
+        ]
+        if limit:
+            events = events[-limit:]
+        return events
+
+    def get_related_event_trace(
+        self,
+        *,
+        root_event_id: str | None = None,
+        run_id: str | None = None,
+        limit: Optional[int] = None,
+    ) -> list[dict[str, Any]]:
+        """获取与某个 run 或根事件相关的 event trace."""
+        related_event_ids = {
+            event.get("event_id")
+            for event in self.get_related_event_history(
+                root_event_id=root_event_id,
+                run_id=run_id,
+            )
+            if isinstance(event, dict)
+        }
+        trace = [
+            item
+            for item in self._event_trace
+            if item.get("event_id") in related_event_ids
+        ]
+        if limit:
+            trace = trace[-limit:]
+        return trace
 
     def get_message_by_id(
         self,
@@ -309,6 +506,52 @@ class MessageBus:
                         callback(message)
                 except Exception as e:
                     logger.error(f"Subscriber error for {to_agent}: {e}")
+
+    async def _notify_event_subscribers(self, event: dict[str, Any]) -> dict[str, Any]:
+        """通知事件订阅者,并返回投递摘要."""
+        callbacks = list(self._event_any_subscribers)
+        callbacks.extend(self._event_subscribers.get(str(event.get("event_type")), []))
+
+        delivery_errors: list[str] = []
+        subscriber_count = 0
+        for callback in callbacks:
+            subscriber_count += 1
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(event)
+                else:
+                    callback(event)
+            except Exception as exc:
+                delivery_errors.append(str(exc))
+                logger.error("Event subscriber error: %s", exc)
+
+        return {
+            "subscriber_count": subscriber_count,
+            "delivery_errors": delivery_errors,
+        }
+
+    def _is_related_event(
+        self,
+        *,
+        event: dict[str, Any],
+        root_event_id: str | None,
+        run_id: str | None,
+    ) -> bool:
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        context_summary = payload.get("context_summary") if isinstance(payload.get("context_summary"), dict) else {}
+        if isinstance(run_id, str) and run_id:
+            if context_summary.get("run_id") == run_id:
+                return True
+        if isinstance(root_event_id, str) and root_event_id:
+            if event.get("event_id") == root_event_id:
+                return True
+            if event.get("correlation_id") == root_event_id:
+                return True
+            if event.get("causation_id") == root_event_id:
+                return True
+            if payload.get("event_id") == root_event_id:
+                return True
+        return False
 
 
 # 全局消息总线实例

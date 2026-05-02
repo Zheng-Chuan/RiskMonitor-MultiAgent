@@ -228,6 +228,15 @@ def test_task_graph_executor_runs_tool_call_via_tool_executor_and_emits_receipt(
         "output": {"action": "collect_metrics", "result": {"cpu": 0.7}},
         "side_effect": False,
         "approval_state": "not_required",
+        "approval_trace": {
+            "required": False,
+            "current_state": "not_required",
+            "history": [{"state": "not_required", "ts_ms": 1, "reason": "read_only_tool"}],
+        },
+        "failure_classification": None,
+        "retry_count": 0,
+        "retry_budget": 0,
+        "timeout_ms": 1000,
     }
 
     with patch(
@@ -249,6 +258,176 @@ def test_task_graph_executor_runs_tool_call_via_tool_executor_and_emits_receipt(
     final_output = result.get("final_output") or {}
     assert "cmd-tool-1" in (final_output.get("receipt_command_ids") or [])
     assert "tool collect_metrics completed cmd:cmd-tool-1" in final_output.get("summary", "")
+
+
+def test_task_graph_executor_preserves_blocked_status_for_approval():
+    executor = TaskGraphExecutor(delegate_handlers={})
+    graph = {
+        "schema_version": "task_graph.v1",
+        "nodes": [
+            {
+                "step_id": "s1",
+                "kind": "tool_call",
+                "reason": "等待审批后执行写操作",
+                "status": "pending",
+                "tool_name": "submit_alerts",
+                "target_agent": "risk_analyst",
+                "params": {},
+                "evidence": {"fields": ["task.payload.content"]},
+            },
+            {
+                "step_id": "s2",
+                "parent_id": "s1",
+                "kind": "finalize",
+                "reason": "汇总结果",
+                "status": "pending",
+                "evidence": {"fields": ["task.payload.content"]},
+            },
+        ],
+        "edges": [{"from_step_id": "s1", "to_step_id": "s2", "condition": "always"}],
+    }
+    blocked_receipt = {
+        "schema_version": "agent_receipt.v1",
+        "run_id": "tg-blocked-1",
+        "command_id": "cmd-blocked-1",
+        "target_agent": "risk_analyst",
+        "tool_name": "submit_alerts",
+        "inputs": {},
+        "outputs": None,
+        "status": "blocked",
+        "ok": False,
+        "latency_ms": 3.0,
+        "evidence": {"reason": "approval_required"},
+        "artifacts": [],
+        "error": "approval_required",
+        "output": None,
+        "side_effect": True,
+        "approval_state": "pending",
+        "approval_trace": {"required": True, "current_state": "pending", "history": []},
+        "failure_classification": "permission",
+        "retry_count": 0,
+        "retry_budget": 0,
+        "timeout_ms": 1000,
+    }
+
+    with patch(
+        "riskmonitor_multiagent.orchestration.task_graph_executor.execute_agent_command",
+        return_value=blocked_receipt,
+    ):
+        result = asyncio.run(
+            executor.execute(
+                task={"task_id": "tg-blocked-1", "payload": {"content": "写入告警"}},
+                task_graph=graph,
+            )
+        )
+
+    execution = result.get("task_graph_execution") or {}
+    assert result.get("status") == "blocked"
+    assert execution.get("status") == "blocked"
+    assert execution.get("blocked_step_id") == "s1"
+    assert execution.get("failed_step_id") is None
+    assert (result.get("receipts") or [])[0].get("approval_state") == "pending"
+
+
+def test_task_graph_executor_supports_step_level_approval_and_resume_without_rerunning_upstream():
+    calls = {"engineer": 0, "analyst": 0}
+
+    async def _fake_engineer(*, task, context=None):
+        calls["engineer"] += 1
+        return ProactiveAgentResult(
+            ok=True,
+            output={"summary": "系统侧已完成"},
+        )
+
+    async def _fake_analyst(*, task, context=None):
+        calls["analyst"] += 1
+        return ProactiveAgentResult(
+            ok=True,
+            output={"report": "业务侧审批后执行完成"},
+        )
+
+    graph = {
+        "schema_version": "task_graph.v1",
+        "nodes": [
+            {"step_id": "s1", "kind": "delegate", "reason": "先做系统分析", "status": "pending", "target_agent": "system_engineer"},
+            {
+                "step_id": "s2",
+                "parent_id": "s1",
+                "kind": "delegate",
+                "reason": "高风险步骤需要审批",
+                "status": "pending",
+                "target_agent": "risk_analyst",
+                "approval": {
+                    "required": True,
+                    "reason": "需要人工确认业务影响范围",
+                    "risk_level": "HIGH",
+                    "impact_scope": ["desk:eq"],
+                    "recommended_action": "review_and_resume_step",
+                },
+            },
+            {"step_id": "s3", "parent_id": "s2", "kind": "finalize", "reason": "汇总"},
+        ],
+        "edges": [
+            {"from_step_id": "s1", "to_step_id": "s2", "condition": "always"},
+            {"from_step_id": "s2", "to_step_id": "s3", "condition": "always"},
+        ],
+    }
+
+    first = asyncio.run(
+        TaskGraphExecutor(
+            delegate_handlers={
+                "system_engineer": _fake_engineer,
+                "risk_analyst": _fake_analyst,
+            }
+        ).execute(
+            task={"task_id": "tg-step-approval", "payload": {"content": "需要审批后再继续"}},
+            task_graph=graph,
+        )
+    )
+
+    first_exec = first.get("task_graph_execution") or {}
+    first_record = (first.get("approval_records") or [])[0]
+    assert first.get("status") == "blocked"
+    assert first_exec.get("blocked_step_id") == "s2"
+    assert first_record.get("level") == "step"
+    assert first_record.get("state") == "pending"
+    assert calls["engineer"] == 1
+    assert calls["analyst"] == 0
+
+    resumed_graph = first.get("task_graph") or {}
+    for node in resumed_graph.get("nodes", []):
+        if node.get("step_id") == "s2":
+            node["approval"] = {
+                "required": True,
+                "state": "approved",
+                "actor": "reviewer",
+                "note": "影响范围已确认",
+                "reason": "需要人工确认业务影响范围",
+                "risk_level": "HIGH",
+                "impact_scope": ["desk:eq"],
+                "recommended_action": "review_and_resume_step",
+            }
+
+    second = asyncio.run(
+        TaskGraphExecutor(
+            delegate_handlers={
+                "system_engineer": _fake_engineer,
+                "risk_analyst": _fake_analyst,
+            }
+        ).execute(
+            task={"task_id": "tg-step-approval", "payload": {"content": "需要审批后再继续"}},
+            task_graph=resumed_graph,
+            execution_state=first_exec,
+            resume_from_step_id="s2",
+        )
+    )
+
+    second_exec = second.get("task_graph_execution") or {}
+    assert second.get("status") == "completed"
+    assert second_exec.get("resume_history")[0].get("resume_from_step_id") == "s2"
+    assert calls["engineer"] == 1
+    assert calls["analyst"] == 1
+    assert "业务侧审批后执行完成" in (second.get("final_output") or {}).get("summary", "")
 
 
 def test_task_graph_executor_supports_replan_marker_node():

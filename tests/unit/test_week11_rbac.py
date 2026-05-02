@@ -71,6 +71,9 @@ def test_week11_manager_requires_approval_for_side_effect_tool(monkeypatch):
     assert receipt["ok"] is False
     assert receipt["error"] == "approval_required"
     assert receipt["evidence"]["reason"] == "approval_required"
+    assert receipt["approval_state"] == "pending"
+    assert isinstance(receipt["approval_trace"], dict)
+    assert receipt["approval_trace"]["current_state"] == "pending"
 
 
 def test_week11_manager_can_execute_side_effect_tool_after_approval(monkeypatch):
@@ -92,6 +95,12 @@ def test_week11_manager_can_execute_side_effect_tool_after_approval(monkeypatch)
     receipt = execute_agent_command(cmd)
     assert receipt["ok"] is True
     assert calls["n"] == 1
+    assert receipt["approval_state"] == "resumed"
+    history = receipt["approval_trace"]["history"]
+    states = [item.get("state") for item in history]
+    assert "pending" in states
+    assert "approved" in states
+    assert "resumed" in states
 
 
 def test_week13_rbac_enhanced_denies_cross_role_read_only_tool():

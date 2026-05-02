@@ -36,12 +36,18 @@ def _receipt_error_to_public_result(*, request_id: str, error: str | None) -> di
         return {"request_id": request_id, **error_payload("APPROVAL_REQUIRED", "需要审批", request_id)}
     if error == "approval_reason_required":
         return {"request_id": request_id, **error_payload("APPROVAL_REQUIRED", "审批缺少理由", request_id)}
+    if error == "approval_rejected":
+        return {"request_id": request_id, **error_payload("APPROVAL_REJECTED", "审批已拒绝", request_id)}
+    if error == "approval_expired":
+        return {"request_id": request_id, **error_payload("APPROVAL_EXPIRED", "审批已过期", request_id)}
     if error in {"rbac_denied", "policy_denied"}:
         return {"request_id": request_id, **error_payload("PERMISSION_DENIED", "权限拒绝", request_id)}
     if error == "invalid_command":
         return {"request_id": request_id, **error_payload("INVALID_INPUT", "命令参数非法", request_id)}
     if error in {"unknown_action", "handler_missing"}:
         return {"request_id": request_id, **error_payload("TOOL_UNAVAILABLE", "工具不可用", request_id)}
+    if error in {"tool_budget_exceeded", "side_effect_budget_exceeded"}:
+        return {"request_id": request_id, **error_payload("TOOL_BUDGET_EXCEEDED", "工具预算已耗尽", request_id)}
     message = error or "工具执行失败"
     return {"request_id": request_id, **error_payload("INTERNAL_ERROR", message, request_id)}
 

@@ -67,12 +67,13 @@ def test_intent_output_multi_intent_is_sorted_and_explained():
 
 
 @pytest.mark.asyncio
-async def test_intent_agent_raises_when_llm_disabled(monkeypatch):
+async def test_intent_agent_returns_failed_result_when_llm_disabled(monkeypatch):
     monkeypatch.setenv("DISABLE_LLM", "1")
     monkeypatch.setenv("LLM_API_KEY", "test")
     from riskmonitor_multiagent.agents.roles import IntentAgent
 
     task = {"task_id": "t1", "session_id": "s1", "source": "human", "payload": {"content": "请查询 TRADER-001 的头寸"}}
     agent = IntentAgent()
-    with pytest.raises(Exception):
-        await agent.recognize(task=task, metadata={"source": "test"})
+    result = await agent.recognize(task=task, metadata={"source": "test"})
+    assert result.ok is False
+    assert "LLM_DISABLED" in str((result.output or {}).get("error") or "")

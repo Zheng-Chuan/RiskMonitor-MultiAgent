@@ -7,12 +7,22 @@
     "run_id",
     "command_id",
     "target_agent",
+    "tool_name",
+    "inputs",
+    "outputs",
+    "status",
     "ok",
     "latency_ms",
     "evidence",
     "artifacts",
     "error",
-    "output"
+    "output",
+    "side_effect",
+    "approval_state",
+    "approval_trace",
+    "retry_count",
+    "retry_budget",
+    "timeout_ms"
   ],
   "properties": {
     "schema_version": {
@@ -30,6 +40,22 @@
     "target_agent": {
       "type": "string",
       "enum": ["system_engineer", "risk_analyst", "manager"]
+    },
+    "tool_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "outputs": {
+      "type": ["object", "null"],
+      "additionalProperties": true
+    },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "failed", "blocked"]
     },
     "ok": {
       "type": "boolean"
@@ -55,6 +81,49 @@
     "output": {
       "type": ["object", "null"],
       "additionalProperties": true
+    },
+    "side_effect": {
+      "type": "boolean"
+    },
+    "approval_state": {
+      "type": "string",
+      "enum": ["not_required", "pending", "approved", "approved_but_failed", "rejected", "expired", "resumed", "unknown"]
+    },
+    "approval_trace": {
+      "type": "object",
+      "required": ["required", "current_state", "history"],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "current_state": {
+          "type": "string"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "failure_classification": {
+      "type": ["string", "null"],
+      "enum": ["permission", "validation", "runtime", "dependency", "timeout", null]
+    },
+    "retry_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "retry_budget": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 0
     }
   },
   "additionalProperties": true

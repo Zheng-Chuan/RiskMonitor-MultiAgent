@@ -32,6 +32,7 @@ from riskmonitor_multiagent.proactive_agents.question_manager import (
     ask_user_question,
     answer_user_question,
 )
+from riskmonitor_multiagent.proactive_agents.moderator import ModeratorAgent
 
 __all__ = [
     "BaseProactiveAgent",
@@ -50,4 +51,5 @@ __all__ = [
     "get_question_manager",
     "ask_user_question",
     "answer_user_question",
+    "ModeratorAgent",
 ]

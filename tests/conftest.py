@@ -1,9 +1,16 @@
 import asyncio
 import gc
 import os
+import sys
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_SRC_ROOT = _PROJECT_ROOT / "src"
+if str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
 
 
 @pytest.fixture(autouse=True, scope="function")
