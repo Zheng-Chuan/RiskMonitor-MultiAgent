@@ -162,7 +162,28 @@ class BaseAgent:
                 use_json_mode=use_json_mode,
             )
 
-        except LLMError:
+        except LLMError as e:
+            if self._should_use_fallback(e):
+                logger.warning(
+                    "Agent %s falling back to default JSON output due to LLM error: %s",
+                    self._name,
+                    e.code,
+                )
+                return AgentResult(
+                    ok=True,
+                    output=dict(fallback),
+                    usage=None,
+                    meta={
+                        "agent": self._name,
+                        "model": model_label,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "prompt_version": self._prompt_version,
+                        "policy_version": self._policy_version,
+                        "fallback_used": True,
+                        "fallback_reason": e.code,
+                    },
+                )
             raise
         except Exception:
             # 记录未知错误指标
@@ -273,6 +294,15 @@ class BaseAgent:
                 return self._parse_response(resp, model_label, user_id, priority, gov_meta)
                 
             except LLMError as e:
+                if use_json_mode and self._is_json_mode_unsupported(e):
+                    logger.info(
+                        "Agent %s detected unsupported json mode. Retrying without response_format.",
+                        self._name,
+                    )
+                    use_json_mode = False
+                    last_error = e
+                    last_error_message = str(e.message)[:500]
+                    continue
                 last_error = e
                 
                 # 保存错误信息用于下次重试
@@ -300,6 +330,29 @@ class BaseAgent:
             raise last_error
         
         raise LLMError(code="UNKNOWN", message="Unexpected error in retry loop")
+
+    @staticmethod
+    def _is_json_mode_unsupported(error: LLMError) -> bool:
+        """判断上游是否不支持 JSON Mode."""
+        if error.code != "UPSTREAM_BAD_STATUS":
+            return False
+        message = str(error.message or "").lower()
+        return (
+            "response_format" in message
+            or "json_object" in message
+            or "not supported by this model" in message
+        )
+
+    @staticmethod
+    def _should_use_fallback(error: LLMError) -> bool:
+        """判断是否应返回调用方提供的 fallback."""
+        return error.code in {
+            "BAD_LLM_OUTPUT",
+            "UPSTREAM_BAD_STATUS",
+            "UPSTREAM_BAD_RESPONSE",
+            "UPSTREAM_TIMEOUT",
+            "UPSTREAM_UNAVAILABLE",
+        }
     
     def _build_repair_prompt(
         self,

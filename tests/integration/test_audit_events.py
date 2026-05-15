@@ -57,7 +57,7 @@ async def test_audit_event_persistence_and_retrieval():
         "command_id": "cmd-1",
         "target_agent": "orchestrator",
         "action": "write_alert",
-        "actor": "orchestrator_workflow",
+        "actor": "proactive_workflow",
         "approved": True,
         "approved_by": "auto",
         "approval_reason": "side_effect_required",

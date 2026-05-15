@@ -1,9 +1,8 @@
-"""LLM 客户端(OpenAI 兼容).
+"""LLM 客户端.
 
 说明:
-- 统一封装 Chat Completions 调用,可对接任意 OpenAI 兼容的 LLM 平台
+- 统一封装 Chat Completions 调用,当前项目默认对接火山引擎 Coding API
 - 仅负责 HTTP 调用与错误封装, 不包含业务逻辑
-- 切换平台时只需更换 LLM_BASE_URL、LLM_API_KEY、LLM_MODEL
 - 支持固定 IP 解析(绕过 DNS 故障节点)
 """
 
@@ -52,7 +51,7 @@ def _build_headers(host_header: Optional[str] = None) -> dict[str, str]:
 
 
 class LlmClient:
-    """LLM 异步客户端(OpenAI 兼容 API)."""
+    """LLM 异步客户端."""
 
     def __init__(
         self,
@@ -66,19 +65,24 @@ class LlmClient:
         self._http_client = http_client
         self._resolve_ip = config.get_llm_resolve_ip()
         self._original_getaddrinfo: Optional[Any] = None
+        self._patched_host: Optional[str] = None
 
     def _apply_dns_patch(self) -> None:
         """临时替换 socket.getaddrinfo 以支持固定 IP."""
-        if self._resolve_ip and "api.n1n.ai" in self._base_url:
+        if self._resolve_ip:
+            host = self._base_url.removeprefix("https://").removeprefix("http://").split("/", 1)[0]
+            if not host:
+                return
             self._original_getaddrinfo = socket.getaddrinfo
 
             def patched_getaddrinfo(host: str, port: Any, *args: Any, **kwargs: Any) -> Any:
-                if host == "api.n1n.ai":
+                if host == self._patched_host:
                     return [
                         (socket.AF_INET, socket.SOCK_STREAM, 0, "", (self._resolve_ip, port)),
                     ]
                 return self._original_getaddrinfo(host, port, *args, **kwargs)
 
+            self._patched_host = host
             socket.getaddrinfo = patched_getaddrinfo  # type: ignore[assignment]
 
     def _restore_dns(self) -> None:
@@ -148,7 +152,7 @@ class LlmClient:
 
         # 准备 URL 和 headers
         url = f"{self._base_url}/chat/completions"
-        host_header = "api.n1n.ai" if self._resolve_ip and "api.n1n.ai" in self._base_url else None
+        host_header = self._patched_host if self._resolve_ip else None
         headers = _build_headers(host_header=host_header)
 
         client = self._http_client

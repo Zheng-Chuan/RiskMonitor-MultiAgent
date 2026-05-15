@@ -53,8 +53,8 @@ class Config(BaseSettings):
     )
 
     # LLM 配置
-    llm_model: str = Field(default="qwen3-8b", description="LLM 模型名称")
-    llm_base_url: str = Field(default="https://api.openai.com/v1", description="LLM API 基础 URL")
+    llm_model: str = Field(default="ark-code-latest", description="LLM 模型名称")
+    llm_base_url: str = Field(default="https://ark.cn-beijing.volces.com/api/coding/v3", description="LLM API 基础 URL")
     llm_api_key: str = Field(default="", description="LLM API Key")
     llm_resolve_ip: Optional[str] = Field(default=None, description="LLM API 固定 IP")
     llm_http_referer: Optional[str] = Field(default=None, description="LLM HTTP Referer")

@@ -66,35 +66,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # PageIndex - 长期语义记忆服务
-  # 当前仓库先提供轻量 HTTP 容器接入默认 compose 拓扑
-  # 后续接入真实 PageIndex 服务时 仅需替换 image 和 healthcheck
-  pageindex:
-    image: python:3.11-alpine
-    container_name: riskmonitor-pageindex
-    environment:
-      PAGE_INDEX_API_KEY: ${PAGE_INDEX_API_KEY:-}
-      PAGE_INDEX_ENABLED: ${PAGE_INDEX_ENABLED:-true}
-    ports:
-      - "8080:8080"
-    volumes:
-      - pageindex_data:/data
-    command:
-      - sh
-      - -lc
-      - |
-        mkdir -p /data && \
-        printf '{"service":"pageindex","status":"ok"}' > /data/index.json && \
-        python -m http.server 8080 -d /data
-    networks:
-      - riskmonitor-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/index.json || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # RiskMonitor MultiAgent MCP 服务
   mcp-server:
     build:
@@ -115,10 +86,8 @@ services:
       CHROMA_PORT: 8000
       MEMORY_TTL_S: 86400
       MEMORY_MAX_LEN: 2000
-      # PageIndex 配置
-      PAGE_INDEX_ENABLED: ${PAGE_INDEX_ENABLED:-true}
-      PAGE_INDEX_URL: ${PAGE_INDEX_URL:-http://pageindex:8080}
-      PAGE_INDEX_API_KEY: ${PAGE_INDEX_API_KEY:-}
+      # 统一语义记忆配置
+      SEMANTIC_MEMORY_ENABLED: ${SEMANTIC_MEMORY_ENABLED:-true}
       # 应用配置
       APP_ENV: production
       LOG_LEVEL: INFO
@@ -131,8 +100,6 @@ services:
       redis:
         condition: service_healthy
       chroma:
-        condition: service_healthy
-      pageindex:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -157,16 +124,13 @@ services:
       CHROMA_PORT: 8000
       APP_ENV: test
       LOG_LEVEL: INFO
-      PAGE_INDEX_ENABLED: ${PAGE_INDEX_ENABLED:-true}
-      PAGE_INDEX_URL: ${PAGE_INDEX_URL:-http://pageindex:8080}
+      SEMANTIC_MEMORY_ENABLED: ${SEMANTIC_MEMORY_ENABLED:-true}
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
       chroma:
-        condition: service_healthy
-      pageindex:
         condition: service_healthy
     volumes:
       - .:/app
@@ -261,8 +225,6 @@ volumes:
   redis_data:
     driver: local
   chroma_data:
-    driver: local
-  pageindex_data:
     driver: local
   prometheus_data:
     driver: local

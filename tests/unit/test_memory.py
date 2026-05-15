@@ -200,14 +200,14 @@ async def test_memory_store_run_summary_with_mock_redis():
     assert summary.get("text") == "总结"
 
 
-def test_memory_store_semantic_disabled_by_default(monkeypatch):
-    """测试 MemoryStore 默认禁用语义搜索."""
+def test_memory_store_semantic_enabled_by_default(monkeypatch):
+    """测试 MemoryStore 默认启用内置语义搜索."""
     monkeypatch.delenv("PAGE_INDEX_ENABLED", raising=False)
+    monkeypatch.delenv("SEMANTIC_MEMORY_ENABLED", raising=False)
     from riskmonitor_multiagent.memory import MemoryStore
 
     store = MemoryStore()
-    # PageIndex 应该未初始化
-    assert store._page_index is None
+    assert store._config.enable_semantic_memory is True
 
 
 @pytest.mark.asyncio
@@ -259,6 +259,22 @@ async def test_memory_store_retrieve_for_planning_summarizes_recent_hits():
             "content": {"text": "上次同类任务先查交易台再查告警"},
         }
     )
+    await store.append(
+        {
+            "agent_id": "critic",
+            "scope": "shared",
+            "kind": "semantic_case",
+            "memory_type": "semantic",
+            "session_id": "s_plan",
+            "content": {
+                "text": "历史 lesson 显示 延迟异常应先复用排查路径再输出建议",
+                "decision_pattern": "先引用 lesson -> 再核对延迟 -> 最后给建议",
+                "failure_boundary": ["不要伪造历史 lesson"],
+                "applicable_conditions": ["延迟异常"],
+                "evidence_refs": ["bootstrap:memory"],
+            },
+        }
+    )
     summary = await store.retrieve_for_planning(
         task={"task_id": "t1", "session_id": "s_plan", "payload": {"content": "查询交易台风险"}},
         intent={"primary_intent_type": "query_positions"},
@@ -266,11 +282,13 @@ async def test_memory_store_retrieve_for_planning_summarizes_recent_hits():
     )
 
     assert isinstance(summary.get("hits"), list)
-    assert len(summary.get("hits") or []) == 1
+    assert len(summary.get("hits") or []) >= 2
     summary_block = summary.get("summary") or {}
-    assert summary_block.get("hit_count") == 1
+    assert summary_block.get("hit_count") >= 2
     assert isinstance(summary_block.get("texts"), list)
     assert "plan" in summary_block.get("texts")[0]
+    assert summary_block.get("few_shot_example_count") >= 1
+    assert summary_block.get("few_shot_examples")
 
 
 @pytest.mark.asyncio
@@ -306,7 +324,7 @@ async def test_memory_store_semantic_search_returns_real_hits():
     store = MemoryStore(
         config=MemoryConfig(
             redis_url="redis://unused",
-            enable_page_index=True,
+            enable_semantic_memory=True,
         )
     )
     store._redis = mock_redis
@@ -377,6 +395,8 @@ async def test_memory_store_build_resume_payload_uses_run_context_and_memory_sta
     assert payload.get("resume_from_step_id") == "s2"
     assert (payload.get("task_graph") or {}).get("schema_version") == "task_graph.v1"
     assert len(payload.get("memory_state") or []) == 1
+    assert isinstance(payload.get("shared_memory_board"), list)
+    assert isinstance(payload.get("private_memory_state"), dict)
     assert (payload.get("run_summary") or {}).get("text") == "run summary"
 
 
@@ -422,3 +442,122 @@ async def test_memory_store_build_resume_payload_prefers_blocked_step_id():
 
     assert payload is not None
     assert payload.get("resume_from_step_id") == "s3"
+
+
+@pytest.mark.asyncio
+async def test_memory_store_record_working_memory_builds_private_and_shared_views():
+    from riskmonitor_multiagent.memory import MemoryStore
+
+    _store_data = {}
+    mock_redis = MagicMock()
+    mock_pipeline = MagicMock()
+
+    def mock_lpush(key, value):
+        if key not in _store_data:
+            _store_data[key] = []
+        _store_data[key].insert(0, value)
+        return mock_pipeline
+
+    def mock_ltrim(key, start, end):
+        if key in _store_data:
+            _store_data[key] = _store_data[key][start:end + 1]
+        return mock_pipeline
+
+    def mock_expire(key, ttl):
+        return mock_pipeline
+
+    mock_pipeline.lpush = mock_lpush
+    mock_pipeline.ltrim = mock_ltrim
+    mock_pipeline.expire = mock_expire
+    mock_pipeline.execute = AsyncMock(return_value=[True, True, True])
+    mock_redis.pipeline = MagicMock(return_value=mock_pipeline)
+
+    async def mock_lrange(key, start, end):
+        arr = _store_data.get(key, [])
+        return arr[start:end + 1] if arr else []
+
+    mock_redis.lrange = mock_lrange
+    mock_redis.ping = AsyncMock(return_value=True)
+
+    store = MemoryStore()
+    store._redis = mock_redis
+
+    await store.record_working_memory(
+        run_id="run_private_1",
+        task={"task_id": "task-private-1", "session_id": "s-private", "payload": {"content": "排查交易台异常"}},
+        trace_entry={"step_id": "s1", "kind": "delegate", "status": "completed", "target_agent": "risk_analyst"},
+        node={"step_id": "s1", "target_agent": "risk_analyst"},
+        node_result={"output": {"report": "先核对持仓", "confidence": 0.9}},
+    )
+
+    private_state = await store.get_private_memory_state(
+        run_id="run_private_1",
+        agent_ids=["risk_analyst"],
+        limit=5,
+    )
+    board = await store.get_shared_memory_board(run_id="run_private_1", limit=5)
+
+    assert len(private_state.get("risk_analyst") or []) == 1
+    private_content = (private_state["risk_analyst"][0].get("content") or {})
+    assert private_content.get("role") == "risk_analyst"
+    assert private_content.get("next_intended_action") == "handoff_to_next_step"
+    assert len(board) == 1
+    assert board[0].get("agent_role") == "risk_analyst"
+    assert board[0].get("agent_perspective") == "business_risk"
+
+
+@pytest.mark.asyncio
+async def test_memory_store_persist_run_artifacts_builds_long_term_experience():
+    from riskmonitor_multiagent.memory import MemoryConfig, MemoryStore
+
+    _store_data = {}
+    mock_redis = MagicMock()
+    mock_pipeline = MagicMock()
+
+    def mock_lpush(key, value):
+        if key not in _store_data:
+            _store_data[key] = []
+        _store_data[key].insert(0, value)
+        return mock_pipeline
+
+    def mock_ltrim(key, start, end):
+        if key in _store_data:
+            _store_data[key] = _store_data[key][start:end + 1]
+        return mock_pipeline
+
+    def mock_expire(key, ttl):
+        return mock_pipeline
+
+    mock_pipeline.lpush = mock_lpush
+    mock_pipeline.ltrim = mock_ltrim
+    mock_pipeline.expire = mock_expire
+    mock_pipeline.execute = AsyncMock(return_value=[True, True, True])
+    mock_redis.pipeline = MagicMock(return_value=mock_pipeline)
+    mock_redis.hset = AsyncMock(return_value=True)
+    mock_redis.ping = AsyncMock(return_value=True)
+
+    store = MemoryStore(
+        config=MemoryConfig(
+            redis_url="redis://unused",
+            enable_semantic_memory=True,
+        )
+    )
+    store._redis = mock_redis
+
+    persisted = await store.persist_run_artifacts(
+        run_id="run_exp_1",
+        task={"task_id": "task-exp-1", "session_id": "s-exp", "payload": {"content": "分析风险并给出结论"}},
+        final_output={"summary": "完成", "receipt_command_ids": ["cmd-1"]},
+        critic_final={
+            "ok": True,
+            "confidence": 0.95,
+            "issues": [],
+            "evidence": {"receipt_command_ids": ["cmd-1"]},
+            "run_summary": {"text": "完成总结", "key_points": ["先查持仓", "再查限额"]},
+        },
+    )
+
+    experience = persisted.get("long_term_experience") or {}
+    assert experience.get("kind") == "semantic_case"
+    assert (experience.get("content") or {}).get("decision_pattern")
+    assert (persisted.get("memory_policy") or {}).get("accepted") is True

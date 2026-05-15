@@ -4,7 +4,7 @@
 融合原 UnifiedMemory 和 ContextStore 功能,提供:
 - 短期工作记忆 (Redis): Agent 独立记忆 + 共享记忆
 - 长期运行记忆 (Redis Hash): 完整的运行状态快照
-- 长期语义记忆 (PageIndex): 可检索的知识积累
+- 长期语义经验 (内置语义索引): 可检索的知识积累
 
 架构:
     ┌─────────────────────────────────────────────┐
@@ -12,7 +12,7 @@
     ├──────────────────┬──────────────────────────┤
     │  短期工作记忆     │    长期记忆             │
     │  (Redis List)    │    (Redis Hash)          │
-    │                  │    + PageIndex          │
+    │                  │    + Semantic Index      │
     ├──────────────────┼──────────────────────────┤
     │  - agent:{id}    │  - context:{run_id}      │
     │  - shared        │  - summary:{run_id}      │
@@ -38,6 +38,28 @@ from riskmonitor_multiagent.contracts.approval import build_approval_summary_tex
 from riskmonitor_multiagent.contracts.memory_entry import normalize_memory_entry
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]")
+_DEFAULT_PRIVATE_AGENT_IDS = (
+    "orchestrator",
+    "system_engineer",
+    "risk_analyst",
+    "critic",
+)
+_CANONICAL_AGENT_IDS = {
+    "engineer": "system_engineer",
+    "system_engineer": "system_engineer",
+    "analyst": "risk_analyst",
+    "risk_analyst": "risk_analyst",
+    "orchestrator": "orchestrator",
+    "critic": "critic",
+    "intent": "intent",
+}
+_AGENT_PERSPECTIVES = {
+    "system_engineer": "system_reliability",
+    "risk_analyst": "business_risk",
+    "orchestrator": "global_planning",
+    "critic": "quality_gate",
+    "intent": "intent_resolution",
+}
 
 
 @dataclass
@@ -46,8 +68,7 @@ class MemoryConfig:
     redis_url: str
     default_ttl: int = 86400  # 24小时
     max_list_len: int = 2000
-    enable_page_index: bool = False
-    page_index_api_key: str | None = None
+    enable_semantic_memory: bool = True
 
 
 class MemoryStore:
@@ -57,7 +78,7 @@ class MemoryStore:
     提供分层记忆管理:
     1. 短期记忆: Agent 独立 + 共享,支持 TTL
     2. 长期上下文: 完整运行状态,持久化
-    3. 长期语义: PageIndex 向量检索
+    3. 长期语义: 内置语义检索
     """
 
     def __init__(self, config: MemoryConfig | None = None) -> None:
@@ -67,7 +88,6 @@ class MemoryStore:
         
         self._config = config
         self._redis: redis.Redis | None = None
-        self._page_index = None
         self._semantic_index: dict[str, dict[str, Any]] = {}
         
         # 延迟初始化连接
@@ -78,15 +98,16 @@ class MemoryStore:
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         ttl = int(os.getenv("MEMORY_TTL_S", "86400"))
         max_len = int(os.getenv("MEMORY_MAX_LEN", "2000"))
-        enable_pi = os.getenv("PAGE_INDEX_ENABLED", "false").lower() == "true"
-        pi_key = os.getenv("PAGE_INDEX_API_KEY")
+        legacy_pageindex = os.getenv("PAGE_INDEX_ENABLED")
+        semantic_enabled = os.getenv("SEMANTIC_MEMORY_ENABLED")
+        if semantic_enabled is None:
+            semantic_enabled = legacy_pageindex if legacy_pageindex is not None else "true"
         
         return MemoryConfig(
             redis_url=redis_url,
             default_ttl=ttl,
             max_list_len=max_len,
-            enable_page_index=enable_pi,
-            page_index_api_key=pi_key,
+            enable_semantic_memory=str(semantic_enabled).lower() == "true",
         )
     
     async def _ensure_connected(self) -> redis.Redis:
@@ -150,7 +171,7 @@ class MemoryStore:
         
         # 异步索引到长期语义记忆
         if scope == "shared":
-            await self._index_to_page_index(nd)
+            await self._index_to_semantic_memory(nd)
         
         return nd
     
@@ -233,28 +254,74 @@ class MemoryStore:
         """在规划前统一检索近期记忆和语义记忆."""
         payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
         content = payload.get("content") if isinstance(payload.get("content"), str) else ""
+        if not content and isinstance(task.get("content"), str):
+            content = task.get("content") or ""
         session_id = task.get("session_id") if isinstance(task.get("session_id"), str) else None
+        run_id = task.get("run_id") if isinstance(task.get("run_id"), str) else None
+        private_memory_enabled = task.get("private_memory_enabled", True) is not False
         intent_type = None
         if isinstance(intent, dict):
             intent_type = intent.get("primary_intent_type")
 
+        shared_board = await self.get_shared_memory_board(
+            session_id=session_id,
+            run_id=run_id,
+            limit=max(limit * 2, 6),
+        )
+        private_memory_state: dict[str, list[dict[str, Any]]] = {}
+        if private_memory_enabled:
+            private_memory_state = await self.get_private_memory_state(
+                session_id=session_id,
+                run_id=run_id,
+                agent_ids=_DEFAULT_PRIVATE_AGENT_IDS,
+                limit=3,
+            )
+
+        semantic_reserve = 1 if limit <= 2 else 2
+        recent_limit = max(1, limit - semantic_reserve)
         recent_hits = await self.list_recent(
             agent_id="orchestrator",
             scope="shared",
             session_id=session_id,
             kinds=["plan", "final", "analysis", "intent_disambiguation", "lesson", "approval"],
             memory_types=["episodic", "procedural"],
-            limit=max(limit, 1),
+            limit=recent_limit,
         )
         semantic_hits = await self.search_semantic(
             self._build_planning_query(content=content, intent_type=intent_type),
             agent_id="orchestrator",
-            limit=max(0, limit - len(recent_hits)),
+            limit=max(1, limit - min(len(recent_hits), recent_limit)),
         )
-        hits = self._dedupe_memory_hits(recent_hits + semantic_hits, limit=limit)
+        recent_semantic_cases = await self.list_recent(
+            agent_id="orchestrator",
+            scope="shared",
+            session_id=session_id,
+            kinds=["semantic_case"],
+            memory_types=["semantic"],
+            limit=semantic_reserve,
+        )
+        for entry in recent_semantic_cases:
+            reusable_snippet = self._build_reusable_snippet(entry)
+            if reusable_snippet:
+                entry["reusable_snippet"] = reusable_snippet
+        hits = self._dedupe_memory_hits(recent_hits + semantic_hits + recent_semantic_cases, limit=limit)
+        summary = self._summarize_hits(hits)
+        summary["shared_board"] = self._summarize_shared_board(shared_board)
+        summary["private_memory"] = self._summarize_private_memory(private_memory_state)
+        summary["few_shot_examples"] = self._extract_few_shot_examples(hits)
+        summary["few_shot_example_count"] = len(summary["few_shot_examples"])
+        summary["role_drift_rate"] = self._estimate_role_drift(
+            shared_board=shared_board,
+            private_memory_state=private_memory_state,
+        )
+        summary["memory_cross_talk_rate"] = self._estimate_memory_cross_talk(
+            private_memory_state=private_memory_state,
+        )
         return {
             "hits": hits,
-            "summary": self._summarize_hits(hits),
+            "summary": summary,
+            "shared_board": shared_board,
+            "private_memory_state": private_memory_state,
         }
 
     async def record_working_memory(
@@ -263,14 +330,22 @@ class MemoryStore:
         run_id: str,
         task: dict[str, Any],
         trace_entry: dict[str, Any],
+        node: dict[str, Any] | None = None,
+        node_result: dict[str, Any] | None = None,
+        private_memory_enabled: bool = True,
     ) -> dict[str, Any]:
         """记录 step 级 working memory."""
         step_id = str(trace_entry.get("step_id") or "unknown")
         kind = str(trace_entry.get("kind") or "unknown")
         status = str(trace_entry.get("status") or "unknown")
         tool_name = trace_entry.get("tool_name")
-        target_agent = trace_entry.get("target_agent")
+        target_agent = self._canonical_agent_id(
+            trace_entry.get("target_agent") or (node or {}).get("target_agent"),
+        )
         error = trace_entry.get("error")
+        content = self._extract_content_text(task=task)
+        task_phase = "execution"
+        confidence = self._extract_confidence(node_result)
 
         text_parts = [f"step {step_id}", f"kind={kind}", f"status={status}"]
         if isinstance(target_agent, str) and target_agent:
@@ -279,17 +354,23 @@ class MemoryStore:
             text_parts.append(f"tool={tool_name}")
         if isinstance(error, str) and error:
             text_parts.append(f"error={error}")
+        if content:
+            text_parts.append(f"task={content[:80]}")
 
-        return await self.append(
+        shared_entry = await self.append(
             {
-                "agent_id": "orchestrator",
+                "agent_id": target_agent or "orchestrator",
                 "scope": "shared",
                 "kind": "working_memory",
                 "memory_type": "episodic",
                 "session_id": task.get("session_id") if isinstance(task.get("session_id"), str) else None,
                 "run_id": run_id,
                 "source": "task_graph_execution",
-                "created_by": "task_graph_executor",
+                "created_by": target_agent or "task_graph_executor",
+                "agent_role": target_agent or "orchestrator",
+                "agent_perspective": self._agent_perspective(target_agent or "orchestrator"),
+                "task_phase": task_phase,
+                "confidence": confidence,
                 "trace_ref": {
                     "run_id": run_id,
                     "step_id": step_id,
@@ -298,12 +379,48 @@ class MemoryStore:
                 "content": {
                     "text": " ".join(text_parts),
                     "task_id": task.get("task_id"),
-                    "payload": task.get("payload"),
-                    "trace_entry": trace_entry,
+                    "payload": self._make_json_safe(task.get("payload")),
+                    "trace_entry": self._make_json_safe(trace_entry),
+                    "node_result": self._make_json_safe(node_result if isinstance(node_result, dict) else {}),
                 },
-                "tags": [kind, status],
+                "tags": [kind, status, task_phase],
             }
         )
+
+        if private_memory_enabled and isinstance(target_agent, str) and target_agent in _DEFAULT_PRIVATE_AGENT_IDS:
+            private_snapshot = self._build_private_task_snapshot(
+                agent_id=target_agent,
+                task=task,
+                trace_entry=trace_entry,
+                node_result=node_result or {},
+            )
+            await self.append(
+                {
+                    "agent_id": target_agent,
+                    "scope": "private",
+                    "kind": "private_task_state",
+                    "memory_type": "episodic",
+                    "session_id": task.get("session_id") if isinstance(task.get("session_id"), str) else None,
+                    "run_id": run_id,
+                    "source": "task_graph_execution",
+                    "created_by": target_agent,
+                    "agent_role": target_agent,
+                    "agent_perspective": self._agent_perspective(target_agent),
+                    "task_phase": task_phase,
+                    "confidence": confidence,
+                    "trace_ref": {
+                        "run_id": run_id,
+                        "step_id": step_id,
+                        "command_id": trace_entry.get("command_id"),
+                    },
+                    "content": private_snapshot,
+                    "tags": ["private_task_memory", status],
+                },
+                agent_id=target_agent,
+                scope="private",
+            )
+
+        return shared_entry
 
     async def persist_run_artifacts(
         self,
@@ -369,10 +486,19 @@ class MemoryStore:
                 "tags": ["lesson", "procedure"],
             }
         )
+        experience_entry = await self._persist_long_term_experience(
+            run_id=run_id,
+            task=task,
+            final_output=final_output,
+            critic_final=critic_final,
+        )
         return {
             "run_summary": summary_payload,
             "summary_entry": summary_entry,
             "lesson_entry": lesson_entry,
+            "long_term_experience": experience_entry.get("experience_entry"),
+            "rejected_experience": experience_entry.get("rejected_entry"),
+            "memory_policy": experience_entry.get("policy", {}),
         }
 
     async def persist_approval_memory(
@@ -436,6 +562,12 @@ class MemoryStore:
             run_id=run_id,
             limit=50,
         )
+        shared_memory_board = await self.get_shared_memory_board(run_id=run_id, limit=30)
+        private_memory_state = await self.get_private_memory_state(
+            run_id=run_id,
+            agent_ids=_DEFAULT_PRIVATE_AGENT_IDS,
+            limit=10,
+        )
         return {
             "run_id": run_id,
             "task_graph": task_graph,
@@ -446,6 +578,8 @@ class MemoryStore:
                 or execution_state.get("failed_step_id")
             ),
             "memory_state": memory_state,
+            "shared_memory_board": shared_memory_board,
+            "private_memory_state": private_memory_state,
             "run_summary": await self.get_run_summary(run_id),
         }
     
@@ -600,11 +734,11 @@ class MemoryStore:
         except json.JSONDecodeError:
             return None
     
-    # ==================== PageIndex 语义记忆 ====================
+    # ==================== 长期语义经验 ====================
     
-    async def _index_to_page_index(self, entry: dict[str, Any]) -> None:
+    async def _index_to_semantic_memory(self, entry: dict[str, Any]) -> None:
         """
-        索引到 PageIndex(长期语义记忆).
+        索引到长期语义经验层.
         
         仅索引重要类型的条目(plan, final).
         """
@@ -622,13 +756,6 @@ class MemoryStore:
         indexed_entry["semantic_text"] = text
         indexed_entry["semantic_vector"] = self._embed_text(text)
         self._semantic_index[entry_id] = indexed_entry
-        if self._page_index is None:
-            self._page_index = {}
-        self._page_index[entry_id] = {
-            "text": text,
-            "memory_type": entry.get("memory_type"),
-            "kind": entry.get("kind"),
-        }
     
     async def search_semantic(
         self,
@@ -648,7 +775,7 @@ class MemoryStore:
         Returns:
             相关记忆条目
         """
-        if not self._config.enable_page_index:
+        if not self._config.enable_semantic_memory:
             return []
 
         query_text = (query or "").strip()
@@ -666,10 +793,61 @@ class MemoryStore:
                 continue
             hit = dict(entry)
             hit["semantic_score"] = round(score, 4)
+            reusable_snippet = self._build_reusable_snippet(hit)
+            if reusable_snippet:
+                hit["reusable_snippet"] = reusable_snippet
             scored.append((score, hit))
 
         scored.sort(key=lambda item: item[0], reverse=True)
         return [hit for _, hit in scored[: max(0, limit)]]
+
+    async def get_private_memory_state(
+        self,
+        *,
+        agent_ids: tuple[str, ...] | list[str] = _DEFAULT_PRIVATE_AGENT_IDS,
+        session_id: str | None = None,
+        run_id: str | None = None,
+        limit: int = 5,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """获取各角色的私有任务记忆快照."""
+        snapshots: dict[str, list[dict[str, Any]]] = {}
+        for agent_id in agent_ids:
+            canonical_agent_id = self._canonical_agent_id(agent_id)
+            if not canonical_agent_id:
+                continue
+            snapshots[canonical_agent_id] = await self.list_recent(
+                agent_id=canonical_agent_id,
+                scope="private",
+                session_id=session_id,
+                run_id=run_id,
+                limit=limit,
+            )
+        return snapshots
+
+    async def get_shared_memory_board(
+        self,
+        *,
+        session_id: str | None = None,
+        run_id: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """获取显式 shared memory board 视图."""
+        entries = await self.list_recent(
+            agent_id="orchestrator",
+            scope="shared",
+            session_id=session_id,
+            run_id=run_id,
+            limit=max(limit * 2, 20),
+        )
+        board: list[dict[str, Any]] = []
+        for entry in entries:
+            row = self._to_shared_board_row(entry)
+            if row is None:
+                continue
+            board.append(row)
+            if len(board) >= limit:
+                break
+        return board
 
     def _build_planning_query(self, *, content: str, intent_type: str | None) -> str:
         parts = [content.strip()]
@@ -712,6 +890,7 @@ class MemoryStore:
                     "kind": hit.get("kind"),
                     "trace_ref": hit.get("trace_ref"),
                     "semantic_score": hit.get("semantic_score"),
+                    "reusable_snippet": hit.get("reusable_snippet"),
                 }
                 for hit in hits
             ],
@@ -719,10 +898,13 @@ class MemoryStore:
 
     def _memory_text(self, entry: dict[str, Any]) -> str:
         content = entry.get("content") if isinstance(entry.get("content"), dict) else {}
+        snapshot_text = content.get("snapshot_text")
+        if isinstance(snapshot_text, str) and snapshot_text.strip():
+            return snapshot_text.strip()
         text = content.get("text")
         if isinstance(text, str) and text.strip():
             return text.strip()
-        return json.dumps(content, ensure_ascii=False, sort_keys=True)
+        return json.dumps(self._make_json_safe(content), ensure_ascii=False, sort_keys=True)
 
     def _derive_summary_text(self, *, final_output: dict[str, Any]) -> str:
         summary = final_output.get("summary")
@@ -772,6 +954,341 @@ class MemoryStore:
         if query_tokens and entry_tokens:
             overlap = len(set(query_tokens) & entry_tokens) / len(set(query_tokens))
         return (cosine * 0.7) + (overlap * 0.3)
+
+    def _canonical_agent_id(self, agent_id: Any) -> str | None:
+        if not isinstance(agent_id, str) or not agent_id.strip():
+            return None
+        return _CANONICAL_AGENT_IDS.get(agent_id.strip(), agent_id.strip())
+
+    def _agent_perspective(self, agent_id: str) -> str:
+        canonical_agent_id = self._canonical_agent_id(agent_id) or "orchestrator"
+        return _AGENT_PERSPECTIVES.get(canonical_agent_id, canonical_agent_id)
+
+    def _extract_content_text(self, task: dict[str, Any]) -> str:
+        payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
+        content = payload.get("content")
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+        return str(task.get("task_id") or "").strip()
+
+    def _extract_confidence(self, node_result: dict[str, Any] | None) -> float:
+        if not isinstance(node_result, dict):
+            return 1.0
+        output = node_result.get("output") if isinstance(node_result.get("output"), dict) else {}
+        value = output.get("confidence")
+        if isinstance(value, (int, float)):
+            return min(1.0, max(0.0, float(value)))
+        return 1.0
+
+    def _build_private_task_snapshot(
+        self,
+        *,
+        agent_id: str,
+        task: dict[str, Any],
+        trace_entry: dict[str, Any],
+        node_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        output = node_result.get("output") if isinstance(node_result.get("output"), dict) else {}
+        current_progress = str(trace_entry.get("status") or "unknown")
+        observation = self._compact_output_text(output) or self._compact_output_text(node_result)
+        error = trace_entry.get("error") if isinstance(trace_entry.get("error"), str) else ""
+        open_questions = [error] if error else []
+        next_action = "continue"
+        if current_progress == "blocked":
+            next_action = "wait_for_resume"
+        elif current_progress == "failed":
+            next_action = "replan_or_retry"
+        elif current_progress == "completed":
+            next_action = "handoff_to_next_step"
+        role = self._canonical_agent_id(agent_id) or agent_id
+        task_goal = self._extract_content_text(task)
+        recent_observations = [item for item in [observation] if item]
+        snapshot_text = (
+            f"role={role} goal={task_goal[:80]} progress={current_progress} "
+            f"observation={(observation or 'none')[:120]} next={next_action}"
+        )
+        return {
+            "role": role,
+            "task_goal": task_goal,
+            "current_progress": current_progress,
+            "open_questions": open_questions,
+            "recent_observations": recent_observations,
+            "next_intended_action": next_action,
+            "snapshot_text": snapshot_text,
+        }
+
+    async def _persist_long_term_experience(
+        self,
+        *,
+        run_id: str,
+        task: dict[str, Any],
+        final_output: dict[str, Any],
+        critic_final: dict[str, Any],
+    ) -> dict[str, Any]:
+        policy = self._build_experience_policy(
+            run_id=run_id,
+            critic_final=critic_final,
+            final_output=final_output,
+        )
+        if not policy["accepted"]:
+            rejected_entry = await self.append(
+                {
+                    "agent_id": "critic",
+                    "scope": "shared",
+                    "kind": "experience_rejection",
+                    "memory_type": "episodic",
+                    "session_id": task.get("session_id") if isinstance(task.get("session_id"), str) else None,
+                    "run_id": run_id,
+                    "source": "critic_confidence_policy",
+                    "created_by": "critic",
+                    "agent_role": "critic",
+                    "agent_perspective": self._agent_perspective("critic"),
+                    "task_phase": "final_review",
+                    "confidence": float(policy["confidence"]),
+                    "trace_ref": {"run_id": run_id},
+                    "content": {
+                        "text": f"experience rejected because {policy['reasons'][0]}",
+                        "policy": policy,
+                    },
+                    "tags": ["experience", "rejected"],
+                }
+            )
+            return {
+                "experience_entry": None,
+                "rejected_entry": rejected_entry,
+                "policy": policy,
+            }
+
+        content = self._build_long_term_experience_content(
+            task=task,
+            final_output=final_output,
+            critic_final=critic_final,
+            policy=policy,
+        )
+        experience_entry = await self.append(
+            {
+                "agent_id": "critic",
+                "scope": "shared",
+                "kind": "semantic_case",
+                "memory_type": "semantic",
+                "session_id": task.get("session_id") if isinstance(task.get("session_id"), str) else None,
+                "run_id": run_id,
+                "source": "critic_confidence_policy",
+                "created_by": "critic",
+                "agent_role": "critic",
+                "agent_perspective": content.get("agent_perspective"),
+                "task_phase": "final_review",
+                "confidence": float(policy["confidence"]),
+                "trace_ref": {"run_id": run_id},
+                "content": content,
+                "tags": ["experience", "few_shot", "critic"],
+            }
+        )
+        return {
+            "experience_entry": experience_entry,
+            "rejected_entry": None,
+            "policy": policy,
+        }
+
+    def _build_experience_policy(
+        self,
+        *,
+        run_id: str,
+        critic_final: dict[str, Any],
+        final_output: dict[str, Any],
+    ) -> dict[str, Any]:
+        evidence = critic_final.get("evidence") if isinstance(critic_final.get("evidence"), dict) else {}
+        receipt_command_ids = list(evidence.get("receipt_command_ids") or final_output.get("receipt_command_ids") or [])
+        if not receipt_command_ids:
+            explicit_refs = evidence.get("evidence_refs")
+            if isinstance(explicit_refs, list):
+                receipt_command_ids = [str(item) for item in explicit_refs if str(item).strip()]
+        if not receipt_command_ids:
+            receipt_command_ids = [f"run_trace:{run_id}", f"final_output:{run_id}"]
+        confidence = critic_final.get("confidence")
+        if not isinstance(confidence, (int, float)):
+            confidence = 0.9 if critic_final.get("ok") is True else 0.4
+        reasons: list[str] = []
+        if critic_final.get("ok") is not True:
+            reasons.append("critic_not_ok")
+        if float(confidence) < 0.85:
+            reasons.append("low_confidence")
+        return {
+            "accepted": len(reasons) == 0,
+            "confidence": min(1.0, max(0.0, float(confidence))),
+            "threshold": 0.85,
+            "reasons": reasons or ["accepted"],
+            "evidence_refs": receipt_command_ids,
+        }
+
+    def _build_long_term_experience_content(
+        self,
+        *,
+        task: dict[str, Any],
+        final_output: dict[str, Any],
+        critic_final: dict[str, Any],
+        policy: dict[str, Any],
+    ) -> dict[str, Any]:
+        summary = critic_final.get("run_summary") if isinstance(critic_final.get("run_summary"), dict) else {}
+        key_points = summary.get("key_points") if isinstance(summary.get("key_points"), list) else []
+        decision_pattern = " -> ".join(str(item) for item in key_points[:3]) or "use receipts to validate final answer"
+        applicable_conditions = [
+            self._extract_content_text(task)[:120] or "general_multi_agent_task",
+        ]
+        failure_boundary = critic_final.get("issues") if isinstance(critic_final.get("issues"), list) else []
+        if not failure_boundary:
+            failure_boundary = ["low_evidence_or_low_confidence_should_not_reuse"]
+        snapshot_text = (
+            f"decision_pattern={decision_pattern[:120]} "
+            f"conditions={'; '.join(applicable_conditions)[:120]} "
+            f"boundary={'; '.join(str(item) for item in failure_boundary[:2])[:120]}"
+        )
+        return {
+            "text": summary.get("text") or self._derive_summary_text(final_output=final_output),
+            "agent_perspective": self._agent_perspective("critic"),
+            "decision_pattern": decision_pattern,
+            "applicable_conditions": applicable_conditions,
+            "failure_boundary": failure_boundary,
+            "evidence_refs": list(policy.get("evidence_refs") or []),
+            "snapshot_text": snapshot_text,
+        }
+
+    def _build_reusable_snippet(self, entry: dict[str, Any]) -> dict[str, Any] | None:
+        content = entry.get("content") if isinstance(entry.get("content"), dict) else {}
+        decision_pattern = content.get("decision_pattern")
+        failure_boundary = content.get("failure_boundary")
+        if not isinstance(decision_pattern, str) and not isinstance(failure_boundary, list):
+            return None
+        return {
+            "decision_pattern": decision_pattern,
+            "failure_boundary": failure_boundary if isinstance(failure_boundary, list) else [],
+            "applicable_conditions": content.get("applicable_conditions") if isinstance(content.get("applicable_conditions"), list) else [],
+            "evidence_refs": content.get("evidence_refs") if isinstance(content.get("evidence_refs"), list) else [],
+        }
+
+    def _extract_few_shot_examples(self, hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        examples: list[dict[str, Any]] = []
+        for hit in hits:
+            snippet = hit.get("reusable_snippet")
+            if not isinstance(snippet, dict):
+                continue
+            examples.append(
+                {
+                    "entry_id": hit.get("entry_id"),
+                    "decision_pattern": snippet.get("decision_pattern"),
+                    "failure_boundary": snippet.get("failure_boundary"),
+                    "applicable_conditions": snippet.get("applicable_conditions"),
+                }
+            )
+        return examples
+
+    def _to_shared_board_row(self, entry: dict[str, Any]) -> dict[str, Any] | None:
+        if str(entry.get("scope") or "shared") != "shared":
+            return None
+        content = entry.get("content") if isinstance(entry.get("content"), dict) else {}
+        text = content.get("text")
+        if not isinstance(text, str) or not text.strip():
+            text = self._compact_output_text(content)
+        agent_role = self._canonical_agent_id(entry.get("agent_role") or entry.get("agent_id"))
+        if not agent_role:
+            return None
+        return {
+            "entry_id": entry.get("entry_id"),
+            "agent_role": agent_role,
+            "agent_perspective": entry.get("agent_perspective") or self._agent_perspective(agent_role),
+            "task_phase": entry.get("task_phase") or "execution",
+            "confidence": float(entry.get("confidence") or 0.0),
+            "trace_ref": entry.get("trace_ref") if isinstance(entry.get("trace_ref"), dict) else {},
+            "summary_text": text[:160] if isinstance(text, str) else "",
+            "kind": entry.get("kind"),
+            "memory_type": entry.get("memory_type"),
+        }
+
+    def _summarize_shared_board(self, board: list[dict[str, Any]]) -> dict[str, Any]:
+        by_role: dict[str, int] = {}
+        for row in board:
+            role = str(row.get("agent_role") or "unknown")
+            by_role[role] = by_role.get(role, 0) + 1
+        return {
+            "item_count": len(board),
+            "by_role": by_role,
+            "latest": board[:5],
+        }
+
+    def _summarize_private_memory(
+        self,
+        private_memory_state: dict[str, list[dict[str, Any]]],
+    ) -> dict[str, Any]:
+        summary: dict[str, Any] = {}
+        for agent_id, entries in private_memory_state.items():
+            latest = entries[0] if entries else {}
+            content = latest.get("content") if isinstance(latest.get("content"), dict) else {}
+            summary[agent_id] = {
+                "count": len(entries),
+                "role": content.get("role") or agent_id,
+                "current_progress": content.get("current_progress"),
+                "next_intended_action": content.get("next_intended_action"),
+            }
+        return summary
+
+    def _estimate_role_drift(
+        self,
+        *,
+        shared_board: list[dict[str, Any]],
+        private_memory_state: dict[str, list[dict[str, Any]]],
+    ) -> float:
+        total = 0
+        drift = 0
+        for row in shared_board:
+            total += 1
+            role = self._canonical_agent_id(row.get("agent_role"))
+            perspective = row.get("agent_perspective")
+            if role and perspective != self._agent_perspective(role):
+                drift += 1
+        for agent_id, entries in private_memory_state.items():
+            for entry in entries:
+                total += 1
+                content = entry.get("content") if isinstance(entry.get("content"), dict) else {}
+                if self._canonical_agent_id(content.get("role")) != self._canonical_agent_id(agent_id):
+                    drift += 1
+        return round(drift / total, 4) if total else 0.0
+
+    def _estimate_memory_cross_talk(
+        self,
+        *,
+        private_memory_state: dict[str, list[dict[str, Any]]],
+    ) -> float:
+        total = 0
+        cross_talk = 0
+        for agent_id, entries in private_memory_state.items():
+            for entry in entries:
+                total += 1
+                if self._canonical_agent_id(entry.get("agent_id")) != self._canonical_agent_id(agent_id):
+                    cross_talk += 1
+        return round(cross_talk / total, 4) if total else 0.0
+
+    def _compact_output_text(self, payload: Any) -> str:
+        if isinstance(payload, dict):
+            for key in ("summary", "report", "text", "reason"):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            return json.dumps(self._make_json_safe(payload), ensure_ascii=False, sort_keys=True)[:200]
+        if isinstance(payload, str):
+            return payload[:200]
+        return ""
+
+    def _make_json_safe(self, value: Any) -> Any:
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, dict):
+            return {
+                str(key): self._make_json_safe(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, (list, tuple, set)):
+            return [self._make_json_safe(item) for item in value]
+        return str(value)
     
     # ==================== 工具方法 ====================
     
@@ -813,6 +1330,7 @@ def get_memory_store() -> MemoryStore:
     sig = (
         os.getenv("REDIS_URL", ""),
         os.getenv("MEMORY_TTL_S", ""),
+        os.getenv("SEMANTIC_MEMORY_ENABLED", ""),
         os.getenv("PAGE_INDEX_ENABLED", ""),
         loop_sig,
     )

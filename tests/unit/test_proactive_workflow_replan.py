@@ -540,14 +540,26 @@ def test_proactive_workflow_persists_memory_and_supports_resume_from_run_id():
             self.saved_contexts = {}
             self.persisted_runs = {}
 
+        async def append(self, entry, **kwargs):
+            del kwargs
+            return dict(entry)
+
         async def retrieve_for_planning(self, *, task, intent=None, limit=5):
             return {
                 "hits": [{"entry_id": "mem-1", "kind": "lesson", "memory_type": "procedural", "content": {"text": "先查持仓"}}],
                 "summary": {"hit_count": 1, "texts": ["[procedural/lesson] 先查持仓"]},
             }
 
-        async def record_working_memory(self, *, run_id, task, trace_entry):
-            self.working_entries.append({"run_id": run_id, "trace_entry": trace_entry})
+        async def record_working_memory(self, *, run_id, task, trace_entry, node=None, node_result=None, private_memory_enabled=True):
+            self.working_entries.append(
+                {
+                    "run_id": run_id,
+                    "trace_entry": trace_entry,
+                    "node": node,
+                    "node_result": node_result,
+                    "private_memory_enabled": private_memory_enabled,
+                }
+            )
             return {"entry_id": f"wm-{len(self.working_entries)}"}
 
         async def persist_run_artifacts(self, *, run_id, task, final_output, critic_final):
@@ -555,6 +567,9 @@ def test_proactive_workflow_persists_memory_and_supports_resume_from_run_id():
                 "run_summary": {"text": "完成总结", "key_points": ["先查持仓"], "receipt_command_ids": list(final_output.get("receipt_command_ids") or [])},
                 "summary_entry": {"entry_id": "summary-1"},
                 "lesson_entry": {"entry_id": "lesson-1", "kind": "lesson", "memory_type": "procedural", "content": {"text": "先查持仓再查风险"}},
+                "long_term_experience": {"entry_id": "exp-1", "kind": "semantic_case", "memory_type": "semantic"},
+                "rejected_experience": {},
+                "memory_policy": {"accepted": True, "confidence": 0.95},
             }
             self.persisted_runs[run_id] = payload
             return payload
@@ -589,6 +604,8 @@ def test_proactive_workflow_persists_memory_and_supports_resume_from_run_id():
                 "execution_state": context["data"]["task_graph_execution"],
                 "resume_from_step_id": resume_from_step_id or context["data"]["task_graph_execution"].get("failed_step_id"),
                 "memory_state": await self.list_recent(agent_id="orchestrator", scope="shared", run_id=run_id),
+                "shared_memory_board": context["data"].get("shared_memory_board", []),
+                "private_memory_state": context["data"].get("private_memory_state", {}),
                 "run_summary": await self.get_run_summary(run_id),
             }
 
@@ -747,6 +764,100 @@ def test_proactive_workflow_omits_memory_fields_when_memory_disabled():
     assert "planning_memory" not in result
 
 
+def test_proactive_workflow_disables_private_memory_only():
+    class _FakeMemoryStore:
+        def __init__(self) -> None:
+            self.private_flags = []
+
+        async def append(self, entry, **kwargs):
+            del kwargs
+            return dict(entry)
+
+        async def retrieve_for_planning(self, *, task, intent=None, limit=5):
+            del intent, limit
+            assert task.get("private_memory_enabled") is False
+            return {
+                "hits": [{"entry_id": "mem-1", "kind": "lesson", "memory_type": "procedural", "content": {"text": "先查持仓"}}],
+                "summary": {"hit_count": 1, "texts": ["[procedural/lesson] 先查持仓"]},
+                "shared_board": [{"entry_id": "board-1", "agent_role": "orchestrator"}],
+                "private_memory_state": {},
+            }
+
+        async def record_working_memory(self, *, run_id, task, trace_entry, node=None, node_result=None, private_memory_enabled=True):
+            del run_id, task, trace_entry, node, node_result
+            self.private_flags.append(private_memory_enabled)
+            return {"entry_id": f"wm-{len(self.private_flags)}"}
+
+        async def persist_run_artifacts(self, *, run_id, task, final_output, critic_final):
+            del run_id, task, final_output, critic_final
+            return {
+                "run_summary": {"text": "done", "key_points": [], "receipt_command_ids": []},
+                "summary_entry": {"entry_id": "summary-1"},
+                "lesson_entry": {"entry_id": "lesson-1", "kind": "lesson", "memory_type": "procedural"},
+                "long_term_experience": {"entry_id": "exp-1", "kind": "semantic_case", "memory_type": "semantic"},
+                "memory_policy": {"accepted": True, "confidence": 0.9},
+            }
+
+        async def save_run_context(self, *, run_id, event_id, data):
+            del run_id, event_id, data
+
+        async def persist_approval_memory(self, *, run_id, task, approval_records):
+            del run_id, task, approval_records
+            return []
+
+    fake_store = _FakeMemoryStore()
+    workflow = ProactiveMultiAgentWorkflow()
+
+    async def _noop():
+        return None
+
+    async def _fake_intent(*, task):
+        return ProactiveAgentResult(ok=True, output={"primary_intent_type": "parallel_analysis"})
+
+    async def _fake_orchestrate(*, task, context=None):
+        return ProactiveAgentResult(
+            ok=True,
+            output={
+                "plan_steps": [
+                    {"kind": "delegate", "step_id": "s1", "reason": "系统分析", "target_agent": "system_engineer", "instruction": "分析系统影响"},
+                    {"kind": "finalize", "step_id": "s2", "reason": "汇总", "instruction": "输出结论"},
+                ],
+            },
+        )
+
+    async def _fake_critic(*, task, orchestrator, receipts=None, final_output=None, phase="plan_review"):
+        del task, orchestrator, receipts, final_output, phase
+        return ProactiveAgentResult(ok=True, output={"ok": True, "issues": [], "suggested_fixes": [], "run_summary": {"text": "ok", "key_points": [], "receipt_command_ids": []}})
+
+    async def _fake_engineer(*, task, context=None):
+        del task, context
+        return ProactiveAgentResult(ok=True, output={"summary": "系统侧完成"})
+
+    workflow.start_agents = _noop
+    workflow._intent_agent.recognize = _fake_intent
+    workflow._orchestrator_agent.orchestrate = _fake_orchestrate
+    workflow._critic_agent.review = _fake_critic
+    workflow._engineer_agent.analyze_task = _fake_engineer
+
+    with patch("riskmonitor_multiagent.orchestration.proactive_workflow.get_memory_store", return_value=fake_store):
+        result = asyncio.run(
+            workflow.run(
+                {
+                    "task_id": "private-disabled-1",
+                    "source": "human",
+                    "payload": {"content": "关闭 private memory 保留 shared memory"},
+                    "memory_enabled": True,
+                    "private_memory_enabled": False,
+                }
+            )
+        )
+
+    assert result.get("status") == "completed"
+    assert result.get("shared_memory_board") == [{"entry_id": "board-1", "agent_role": "orchestrator"}]
+    assert result.get("private_memory_state") == {}
+    assert fake_store.private_flags and all(flag is False for flag in fake_store.private_flags)
+
+
 def test_proactive_workflow_resumes_pending_approval_from_blocked_step():
     class _FakeMemoryStore:
         def __init__(self) -> None:
@@ -755,11 +866,23 @@ def test_proactive_workflow_resumes_pending_approval_from_blocked_step():
             self.saved_contexts = {}
             self.persisted_runs = {}
 
+        async def append(self, entry, **kwargs):
+            del kwargs
+            return dict(entry)
+
         async def retrieve_for_planning(self, *, task, intent=None, limit=5):
             return {"hits": [], "summary": {}}
 
-        async def record_working_memory(self, *, run_id, task, trace_entry):
-            self.working_entries.append({"run_id": run_id, "trace_entry": trace_entry})
+        async def record_working_memory(self, *, run_id, task, trace_entry, node=None, node_result=None, private_memory_enabled=True):
+            self.working_entries.append(
+                {
+                    "run_id": run_id,
+                    "trace_entry": trace_entry,
+                    "node": node,
+                    "node_result": node_result,
+                    "private_memory_enabled": private_memory_enabled,
+                }
+            )
             return {"entry_id": f"wm-{len(self.working_entries)}"}
 
         async def persist_run_artifacts(self, *, run_id, task, final_output, critic_final):

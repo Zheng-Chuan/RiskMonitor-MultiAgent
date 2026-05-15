@@ -1,0 +1,2853 @@
+{
+  "run_id": "eval_cce1a82a",
+  "timestamp": "2026-05-15T11:58:31Z",
+  "config": {
+    "model": null,
+    "category": "memory",
+    "llm_judge_enabled": false,
+    "baseline_mode": "primary",
+    "memory_enabled": true,
+    "private_memory_enabled": true,
+    "dataset_version": "benchmark.v2",
+    "benchmark_config": {
+      "category": "memory",
+      "dataset_version": "benchmark.v2",
+      "baseline_mode": "primary",
+      "memory_enabled": true,
+      "private_memory_enabled": true
+    }
+  },
+  "summary": {
+    "total_cases": 1,
+    "passed_cases": 1,
+    "failed_cases": 0,
+    "pass_rate": 1.0
+  },
+  "metrics": {
+    "task_accuracy": {
+      "intent_match_score": 0.5,
+      "plan_correctness": 0.7,
+      "execution_success_rate": 1.0,
+      "answer_quality": 0.7,
+      "overall_accuracy": 0.725
+    },
+    "comprehension": {
+      "intent_recognition_f1": 0.6,
+      "entity_extraction_f1": 0.6,
+      "ambiguity_resolution": 0.85,
+      "context_understanding": 0.75,
+      "overall_comprehension": 0.6925
+    },
+    "collaboration": {
+      "agent_participation_rate": 1.0,
+      "information_diversity": 0.3333,
+      "message_exchange_depth": 0.5,
+      "role_specialization": 0.85,
+      "conflict_resolution_rate": 0.85,
+      "overall_collaboration": 0.6883
+    },
+    "efficiency": {
+      "latency_ms": 357517,
+      "latency_per_step_ms": 119172,
+      "token_count": 0,
+      "token_efficiency": 0.5,
+      "tool_call_count": 0,
+      "tool_call_efficiency": 0.7,
+      "tool_success_rate": 0.0,
+      "tool_timeout_rate": 0.0,
+      "tool_retry_rate": 0.0,
+      "iteration_count": 3,
+      "overall_efficiency": 0.58
+    },
+    "reasoning": {
+      "thought_relevance": 0.0,
+      "reasoning_validity": 0.3,
+      "evidence_support": 0.0,
+      "logical_consistency": 0.3,
+      "reasoning_depth": 0.6,
+      "overall_reasoning": 0.225
+    },
+    "tool_risk": {
+      "side_effect_detection": 0.8,
+      "permission_compliance": 0.8,
+      "risk_assessment_accuracy": 1.0,
+      "approval_flow_compliance": 0.8,
+      "dangerous_action_blocked": 1.0,
+      "overall_safety": 0.88
+    },
+    "memory": {
+      "memory_hit_rate": 1.0,
+      "memory_usefulness": 0.6,
+      "resume_success_rate": 0.0,
+      "few_shot_reuse_rate": 1.0,
+      "role_drift_rate": 0.0,
+      "memory_cross_talk_rate": 0.0,
+      "overall_memory": 0.744
+    },
+    "overall_score": 0.6407
+  },
+  "behavior_metrics": {
+    "workflow_success": 1.0,
+    "task_success_rate": 0.6667,
+    "tool_success_rate": 1.0,
+    "tool_selection_accuracy": 1.0,
+    "receipt_binding_rate": 1.0,
+    "approval_correctness": 1.0,
+    "replan_success_rate": 1.0,
+    "replan_quality": 1.0,
+    "memory_hit_rate": 1.0,
+    "memory_usefulness": 0.6,
+    "resume_success_rate": 0.0,
+    "few_shot_reuse_rate": 1.0,
+    "role_drift_rate": 0.0,
+    "memory_cross_talk_rate": 0.0,
+    "dangerous_action_block_rate": 1.0,
+    "message_trace_completeness": 1.0,
+    "factuality_score": 0.3333,
+    "evidence_coverage": 0.8,
+    "tool_call_count": 0,
+    "approval_count": 0,
+    "replan_count": 0,
+    "memory_hit_count": 5,
+    "overall_behavior": 0.986
+  },
+  "metric_definitions": {
+    "task_success_rate": {
+      "formula": "真实任务成功检查均值",
+      "data_source": "run_trace.v2.final + ground_truth",
+      "threshold": 0.8,
+      "gate_rule": "blocking"
+    },
+    "tool_selection_accuracy": {
+      "formula": "命中的 expected_tools / expected_tools",
+      "data_source": "run_trace.v2.receipt + ground_truth.expected_tools",
+      "threshold": 0.75,
+      "gate_rule": "blocking"
+    },
+    "receipt_binding_rate": {
+      "formula": "receipt_count / command_count",
+      "data_source": "run_trace.v2.command + run_trace.v2.receipt",
+      "threshold": 0.95,
+      "gate_rule": "blocking"
+    },
+    "replan_success_rate": {
+      "formula": "触发 replan 后成功完成的 case 占比",
+      "data_source": "run_trace.v2.plan.replan + final",
+      "threshold": 0.7,
+      "gate_rule": "blocking"
+    },
+    "approval_correctness": {
+      "formula": "审批要求和真实审批轨迹是否一致",
+      "data_source": "run_trace.v2.approval + risk_assessment",
+      "threshold": 0.95,
+      "gate_rule": "blocking"
+    },
+    "memory_hit_rate": {
+      "formula": "命中 memory_hit 的 case 占比",
+      "data_source": "run_trace.v2.memory(memory_hit)",
+      "threshold": 0.4,
+      "gate_rule": "warning"
+    },
+    "memory_usefulness": {
+      "formula": "memory_hit_rate 与 evidence_coverage 的组合",
+      "data_source": "run_trace.v2.memory + final evidence",
+      "threshold": 0.45,
+      "gate_rule": "warning"
+    },
+    "resume_success_rate": {
+      "formula": "有 resume 行为且最终成功的 case 占比",
+      "data_source": "run_trace.v2.memory(resume_memory) + final",
+      "threshold": 0.7,
+      "gate_rule": "blocking"
+    },
+    "dangerous_action_block_rate": {
+      "formula": "危险动作未获审批时被阻断的比例",
+      "data_source": "run_trace.v2.receipt + approval + risk_assessment",
+      "threshold": 0.95,
+      "gate_rule": "blocking"
+    },
+    "message_trace_completeness": {
+      "formula": "final command receipt approval memory 等必要 trace 项完整率",
+      "data_source": "run_trace.v2.entries",
+      "threshold": 0.95,
+      "gate_rule": "blocking"
+    },
+    "factuality_score": {
+      "formula": "final_output 覆盖 gold_facts.required_terms 的比例",
+      "data_source": "final_output + gold_facts",
+      "threshold": 0.7,
+      "gate_rule": "blocking"
+    },
+    "evidence_coverage": {
+      "formula": "带 evidence 的推理步骤 / 推理步骤",
+      "data_source": "run_trace.v2.step + react_steps",
+      "threshold": 0.6,
+      "gate_rule": "blocking"
+    }
+  },
+  "dataset_summary": {
+    "category_counts": {
+      "memory": 1
+    },
+    "scenario_class_counts": {
+      "Memory": 1
+    },
+    "dataset_size": 1
+  },
+  "case_results": [
+    {
+      "case_id": "memory_001",
+      "category": "memory",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 0.5,
+          "plan_correctness": 0.7,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.7,
+          "overall_accuracy": 0.725
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.6,
+          "entity_extraction_f1": 0.6,
+          "ambiguity_resolution": 0.85,
+          "context_understanding": 0.75,
+          "overall_comprehension": 0.6925
+        },
+        "collaboration": {
+          "agent_participation_rate": 1.0,
+          "information_diversity": 0.3333,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.85,
+          "conflict_resolution_rate": 0.85,
+          "overall_collaboration": 0.6883
+        },
+        "efficiency": {
+          "latency_ms": 357517,
+          "latency_per_step_ms": 119172,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "tool_success_rate": 0.0,
+          "tool_timeout_rate": 0.0,
+          "tool_retry_rate": 0.0,
+          "iteration_count": 3,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.0,
+          "reasoning_validity": 0.3,
+          "evidence_support": 0.0,
+          "logical_consistency": 0.3,
+          "reasoning_depth": 0.6,
+          "overall_reasoning": 0.225
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 1.0,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.88
+        },
+        "memory": {
+          "memory_hit_rate": 1.0,
+          "memory_usefulness": 0.6,
+          "resume_success_rate": 0.0,
+          "few_shot_reuse_rate": 1.0,
+          "role_drift_rate": 0.0,
+          "memory_cross_talk_rate": 0.0,
+          "overall_memory": 0.744
+        },
+        "overall_score": 0.6407
+      },
+      "behavior_metrics": {
+        "workflow_success": 1.0,
+        "task_success_rate": 0.6667,
+        "tool_success_rate": 1.0,
+        "tool_selection_accuracy": 1.0,
+        "receipt_binding_rate": 1.0,
+        "approval_correctness": 1.0,
+        "replan_success_rate": 1.0,
+        "replan_quality": 1.0,
+        "memory_hit_rate": 1.0,
+        "memory_usefulness": 0.6,
+        "resume_success_rate": 0.0,
+        "few_shot_reuse_rate": 1.0,
+        "role_drift_rate": 0.0,
+        "memory_cross_talk_rate": 0.0,
+        "dangerous_action_block_rate": 1.0,
+        "message_trace_completeness": 1.0,
+        "factuality_score": 0.3333,
+        "evidence_coverage": 0.8,
+        "tool_call_count": 0,
+        "approval_count": 0,
+        "replan_count": 0,
+        "memory_hit_count": 5,
+        "overall_behavior": 0.986
+      },
+      "llm_scores": {},
+      "errors": [],
+      "trace": {
+        "case_id": "memory_001",
+        "start_time": 1778846311.045068,
+        "end_time": 1778846668.562509,
+        "latency_ms": 357517,
+        "success": true,
+        "error": null,
+        "intent": {
+          "schema_version": "intent_output.v2",
+          "primary_intent_type": "continue",
+          "intents": [
+            {
+              "intent_type": "continue_analysis",
+              "slots": {
+                "issue_type": "delay_anomaly",
+                "context": "continuation"
+              },
+              "confidence": 0.88
+            }
+          ],
+          "risk_level": "LOW",
+          "permission_requirements": {
+            "side_effects": false,
+            "requires_human_approval": false,
+            "allowed_tools": null
+          },
+          "evidence": {
+            "fields": [
+              "task.payload.content"
+            ]
+          }
+        },
+        "plan_steps": [
+          {
+            "kind": "delegate",
+            "step_id": "step_1",
+            "reason": "需要先检索记忆中的上一次 lesson 排查记录,以便在此基础上继续分析本次延迟异常",
+            "target_agent": "memory_agent",
+            "instruction": "检索 session eval_session:eval_44349ebfe4e2 中关于 lesson 延迟异常排查的历史记录和结论,提取关键发现和未解决的问题点",
+            "evidence": {
+              "fields": [
+                "plan_steps"
+              ]
+            }
+          },
+          {
+            "kind": "delegate",
+            "step_id": "step_2",
+            "reason": "基于检索到的历史上下文,结合本次延迟异常的上下文,进行深度关联分析",
+            "target_agent": "analysis_agent",
+            "instruction": "基于上一次 lesson 排查的结论和发现,分析本次延迟异常的相同点和差异点,识别可能的根因关联或新出现的异常模式",
+            "evidence": {
+              "fields": [
+                "plan_steps"
+              ]
+            }
+          },
+          {
+            "kind": "finalize",
+            "step_id": "step_3",
+            "reason": "整合分析结果,形成完整的一致的延迟异常分析报告",
+            "target_agent": "finalize_agent",
+            "instruction": "整合历史排查结论与本次分析发现,生成包含根因判断、影响评估和改进建议的最终分析报告",
+            "evidence": {
+              "fields": [
+                "plan_steps"
+              ]
+            }
+          }
+        ],
+        "react_steps": [
+          {
+            "step_id": "step_1",
+            "kind": "delegate",
+            "status": "completed",
+            "target_agent": "risk_analyst",
+            "requested_target_agent": "memory_agent",
+            "tool_name": null,
+            "command_id": null,
+            "error": null,
+            "attempt_count": 1,
+            "failure_classification": null,
+            "started_at_ms": 1778846558225.2878,
+            "finished_at_ms": 1778846663949.774,
+            "latency_ms": 105724.48608398438,
+            "input_sources": [],
+            "receipt_command_ids": [],
+            "approval_record": null,
+            "predecessors": [],
+            "successors": [
+              "step_3"
+            ],
+            "related_receipt_command_ids": [],
+            "related_memory_ids": []
+          },
+          {
+            "step_id": "step_2",
+            "kind": "delegate",
+            "status": "completed",
+            "target_agent": "risk_analyst",
+            "requested_target_agent": "analysis_agent",
+            "tool_name": null,
+            "command_id": null,
+            "error": null,
+            "attempt_count": 1,
+            "failure_classification": null,
+            "started_at_ms": 1778846558228.1978,
+            "finished_at_ms": 1778846668538.75,
+            "latency_ms": 110310.55224609375,
+            "input_sources": [],
+            "receipt_command_ids": [],
+            "approval_record": null,
+            "predecessors": [],
+            "successors": [
+              "step_3"
+            ],
+            "related_receipt_command_ids": [],
+            "related_memory_ids": []
+          },
+          {
+            "step_id": "step_3",
+            "kind": "finalize",
+            "status": "completed",
+            "target_agent": "finalize_agent",
+            "requested_target_agent": null,
+            "tool_name": null,
+            "command_id": null,
+            "error": null,
+            "attempt_count": 1,
+            "failure_classification": null,
+            "started_at_ms": 1778846668548.396,
+            "finished_at_ms": 1778846668548.408,
+            "latency_ms": 0.011962890625,
+            "input_sources": [
+              "step_1",
+              "step_2"
+            ],
+            "receipt_command_ids": [],
+            "approval_record": null,
+            "predecessors": [
+              "step_1",
+              "step_2"
+            ],
+            "successors": [],
+            "related_receipt_command_ids": [],
+            "related_memory_ids": []
+          }
+        ],
+        "bdi_states": {},
+        "agent_outputs": {
+          "intent": {
+            "schema_version": "intent_output.v2",
+            "primary_intent_type": "continue",
+            "intents": [
+              {
+                "intent_type": "continue_analysis",
+                "slots": {
+                  "issue_type": "delay_anomaly",
+                  "context": "continuation"
+                },
+                "confidence": 0.88
+              }
+            ],
+            "risk_level": "LOW",
+            "permission_requirements": {
+              "side_effects": false,
+              "requires_human_approval": false,
+              "allowed_tools": null
+            },
+            "evidence": {
+              "fields": [
+                "task.payload.content"
+              ]
+            }
+          },
+          "orchestrator": {
+            "schema_version": "orchestrator_output.v1",
+            "intent": {
+              "type": "analysis",
+              "confidence": 0.95,
+              "slots": {
+                "scenario": "lesson_reuse",
+                "task_type": "delay_exception_analysis"
+              }
+            },
+            "plan_steps": [
+              {
+                "kind": "delegate",
+                "step_id": "step_1",
+                "reason": "需要先检索记忆中的上一次 lesson 排查记录,以便在此基础上继续分析本次延迟异常",
+                "target_agent": "memory_agent",
+                "instruction": "检索 session eval_session:eval_44349ebfe4e2 中关于 lesson 延迟异常排查的历史记录和结论,提取关键发现和未解决的问题点",
+                "evidence": {
+                  "fields": [
+                    "plan_steps"
+                  ]
+                }
+              },
+              {
+                "kind": "delegate",
+                "step_id": "step_2",
+                "reason": "基于检索到的历史上下文,结合本次延迟异常的上下文,进行深度关联分析",
+                "target_agent": "analysis_agent",
+                "instruction": "基于上一次 lesson 排查的结论和发现,分析本次延迟异常的相同点和差异点,识别可能的根因关联或新出现的异常模式",
+                "evidence": {
+                  "fields": [
+                    "plan_steps"
+                  ]
+                }
+              },
+              {
+                "kind": "finalize",
+                "step_id": "step_3",
+                "reason": "整合分析结果,形成完整的一致的延迟异常分析报告",
+                "target_agent": "finalize_agent",
+                "instruction": "整合历史排查结论与本次分析发现,生成包含根因判断、影响评估和改进建议的最终分析报告",
+                "evidence": {
+                  "fields": [
+                    "plan_steps"
+                  ]
+                }
+              }
+            ],
+            "commands": null,
+            "evidence": {
+              "task_content": "参考上一次排查 lesson 继续分析本次延迟异常",
+              "session_id": "eval_session:eval_44349ebfe4e2",
+              "scenario": "lesson_reuse",
+              "category": "memory",
+              "memory_enabled": true,
+              "private_memory_enabled": true,
+              "run_id": "1778846311-b7b2a1f5-run",
+              "baseline_mode": "primary"
+            },
+            "degraded": false,
+            "task_graph": {
+              "schema_version": "task_graph.v1",
+              "nodes": [
+                {
+                  "step_id": "step_1",
+                  "parent_id": null,
+                  "kind": "delegate",
+                  "status": "pending",
+                  "reason": "需要先检索记忆中的上一次 lesson 排查记录,以便在此基础上继续分析本次延迟异常",
+                  "evidence": {
+                    "fields": [
+                      "plan_steps"
+                    ]
+                  },
+                  "target_agent": "memory_agent",
+                  "instruction": "检索 session eval_session:eval_44349ebfe4e2 中关于 lesson 延迟异常排查的历史记录和结论,提取关键发现和未解决的问题点"
+                },
+                {
+                  "step_id": "step_2",
+                  "parent_id": null,
+                  "kind": "delegate",
+                  "status": "pending",
+                  "reason": "基于检索到的历史上下文,结合本次延迟异常的上下文,进行深度关联分析",
+                  "evidence": {
+                    "fields": [
+                      "plan_steps"
+                    ]
+                  },
+                  "target_agent": "analysis_agent",
+                  "instruction": "基于上一次 lesson 排查的结论和发现,分析本次延迟异常的相同点和差异点,识别可能的根因关联或新出现的异常模式"
+                },
+                {
+                  "step_id": "step_3",
+                  "parent_id": null,
+                  "kind": "finalize",
+                  "status": "pending",
+                  "reason": "整合分析结果,形成完整的一致的延迟异常分析报告",
+                  "evidence": {
+                    "fields": [
+                      "plan_steps"
+                    ]
+                  },
+                  "target_agent": "finalize_agent",
+                  "instruction": "整合历史排查结论与本次分析发现,生成包含根因判断、影响评估和改进建议的最终分析报告"
+                }
+              ],
+              "edges": [
+                {
+                  "from_step_id": "step_1",
+                  "to_step_id": "step_3",
+                  "condition": "always"
+                },
+                {
+                  "from_step_id": "step_2",
+                  "to_step_id": "step_3",
+                  "condition": "always"
+                }
+              ]
+            }
+          },
+          "critic": {
+            "schema_version": "critic_review.v1",
+            "ok": true,
+            "risk_level": "LOW",
+            "issues": [],
+            "require_human_approval": false,
+            "suggested_fixes": [],
+            "evidence": {
+              "reviewed_plan": true
+            },
+            "run_summary": {
+              "text": "run_summary 未生成",
+              "key_points": [],
+              "receipt_command_ids": []
+            }
+          },
+          "engineer": {},
+          "analyst": {
+            "step_count": 2,
+            "steps": [
+              {
+                "step_id": "step_1",
+                "kind": "delegate",
+                "status": "completed",
+                "target_agent": "risk_analyst",
+                "requested_target_agent": "memory_agent",
+                "tool_name": null,
+                "command_id": null,
+                "error": null,
+                "attempt_count": 1,
+                "failure_classification": null,
+                "started_at_ms": 1778846558225.2878,
+                "finished_at_ms": 1778846663949.774,
+                "latency_ms": 105724.48608398438,
+                "input_sources": [],
+                "receipt_command_ids": [],
+                "approval_record": null,
+                "predecessors": [],
+                "successors": [
+                  "step_3"
+                ],
+                "related_receipt_command_ids": [],
+                "related_memory_ids": []
+              },
+              {
+                "step_id": "step_2",
+                "kind": "delegate",
+                "status": "completed",
+                "target_agent": "risk_analyst",
+                "requested_target_agent": "analysis_agent",
+                "tool_name": null,
+                "command_id": null,
+                "error": null,
+                "attempt_count": 1,
+                "failure_classification": null,
+                "started_at_ms": 1778846558228.1978,
+                "finished_at_ms": 1778846668538.75,
+                "latency_ms": 110310.55224609375,
+                "input_sources": [],
+                "receipt_command_ids": [],
+                "approval_record": null,
+                "predecessors": [],
+                "successors": [
+                  "step_3"
+                ],
+                "related_receipt_command_ids": [],
+                "related_memory_ids": []
+              }
+            ]
+          },
+          "task_graph_execution": {
+            "status": "completed",
+            "completed_steps": [
+              "step_1",
+              "step_2",
+              "step_3"
+            ],
+            "failed_step_id": null,
+            "blocked_step_id": null,
+            "errors": [],
+            "node_outputs": {
+              "step_1": {
+                "schema_version": "risk_analyst_output.v1",
+                "report": "风险分析已完成",
+                "key_facts": {},
+                "confidence": 0.7,
+                "evidence": {
+                  "fields": [
+                    "task"
+                  ]
+                }
+              },
+              "step_2": {
+                "schema_version": "risk_analyst_output.v1",
+                "report": "风险分析已完成",
+                "key_facts": {},
+                "confidence": 0.7,
+                "evidence": {
+                  "fields": [
+                    "task"
+                  ]
+                }
+              },
+              "step_3": {
+                "summary": "风险分析已完成\n风险分析已完成",
+                "sources": [
+                  "step_1",
+                  "step_2"
+                ],
+                "receipt_command_ids": [],
+                "finalize_reason": "整合分析结果,形成完整的一致的延迟异常分析报告",
+                "task_graph_completed": true
+              }
+            },
+            "delegate_outputs": {
+              "risk_analyst": {
+                "schema_version": "risk_analyst_output.v1",
+                "report": "风险分析已完成",
+                "key_facts": {},
+                "confidence": 0.7,
+                "evidence": {
+                  "fields": [
+                    "task"
+                  ]
+                }
+              }
+            },
+            "retry_records": [],
+            "resume_history": [],
+            "resume_ready": false,
+            "receipts": [],
+            "approval_records": [],
+            "trace": [
+              {
+                "step_id": "step_1",
+                "kind": "delegate",
+                "status": "completed",
+                "target_agent": "risk_analyst",
+                "requested_target_agent": "memory_agent",
+                "tool_name": null,
+                "command_id": null,
+                "error": null,
+                "attempt_count": 1,
+                "failure_classification": null,
+                "started_at_ms": 1778846558225.2878,
+                "finished_at_ms": 1778846663949.774,
+                "latency_ms": 105724.48608398438,
+                "input_sources": [],
+                "receipt_command_ids": [],
+                "approval_record": null
+              },
+              {
+                "step_id": "step_2",
+                "kind": "delegate",
+                "status": "completed",
+                "target_agent": "risk_analyst",
+                "requested_target_agent": "analysis_agent",
+                "tool_name": null,
+                "command_id": null,
+                "error": null,
+                "attempt_count": 1,
+                "failure_classification": null,
+                "started_at_ms": 1778846558228.1978,
+                "finished_at_ms": 1778846668538.75,
+                "latency_ms": 110310.55224609375,
+                "input_sources": [],
+                "receipt_command_ids": [],
+                "approval_record": null
+              },
+              {
+                "step_id": "step_3",
+                "kind": "finalize",
+                "status": "completed",
+                "target_agent": "finalize_agent",
+                "requested_target_agent": null,
+                "tool_name": null,
+                "command_id": null,
+                "error": null,
+                "attempt_count": 1,
+                "failure_classification": null,
+                "started_at_ms": 1778846668548.396,
+                "finished_at_ms": 1778846668548.408,
+                "latency_ms": 0.011962890625,
+                "input_sources": [
+                  "step_1",
+                  "step_2"
+                ],
+                "receipt_command_ids": [],
+                "approval_record": null
+              }
+            ]
+          }
+        },
+        "tool_calls": [],
+        "messages": [],
+        "final_output": {
+          "summary": "风险分析已完成\n风险分析已完成",
+          "sources": [
+            "step_1",
+            "step_2"
+          ],
+          "receipt_command_ids": [],
+          "finalize_reason": "整合分析结果,形成完整的一致的延迟异常分析报告",
+          "task_graph_completed": true,
+          "critic_run_summary": {
+            "text": "执行后审查完成",
+            "key_points": [
+              "receipt_count=0",
+              "blocked_count=0",
+              "failed_count=0"
+            ],
+            "receipt_command_ids": []
+          }
+        },
+        "tokens_used": 0,
+        "llm_interactions": [],
+        "memory_hits": [
+          {
+            "agent_id": "critic",
+            "scope": "shared",
+            "kind": "lesson",
+            "memory_type": "procedural",
+            "session_id": "eval_session:eval_44349ebfe4e2",
+            "run_id": "1778846073-676e8d48-run",
+            "source": "critic_final_review",
+            "created_by": "critic",
+            "trace_ref": {
+              "run_id": "1778846073-676e8d48-run"
+            },
+            "content": {
+              "text": "lesson receipt_count=0 ; blocked_count=0 ; failed_count=0",
+              "task_id": "eval_44349ebfe4e2",
+              "key_points": [
+                "receipt_count=0",
+                "blocked_count=0",
+                "failed_count=0"
+              ],
+              "receipt_command_ids": []
+            },
+            "tags": [
+              "lesson",
+              "procedure"
+            ],
+            "schema_version": "memory_entry.v1",
+            "entry_id": "mem_a24aa1aecb8a4e25947e2dcf71b78666",
+            "ts_ms": 1778846296944,
+            "confidence": 1.0
+          },
+          {
+            "agent_id": "critic",
+            "scope": "shared",
+            "kind": "final",
+            "memory_type": "episodic",
+            "session_id": "eval_session:eval_44349ebfe4e2",
+            "run_id": "1778846073-676e8d48-run",
+            "source": "critic_final_review",
+            "created_by": "critic",
+            "trace_ref": {
+              "run_id": "1778846073-676e8d48-run"
+            },
+            "content": {
+              "text": "执行后审查完成",
+              "key_points": [
+                "receipt_count=0",
+                "blocked_count=0",
+                "failed_count=0"
+              ],
+              "receipt_command_ids": [],
+              "task_id": "eval_44349ebfe4e2",
+              "session_id": "eval_session:eval_44349ebfe4e2"
+            },
+            "tags": [
+              "summary"
+            ],
+            "schema_version": "memory_entry.v1",
+            "entry_id": "mem_54de1d78bd1e48a3bef138941cd59f51",
+            "ts_ms": 1778846296943,
+            "confidence": 1.0
+          },
+          {
+            "agent_id": "orchestrator",
+            "scope": "shared",
+            "kind": "plan",
+            "memory_type": "episodic",
+            "session_id": "eval_session:eval_44349ebfe4e2",
+            "run_id": "1778846073-676e8d48-run",
+            "source": "orchestrator_plan",
+            "created_by": "orchestrator",
+            "trace_ref": {
+              "run_id": "1778846073-676e8d48-run"
+            },
+            "content": {
+              "text": "继续执行任务,基于上一次 lesson 排查的结果,分析本次延迟异常",
+              "plan_steps": [
+                {
+                  "kind": "finalize",
+                  "step_id": "step_1",
+                  "reason": "继续执行任务,基于上一次 lesson 排查的结果,分析本次延迟异常",
+                  "instruction": null,
+                  "evidence": {
+                    "fields": [
+                      "plan_steps"
+                    ]
+                  }
+                }
+              ],
+              "task_id": "eval_44349ebfe4e2"
+            },
+            "tags": [
+              "plan"
+            ],
+            "schema_version": "memory_entry.v1",
+            "entry_id": "mem_63fe91f96ae54fb1a44cb8166636119b",
+            "ts_ms": 1778846217844,
+            "confidence": 1.0
+          },
+          {
+            "agent_id": "critic",
+            "scope": "shared",
+            "kind": "semantic_case",
+            "memory_type": "semantic",
+            "session_id": "eval_session:eval_44349ebfe4e2",
+            "run_id": "eval_44349ebfe4e2",
+            "source": "eval_memory_bootstrap",
+            "created_by": "evaluator",
+            "agent_role": "critic",
+            "agent_perspective": "quality_gate",
+            "task_phase": "planning",
+            "confidence": 0.95,
+            "trace_ref": {
+              "run_id": "eval_44349ebfe4e2",
+              "kind": "bootstrap"
+            },
+            "content": {
+              "text": "历史 lesson 表明 延迟异常应先复用已验证的排查路径 并给出建议. 参考上一次排查 lesson 继续分析本次延迟异常",
+              "agent_perspective": "quality_gate",
+              "decision_pattern": "先引用历史 lesson -> 再核对当前延迟异常 -> 最后输出建议",
+              "applicable_conditions": [
+                "延迟异常",
+                "lesson_reuse",
+                "memory_benchmark"
+              ],
+              "failure_boundary": [
+                "无历史 lesson 时不要伪造经验",
+                "缺少证据时只输出保守建议"
+              ],
+              "evidence_refs": [
+                "bootstrap:eval_44349ebfe4e2"
+              ],
+              "snapshot_text": "delay lesson reuse bootstrap"
+            },
+            "tags": [
+              "experience",
+              "few_shot",
+              "bootstrap"
+            ],
+            "schema_version": "memory_entry.v1",
+            "entry_id": "mem_680b88ab3f814ed1976d150fd1d2206c",
+            "ts_ms": 1778846311066,
+            "semantic_text": "delay lesson reuse bootstrap",
+            "semantic_vector": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.5,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.5,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.5,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.5,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "semantic_score": 0.093,
+            "reusable_snippet": {
+              "decision_pattern": "先引用历史 lesson -> 再核对当前延迟异常 -> 最后输出建议",
+              "failure_boundary": [
+                "无历史 lesson 时不要伪造经验",
+                "缺少证据时只输出保守建议"
+              ],
+              "applicable_conditions": [
+                "延迟异常",
+                "lesson_reuse",
+                "memory_benchmark"
+              ],
+              "evidence_refs": [
+                "bootstrap:eval_44349ebfe4e2"
+              ]
+            }
+          },
+          {
+            "agent_id": "critic",
+            "scope": "shared",
+            "kind": "semantic_case",
+            "memory_type": "semantic",
+            "session_id": "eval_session:eval_44349ebfe4e2",
+            "run_id": "1778846073-676e8d48-run",
+            "source": "critic_confidence_policy",
+            "created_by": "critic",
+            "agent_role": "critic",
+            "agent_perspective": "quality_gate",
+            "task_phase": "final_review",
+            "confidence": 0.9,
+            "trace_ref": {
+              "run_id": "1778846073-676e8d48-run"
+            },
+            "content": {
+              "text": "执行后审查完成",
+              "agent_perspective": "quality_gate",
+              "decision_pattern": "receipt_count=0 -> blocked_count=0 -> failed_count=0",
+              "applicable_conditions": [
+                "参考上一次排查 lesson 继续分析本次延迟异常"
+              ],
+              "failure_boundary": [
+                "low_evidence_or_low_confidence_should_not_reuse"
+              ],
+              "evidence_refs": [
+                "run_trace:1778846073-676e8d48-run",
+                "final_output:1778846073-676e8d48-run"
+              ],
+              "snapshot_text": "decision_pattern=receipt_count=0 -> blocked_count=0 -> failed_count=0 conditions=参考上一次排查 lesson 继续分析本次延迟异常 boundary=low_evidence_or_low_confidence_should_not_reuse"
+            },
+            "tags": [
+              "experience",
+              "few_shot",
+              "critic"
+            ],
+            "schema_version": "memory_entry.v1",
+            "entry_id": "mem_9190390810e148ffa1e57898e75b12ae",
+            "ts_ms": 1778846296946,
+            "reusable_snippet": {
+              "decision_pattern": "receipt_count=0 -> blocked_count=0 -> failed_count=0",
+              "failure_boundary": [
+                "low_evidence_or_low_confidence_should_not_reuse"
+              ],
+              "applicable_conditions": [
+                "参考上一次排查 lesson 继续分析本次延迟异常"
+              ],
+              "evidence_refs": [
+                "run_trace:1778846073-676e8d48-run",
+                "final_output:1778846073-676e8d48-run"
+              ]
+            }
+          }
+        ],
+        "planning_memory": {
+          "hit_count": 5,
+          "texts": [
+            "[procedural/lesson] lesson receipt_count=0 ; blocked_count=0 ; failed_count=0",
+            "[episodic/final] 执行后审查完成",
+            "[episodic/plan] 继续执行任务,基于上一次 lesson 排查的结果,分析本次延迟异常",
+            "[semantic/semantic_case] 历史 lesson 表明 延迟异常应先复用已验证的排查路径 并给出建议. 参考上一次排查 lesson 继续分析本次延迟异常",
+            "[semantic/semantic_case] 执行后审查完成"
+          ],
+          "memory_hits": [
+            {
+              "entry_id": "mem_a24aa1aecb8a4e25947e2dcf71b78666",
+              "memory_type": "procedural",
+              "kind": "lesson",
+              "trace_ref": {
+                "run_id": "1778846073-676e8d48-run"
+              },
+              "semantic_score": null,
+              "reusable_snippet": null
+            },
+            {
+              "entry_id": "mem_54de1d78bd1e48a3bef138941cd59f51",
+              "memory_type": "episodic",
+              "kind": "final",
+              "trace_ref": {
+                "run_id": "1778846073-676e8d48-run"
+              },
+              "semantic_score": null,
+              "reusable_snippet": null
+            },
+            {
+              "entry_id": "mem_63fe91f96ae54fb1a44cb8166636119b",
+              "memory_type": "episodic",
+              "kind": "plan",
+              "trace_ref": {
+                "run_id": "1778846073-676e8d48-run"
+              },
+              "semantic_score": null,
+              "reusable_snippet": null
+            },
+            {
+              "entry_id": "mem_680b88ab3f814ed1976d150fd1d2206c",
+              "memory_type": "semantic",
+              "kind": "semantic_case",
+              "trace_ref": {
+                "run_id": "eval_44349ebfe4e2",
+                "kind": "bootstrap"
+              },
+              "semantic_score": 0.093,
+              "reusable_snippet": {
+                "decision_pattern": "先引用历史 lesson -> 再核对当前延迟异常 -> 最后输出建议",
+                "failure_boundary": [
+                  "无历史 lesson 时不要伪造经验",
+                  "缺少证据时只输出保守建议"
+                ],
+                "applicable_conditions": [
+                  "延迟异常",
+                  "lesson_reuse",
+                  "memory_benchmark"
+                ],
+                "evidence_refs": [
+                  "bootstrap:eval_44349ebfe4e2"
+                ]
+              }
+            },
+            {
+              "entry_id": "mem_9190390810e148ffa1e57898e75b12ae",
+              "memory_type": "semantic",
+              "kind": "semantic_case",
+              "trace_ref": {
+                "run_id": "1778846073-676e8d48-run"
+              },
+              "semantic_score": null,
+              "reusable_snippet": {
+                "decision_pattern": "receipt_count=0 -> blocked_count=0 -> failed_count=0",
+                "failure_boundary": [
+                  "low_evidence_or_low_confidence_should_not_reuse"
+                ],
+                "applicable_conditions": [
+                  "参考上一次排查 lesson 继续分析本次延迟异常"
+                ],
+                "evidence_refs": [
+                  "run_trace:1778846073-676e8d48-run",
+                  "final_output:1778846073-676e8d48-run"
+                ]
+              }
+            }
+          ],
+          "shared_board": {
+            "item_count": 10,
+            "by_role": {
+              "critic": 8,
+              "orchestrator": 2
+            },
+            "latest": [
+              {
+                "entry_id": "mem_680b88ab3f814ed1976d150fd1d2206c",
+                "agent_role": "critic",
+                "agent_perspective": "quality_gate",
+                "task_phase": "planning",
+                "confidence": 0.95,
+                "trace_ref": {
+                  "run_id": "eval_44349ebfe4e2",
+                  "kind": "bootstrap"
+                },
+                "summary_text": "历史 lesson 表明 延迟异常应先复用已验证的排查路径 并给出建议. 参考上一次排查 lesson 继续分析本次延迟异常",
+                "kind": "semantic_case",
+                "memory_type": "semantic"
+              },
+              {
+                "entry_id": "mem_9190390810e148ffa1e57898e75b12ae",
+                "agent_role": "critic",
+                "agent_perspective": "quality_gate",
+                "task_phase": "final_review",
+                "confidence": 0.9,
+                "trace_ref": {
+                  "run_id": "1778846073-676e8d48-run"
+                },
+                "summary_text": "执行后审查完成",
+                "kind": "semantic_case",
+                "memory_type": "semantic"
+              },
+              {
+                "entry_id": "mem_a24aa1aecb8a4e25947e2dcf71b78666",
+                "agent_role": "critic",
+                "agent_perspective": "quality_gate",
+                "task_phase": "execution",
+                "confidence": 1.0,
+                "trace_ref": {
+                  "run_id": "1778846073-676e8d48-run"
+                },
+                "summary_text": "lesson receipt_count=0 ; blocked_count=0 ; failed_count=0",
+                "kind": "lesson",
+                "memory_type": "procedural"
+              },
+              {
+                "entry_id": "mem_54de1d78bd1e48a3bef138941cd59f51",
+                "agent_role": "critic",
+                "agent_perspective": "quality_gate",
+                "task_phase": "execution",
+                "confidence": 1.0,
+                "trace_ref": {
+                  "run_id": "1778846073-676e8d48-run"
+                },
+                "summary_text": "执行后审查完成",
+                "kind": "final",
+                "memory_type": "episodic"
+              },
+              {
+                "entry_id": "mem_02ee23e934b34c2c92f60dc5f66439be",
+                "agent_role": "orchestrator",
+                "agent_perspective": "global_planning",
+                "task_phase": "execution",
+                "confidence": 1.0,
+                "trace_ref": {
+                  "run_id": "1778846073-676e8d48-run",
+                  "step_id": "step_1",
+                  "command_id": null
+                },
+                "summary_text": "step step_1 kind=finalize status=completed task=参考上一次排查 lesson 继续分析本次延迟异常",
+                "kind": "working_memory",
+                "memory_type": "episodic"
+              }
+            ]
+          },
+          "private_memory": {
+            "orchestrator": {
+              "count": 0,
+              "role": "orchestrator",
+              "current_progress": null,
+              "next_intended_action": null
+            },
+            "system_engineer": {
+              "count": 0,
+              "role": "system_engineer",
+              "current_progress": null,
+              "next_intended_action": null
+            },
+            "risk_analyst": {
+              "count": 0,
+              "role": "risk_analyst",
+              "current_progress": null,
+              "next_intended_action": null
+            },
+            "critic": {
+              "count": 0,
+              "role": "critic",
+              "current_progress": null,
+              "next_intended_action": null
+            }
+          },
+          "few_shot_examples": [
+            {
+              "entry_id": "mem_680b88ab3f814ed1976d150fd1d2206c",
+              "decision_pattern": "先引用历史 lesson -> 再核对当前延迟异常 -> 最后输出建议",
+              "failure_boundary": [
+                "无历史 lesson 时不要伪造经验",
+                "缺少证据时只输出保守建议"
+              ],
+              "applicable_conditions": [
+                "延迟异常",
+                "lesson_reuse",
+                "memory_benchmark"
+              ]
+            },
+            {
+              "entry_id": "mem_9190390810e148ffa1e57898e75b12ae",
+              "decision_pattern": "receipt_count=0 -> blocked_count=0 -> failed_count=0",
+              "failure_boundary": [
+                "low_evidence_or_low_confidence_should_not_reuse"
+              ],
+              "applicable_conditions": [
+                "参考上一次排查 lesson 继续分析本次延迟异常"
+              ]
+            }
+          ],
+          "few_shot_example_count": 2,
+          "role_drift_rate": 0.0,
+          "memory_cross_talk_rate": 0.0
+        },
+        "resume_memory_state": [],
+        "run_summary": {
+          "text": "执行后审查完成",
+          "key_points": [
+            "receipt_count=0",
+            "blocked_count=0",
+            "failed_count=0"
+          ],
+          "receipt_command_ids": [],
+          "task_id": "eval_44349ebfe4e2",
+          "session_id": "eval_session:eval_44349ebfe4e2"
+        },
+        "run_trace": {
+          "schema_version": "run_trace.v2",
+          "run_id": "1778846311-b7b2a1f5-run",
+          "entry_type": "user_task",
+          "status": "completed",
+          "task_id": "eval_44349ebfe4e2",
+          "version_snapshot": {
+            "prompt_versions": {
+              "intent": "intent_prompt.v1",
+              "orchestrator": "orchestrator_prompt.v1",
+              "critic": "critic_prompt.v1",
+              "system_engineer": "system_engineer_prompt.v1",
+              "risk_analyst": "risk_analyst_prompt.v1",
+              "manager": "manager_prompt.v1"
+            },
+            "policy_version": "policy.v1",
+            "model": "ark-code-latest",
+            "toolset_version": "tool_registry.v1",
+            "benchmark_config": {}
+          },
+          "failure_summary": {},
+          "summary": {
+            "entry_count": 20,
+            "receipt_count": 0,
+            "approval_count": 0,
+            "memory_entry_count": 11,
+            "event_count": 0,
+            "trace_counts": {
+              "task": 1,
+              "version_snapshot": 1,
+              "plan": 3,
+              "step": 3,
+              "memory": 11,
+              "final": 1
+            }
+          },
+          "entries": [
+            {
+              "category": "step",
+              "trace_type": "task_graph_step",
+              "timestamp_ms": 1778846558225,
+              "status": "completed",
+              "summary": {
+                "step_id": "step_1",
+                "kind": "delegate",
+                "status": "completed",
+                "failure_classification": null
+              },
+              "payload": {
+                "step_id": "step_1",
+                "kind": "delegate",
+                "status": "completed",
+                "target_agent": "risk_analyst",
+                "requested_target_agent": "memory_agent",
+                "tool_name": null,
+                "command_id": null,
+                "error": null,
+                "attempt_count": 1,
+                "failure_classification": null,
+                "started_at_ms": 1778846558225.2878,
+                "finished_at_ms": 1778846663949.774,
+                "latency_ms": 105724.48608398438,
+                "input_sources": [],
+                "receipt_command_ids": [],
+                "approval_record": null,
+                "predecessors": [],
+                "successors": [
+                  "step_3"
+                ],
+                "related_receipt_command_ids": [],
+                "related_memory_ids": []
+              }
+            },
+            {
+              "category": "step",
+              "trace_type": "task_graph_step",
+              "timestamp_ms": 1778846558228,
+              "status": "completed",
+              "summary": {
+                "step_id": "step_2",
+                "kind": "delegate",
+                "status": "completed",
+                "failure_classification": null
+              },
+              "payload": {
+                "step_id": "step_2",
+                "kind": "delegate",
+                "status": "completed",
+                "target_agent": "risk_analyst",
+                "requested_target_agent": "analysis_agent",
+                "tool_name": null,
+                "command_id": null,
+                "error": null,
+                "attempt_count": 1,
+                "failure_classification": null,
+                "started_at_ms": 1778846558228.1978,
+                "finished_at_ms": 1778846668538.75,
+                "latency_ms": 110310.55224609375,
+                "input_sources": [],
+                "receipt_command_ids": [],
+                "approval_record": null,
+                "predecessors": [],
+                "successors": [
+                  "step_3"
+                ],
+                "related_receipt_command_ids": [],
+                "related_memory_ids": []
+              }
+            },
+            {
+              "category": "step",
+              "trace_type": "task_graph_step",
+              "timestamp_ms": 1778846668548,
+              "status": "completed",
+              "summary": {
+                "step_id": "step_3",
+                "kind": "finalize",
+                "status": "completed",
+                "failure_classification": null
+              },
+              "payload": {
+                "step_id": "step_3",
+                "kind": "finalize",
+                "status": "completed",
+                "target_agent": "finalize_agent",
+                "requested_target_agent": null,
+                "tool_name": null,
+                "command_id": null,
+                "error": null,
+                "attempt_count": 1,
+                "failure_classification": null,
+                "started_at_ms": 1778846668548.396,
+                "finished_at_ms": 1778846668548.408,
+                "latency_ms": 0.011962890625,
+                "input_sources": [
+                  "step_1",
+                  "step_2"
+                ],
+                "receipt_command_ids": [],
+                "approval_record": null,
+                "predecessors": [
+                  "step_1",
+                  "step_2"
+                ],
+                "successors": [],
+                "related_receipt_command_ids": [],
+                "related_memory_ids": []
+              }
+            },
+            {
+              "category": "task",
+              "trace_type": "task",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "entry_type": "user_task",
+                "task_id": "eval_44349ebfe4e2",
+                "trigger_event_id": null
+              },
+              "payload": {
+                "run_id": "1778846311-b7b2a1f5-run",
+                "entry_type": "user_task",
+                "task_id": "eval_44349ebfe4e2",
+                "trigger_event_id": null,
+                "trigger_reason": null,
+                "trigger_evidence": {},
+                "route_decision": {},
+                "metadata": {
+                  "source": null
+                },
+                "schema_version": "run_context.v1",
+                "task_graph_schema_version": "task_graph.v1"
+              }
+            },
+            {
+              "category": "version_snapshot",
+              "trace_type": "version_snapshot",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "model": "ark-code-latest",
+                "policy_version": "policy.v1",
+                "toolset_version": "tool_registry.v1"
+              },
+              "payload": {
+                "prompt_versions": {
+                  "intent": "intent_prompt.v1",
+                  "orchestrator": "orchestrator_prompt.v1",
+                  "critic": "critic_prompt.v1",
+                  "system_engineer": "system_engineer_prompt.v1",
+                  "risk_analyst": "risk_analyst_prompt.v1",
+                  "manager": "manager_prompt.v1"
+                },
+                "policy_version": "policy.v1",
+                "model": "ark-code-latest",
+                "toolset_version": "tool_registry.v1",
+                "benchmark_config": {}
+              }
+            },
+            {
+              "category": "plan",
+              "trace_type": "intent",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "primary_intent_type": "continue"
+              },
+              "payload": {
+                "schema_version": "intent_output.v2",
+                "primary_intent_type": "continue",
+                "intents": [
+                  {
+                    "intent_type": "continue_analysis",
+                    "slots": {
+                      "issue_type": "delay_anomaly",
+                      "context": "continuation"
+                    },
+                    "confidence": 0.88
+                  }
+                ],
+                "risk_level": "LOW",
+                "permission_requirements": {
+                  "side_effects": false,
+                  "requires_human_approval": false,
+                  "allowed_tools": null
+                },
+                "evidence": {
+                  "fields": [
+                    "task.payload.content"
+                  ]
+                }
+              }
+            },
+            {
+              "category": "plan",
+              "trace_type": "orchestrator_plan",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "plan_steps": 3,
+                "nodes": 3
+              },
+              "payload": {
+                "schema_version": "orchestrator_output.v1",
+                "intent": {
+                  "type": "analysis",
+                  "confidence": 0.95,
+                  "slots": {
+                    "scenario": "lesson_reuse",
+                    "task_type": "delay_exception_analysis"
+                  }
+                },
+                "plan_steps": [
+                  {
+                    "kind": "delegate",
+                    "step_id": "step_1",
+                    "reason": "需要先检索记忆中的上一次 lesson 排查记录,以便在此基础上继续分析本次延迟异常",
+                    "target_agent": "memory_agent",
+                    "instruction": "检索 session eval_session:eval_44349ebfe4e2 中关于 lesson 延迟异常排查的历史记录和结论,提取关键发现和未解决的问题点",
+                    "evidence": {
+                      "fields": [
+                        "plan_steps"
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "delegate",
+                    "step_id": "step_2",
+                    "reason": "基于检索到的历史上下文,结合本次延迟异常的上下文,进行深度关联分析",
+                    "target_agent": "analysis_agent",
+                    "instruction": "基于上一次 lesson 排查的结论和发现,分析本次延迟异常的相同点和差异点,识别可能的根因关联或新出现的异常模式",
+                    "evidence": {
+                      "fields": [
+                        "plan_steps"
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "finalize",
+                    "step_id": "step_3",
+                    "reason": "整合分析结果,形成完整的一致的延迟异常分析报告",
+                    "target_agent": "finalize_agent",
+                    "instruction": "整合历史排查结论与本次分析发现,生成包含根因判断、影响评估和改进建议的最终分析报告",
+                    "evidence": {
+                      "fields": [
+                        "plan_steps"
+                      ]
+                    }
+                  }
+                ],
+                "commands": null,
+                "evidence": {
+                  "task_content": "参考上一次排查 lesson 继续分析本次延迟异常",
+                  "session_id": "eval_session:eval_44349ebfe4e2",
+                  "scenario": "lesson_reuse",
+                  "category": "memory",
+                  "memory_enabled": true,
+                  "private_memory_enabled": true,
+                  "run_id": "1778846311-b7b2a1f5-run",
+                  "baseline_mode": "primary"
+                },
+                "degraded": false,
+                "task_graph": {
+                  "schema_version": "task_graph.v1",
+                  "nodes": [
+                    {
+                      "step_id": "step_1",
+                      "parent_id": null,
+                      "kind": "delegate",
+                      "status": "pending",
+                      "reason": "需要先检索记忆中的上一次 lesson 排查记录,以便在此基础上继续分析本次延迟异常",
+                      "evidence": {
+                        "fields": [
+                          "plan_steps"
+                        ]
+                      },
+                      "target_agent": "memory_agent",
+                      "instruction": "检索 session eval_session:eval_44349ebfe4e2 中关于 lesson 延迟异常排查的历史记录和结论,提取关键发现和未解决的问题点"
+                    },
+                    {
+                      "step_id": "step_2",
+                      "parent_id": null,
+                      "kind": "delegate",
+                      "status": "pending",
+                      "reason": "基于检索到的历史上下文,结合本次延迟异常的上下文,进行深度关联分析",
+                      "evidence": {
+                        "fields": [
+                          "plan_steps"
+                        ]
+                      },
+                      "target_agent": "analysis_agent",
+                      "instruction": "基于上一次 lesson 排查的结论和发现,分析本次延迟异常的相同点和差异点,识别可能的根因关联或新出现的异常模式"
+                    },
+                    {
+                      "step_id": "step_3",
+                      "parent_id": null,
+                      "kind": "finalize",
+                      "status": "pending",
+                      "reason": "整合分析结果,形成完整的一致的延迟异常分析报告",
+                      "evidence": {
+                        "fields": [
+                          "plan_steps"
+                        ]
+                      },
+                      "target_agent": "finalize_agent",
+                      "instruction": "整合历史排查结论与本次分析发现,生成包含根因判断、影响评估和改进建议的最终分析报告"
+                    }
+                  ],
+                  "edges": [
+                    {
+                      "from_step_id": "step_1",
+                      "to_step_id": "step_3",
+                      "condition": "always"
+                    },
+                    {
+                      "from_step_id": "step_2",
+                      "to_step_id": "step_3",
+                      "condition": "always"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "category": "plan",
+              "trace_type": "critic_plan",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "ok": true,
+                "issues": 0
+              },
+              "payload": {
+                "schema_version": "critic_review.v1",
+                "ok": true,
+                "risk_level": "LOW",
+                "issues": [],
+                "require_human_approval": false,
+                "suggested_fixes": [],
+                "evidence": {
+                  "reviewed_plan": true
+                },
+                "run_summary": {
+                  "text": "run_summary 未生成",
+                  "key_points": [],
+                  "receipt_command_ids": []
+                }
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "planning_memory",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "keys": [
+                  "few_shot_example_count",
+                  "few_shot_examples",
+                  "hit_count",
+                  "memory_cross_talk_rate",
+                  "memory_hits"
+                ]
+              },
+              "payload": {
+                "hit_count": 5,
+                "texts": [
+                  "[procedural/lesson] lesson receipt_count=0 ; blocked_count=0 ; failed_count=0",
+                  "[episodic/final] 执行后审查完成",
+                  "[episodic/plan] 继续执行任务,基于上一次 lesson 排查的结果,分析本次延迟异常",
+                  "[semantic/semantic_case] 历史 lesson 表明 延迟异常应先复用已验证的排查路径 并给出建议. 参考上一次排查 lesson 继续分析本次延迟异常",
+                  "[semantic/semantic_case] 执行后审查完成"
+                ],
+                "memory_hits": [
+                  {
+                    "entry_id": "mem_a24aa1aecb8a4e25947e2dcf71b78666",
+                    "memory_type": "procedural",
+                    "kind": "lesson",
+                    "trace_ref": {
+                      "run_id": "1778846073-676e8d48-run"
+                    },
+                    "semantic_score": null,
+                    "reusable_snippet": null
+                  },
+                  {
+                    "entry_id": "mem_54de1d78bd1e48a3bef138941cd59f51",
+                    "memory_type": "episodic",
+                    "kind": "final",
+                    "trace_ref": {
+                      "run_id": "1778846073-676e8d48-run"
+                    },
+                    "semantic_score": null,
+                    "reusable_snippet": null
+                  },
+                  {
+                    "entry_id": "mem_63fe91f96ae54fb1a44cb8166636119b",
+                    "memory_type": "episodic",
+                    "kind": "plan",
+                    "trace_ref": {
+                      "run_id": "1778846073-676e8d48-run"
+                    },
+                    "semantic_score": null,
+                    "reusable_snippet": null
+                  },
+                  {
+                    "entry_id": "mem_680b88ab3f814ed1976d150fd1d2206c",
+                    "memory_type": "semantic",
+                    "kind": "semantic_case",
+                    "trace_ref": {
+                      "run_id": "eval_44349ebfe4e2",
+                      "kind": "bootstrap"
+                    },
+                    "semantic_score": 0.093,
+                    "reusable_snippet": {
+                      "decision_pattern": "先引用历史 lesson -> 再核对当前延迟异常 -> 最后输出建议",
+                      "failure_boundary": [
+                        "无历史 lesson 时不要伪造经验",
+                        "缺少证据时只输出保守建议"
+                      ],
+                      "applicable_conditions": [
+                        "延迟异常",
+                        "lesson_reuse",
+                        "memory_benchmark"
+                      ],
+                      "evidence_refs": [
+                        "bootstrap:eval_44349ebfe4e2"
+                      ]
+                    }
+                  },
+                  {
+                    "entry_id": "mem_9190390810e148ffa1e57898e75b12ae",
+                    "memory_type": "semantic",
+                    "kind": "semantic_case",
+                    "trace_ref": {
+                      "run_id": "1778846073-676e8d48-run"
+                    },
+                    "semantic_score": null,
+                    "reusable_snippet": {
+                      "decision_pattern": "receipt_count=0 -> blocked_count=0 -> failed_count=0",
+                      "failure_boundary": [
+                        "low_evidence_or_low_confidence_should_not_reuse"
+                      ],
+                      "applicable_conditions": [
+                        "参考上一次排查 lesson 继续分析本次延迟异常"
+                      ],
+                      "evidence_refs": [
+                        "run_trace:1778846073-676e8d48-run",
+                        "final_output:1778846073-676e8d48-run"
+                      ]
+                    }
+                  }
+                ],
+                "shared_board": {
+                  "item_count": 10,
+                  "by_role": {
+                    "critic": 8,
+                    "orchestrator": 2
+                  },
+                  "latest": [
+                    {
+                      "entry_id": "mem_680b88ab3f814ed1976d150fd1d2206c",
+                      "agent_role": "critic",
+                      "agent_perspective": "quality_gate",
+                      "task_phase": "planning",
+                      "confidence": 0.95,
+                      "trace_ref": {
+                        "run_id": "eval_44349ebfe4e2",
+                        "kind": "bootstrap"
+                      },
+                      "summary_text": "历史 lesson 表明 延迟异常应先复用已验证的排查路径 并给出建议. 参考上一次排查 lesson 继续分析本次延迟异常",
+                      "kind": "semantic_case",
+                      "memory_type": "semantic"
+                    },
+                    {
+                      "entry_id": "mem_9190390810e148ffa1e57898e75b12ae",
+                      "agent_role": "critic",
+                      "agent_perspective": "quality_gate",
+                      "task_phase": "final_review",
+                      "confidence": 0.9,
+                      "trace_ref": {
+                        "run_id": "1778846073-676e8d48-run"
+                      },
+                      "summary_text": "执行后审查完成",
+                      "kind": "semantic_case",
+                      "memory_type": "semantic"
+                    },
+                    {
+                      "entry_id": "mem_a24aa1aecb8a4e25947e2dcf71b78666",
+                      "agent_role": "critic",
+                      "agent_perspective": "quality_gate",
+                      "task_phase": "execution",
+                      "confidence": 1.0,
+                      "trace_ref": {
+                        "run_id": "1778846073-676e8d48-run"
+                      },
+                      "summary_text": "lesson receipt_count=0 ; blocked_count=0 ; failed_count=0",
+                      "kind": "lesson",
+                      "memory_type": "procedural"
+                    },
+                    {
+                      "entry_id": "mem_54de1d78bd1e48a3bef138941cd59f51",
+                      "agent_role": "critic",
+                      "agent_perspective": "quality_gate",
+                      "task_phase": "execution",
+                      "confidence": 1.0,
+                      "trace_ref": {
+                        "run_id": "1778846073-676e8d48-run"
+                      },
+                      "summary_text": "执行后审查完成",
+                      "kind": "final",
+                      "memory_type": "episodic"
+                    },
+                    {
+                      "entry_id": "mem_02ee23e934b34c2c92f60dc5f66439be",
+                      "agent_role": "orchestrator",
+                      "agent_perspective": "global_planning",
+                      "task_phase": "execution",
+                      "confidence": 1.0,
+                      "trace_ref": {
+                        "run_id": "1778846073-676e8d48-run",
+                        "step_id": "step_1",
+                        "command_id": null
+                      },
+                      "summary_text": "step step_1 kind=finalize status=completed task=参考上一次排查 lesson 继续分析本次延迟异常",
+                      "kind": "working_memory",
+                      "memory_type": "episodic"
+                    }
+                  ]
+                },
+                "private_memory": {
+                  "orchestrator": {
+                    "count": 0,
+                    "role": "orchestrator",
+                    "current_progress": null,
+                    "next_intended_action": null
+                  },
+                  "system_engineer": {
+                    "count": 0,
+                    "role": "system_engineer",
+                    "current_progress": null,
+                    "next_intended_action": null
+                  },
+                  "risk_analyst": {
+                    "count": 0,
+                    "role": "risk_analyst",
+                    "current_progress": null,
+                    "next_intended_action": null
+                  },
+                  "critic": {
+                    "count": 0,
+                    "role": "critic",
+                    "current_progress": null,
+                    "next_intended_action": null
+                  }
+                },
+                "few_shot_examples": [
+                  {
+                    "entry_id": "mem_680b88ab3f814ed1976d150fd1d2206c",
+                    "decision_pattern": "先引用历史 lesson -> 再核对当前延迟异常 -> 最后输出建议",
+                    "failure_boundary": [
+                      "无历史 lesson 时不要伪造经验",
+                      "缺少证据时只输出保守建议"
+                    ],
+                    "applicable_conditions": [
+                      "延迟异常",
+                      "lesson_reuse",
+                      "memory_benchmark"
+                    ]
+                  },
+                  {
+                    "entry_id": "mem_9190390810e148ffa1e57898e75b12ae",
+                    "decision_pattern": "receipt_count=0 -> blocked_count=0 -> failed_count=0",
+                    "failure_boundary": [
+                      "low_evidence_or_low_confidence_should_not_reuse"
+                    ],
+                    "applicable_conditions": [
+                      "参考上一次排查 lesson 继续分析本次延迟异常"
+                    ]
+                  }
+                ],
+                "few_shot_example_count": 2,
+                "role_drift_rate": 0.0,
+                "memory_cross_talk_rate": 0.0
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "memory_hit",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "kind": "lesson",
+                "memory_type": "procedural",
+                "run_id": "1778846073-676e8d48-run"
+              },
+              "payload": {
+                "agent_id": "critic",
+                "scope": "shared",
+                "kind": "lesson",
+                "memory_type": "procedural",
+                "session_id": "eval_session:eval_44349ebfe4e2",
+                "run_id": "1778846073-676e8d48-run",
+                "source": "critic_final_review",
+                "created_by": "critic",
+                "trace_ref": {
+                  "run_id": "1778846073-676e8d48-run"
+                },
+                "content": {
+                  "text": "lesson receipt_count=0 ; blocked_count=0 ; failed_count=0",
+                  "task_id": "eval_44349ebfe4e2",
+                  "key_points": [
+                    "receipt_count=0",
+                    "blocked_count=0",
+                    "failed_count=0"
+                  ],
+                  "receipt_command_ids": []
+                },
+                "tags": [
+                  "lesson",
+                  "procedure"
+                ],
+                "schema_version": "memory_entry.v1",
+                "entry_id": "mem_a24aa1aecb8a4e25947e2dcf71b78666",
+                "ts_ms": 1778846296944,
+                "confidence": 1.0
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "memory_hit",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "kind": "final",
+                "memory_type": "episodic",
+                "run_id": "1778846073-676e8d48-run"
+              },
+              "payload": {
+                "agent_id": "critic",
+                "scope": "shared",
+                "kind": "final",
+                "memory_type": "episodic",
+                "session_id": "eval_session:eval_44349ebfe4e2",
+                "run_id": "1778846073-676e8d48-run",
+                "source": "critic_final_review",
+                "created_by": "critic",
+                "trace_ref": {
+                  "run_id": "1778846073-676e8d48-run"
+                },
+                "content": {
+                  "text": "执行后审查完成",
+                  "key_points": [
+                    "receipt_count=0",
+                    "blocked_count=0",
+                    "failed_count=0"
+                  ],
+                  "receipt_command_ids": [],
+                  "task_id": "eval_44349ebfe4e2",
+                  "session_id": "eval_session:eval_44349ebfe4e2"
+                },
+                "tags": [
+                  "summary"
+                ],
+                "schema_version": "memory_entry.v1",
+                "entry_id": "mem_54de1d78bd1e48a3bef138941cd59f51",
+                "ts_ms": 1778846296943,
+                "confidence": 1.0
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "memory_hit",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "kind": "plan",
+                "memory_type": "episodic",
+                "run_id": "1778846073-676e8d48-run"
+              },
+              "payload": {
+                "agent_id": "orchestrator",
+                "scope": "shared",
+                "kind": "plan",
+                "memory_type": "episodic",
+                "session_id": "eval_session:eval_44349ebfe4e2",
+                "run_id": "1778846073-676e8d48-run",
+                "source": "orchestrator_plan",
+                "created_by": "orchestrator",
+                "trace_ref": {
+                  "run_id": "1778846073-676e8d48-run"
+                },
+                "content": {
+                  "text": "继续执行任务,基于上一次 lesson 排查的结果,分析本次延迟异常",
+                  "plan_steps": [
+                    {
+                      "kind": "finalize",
+                      "step_id": "step_1",
+                      "reason": "继续执行任务,基于上一次 lesson 排查的结果,分析本次延迟异常",
+                      "instruction": null,
+                      "evidence": {
+                        "fields": [
+                          "plan_steps"
+                        ]
+                      }
+                    }
+                  ],
+                  "task_id": "eval_44349ebfe4e2"
+                },
+                "tags": [
+                  "plan"
+                ],
+                "schema_version": "memory_entry.v1",
+                "entry_id": "mem_63fe91f96ae54fb1a44cb8166636119b",
+                "ts_ms": 1778846217844,
+                "confidence": 1.0
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "memory_hit",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "kind": "semantic_case",
+                "memory_type": "semantic",
+                "run_id": "eval_44349ebfe4e2"
+              },
+              "payload": {
+                "agent_id": "critic",
+                "scope": "shared",
+                "kind": "semantic_case",
+                "memory_type": "semantic",
+                "session_id": "eval_session:eval_44349ebfe4e2",
+                "run_id": "eval_44349ebfe4e2",
+                "source": "eval_memory_bootstrap",
+                "created_by": "evaluator",
+                "agent_role": "critic",
+                "agent_perspective": "quality_gate",
+                "task_phase": "planning",
+                "confidence": 0.95,
+                "trace_ref": {
+                  "run_id": "eval_44349ebfe4e2",
+                  "kind": "bootstrap"
+                },
+                "content": {
+                  "text": "历史 lesson 表明 延迟异常应先复用已验证的排查路径 并给出建议. 参考上一次排查 lesson 继续分析本次延迟异常",
+                  "agent_perspective": "quality_gate",
+                  "decision_pattern": "先引用历史 lesson -> 再核对当前延迟异常 -> 最后输出建议",
+                  "applicable_conditions": [
+                    "延迟异常",
+                    "lesson_reuse",
+                    "memory_benchmark"
+                  ],
+                  "failure_boundary": [
+                    "无历史 lesson 时不要伪造经验",
+                    "缺少证据时只输出保守建议"
+                  ],
+                  "evidence_refs": [
+                    "bootstrap:eval_44349ebfe4e2"
+                  ],
+                  "snapshot_text": "delay lesson reuse bootstrap"
+                },
+                "tags": [
+                  "experience",
+                  "few_shot",
+                  "bootstrap"
+                ],
+                "schema_version": "memory_entry.v1",
+                "entry_id": "mem_680b88ab3f814ed1976d150fd1d2206c",
+                "ts_ms": 1778846311066,
+                "semantic_text": "delay lesson reuse bootstrap",
+                "semantic_vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.5,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.5,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.5,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.5,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "semantic_score": 0.093,
+                "reusable_snippet": {
+                  "decision_pattern": "先引用历史 lesson -> 再核对当前延迟异常 -> 最后输出建议",
+                  "failure_boundary": [
+                    "无历史 lesson 时不要伪造经验",
+                    "缺少证据时只输出保守建议"
+                  ],
+                  "applicable_conditions": [
+                    "延迟异常",
+                    "lesson_reuse",
+                    "memory_benchmark"
+                  ],
+                  "evidence_refs": [
+                    "bootstrap:eval_44349ebfe4e2"
+                  ]
+                }
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "memory_hit",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "kind": "semantic_case",
+                "memory_type": "semantic",
+                "run_id": "1778846073-676e8d48-run"
+              },
+              "payload": {
+                "agent_id": "critic",
+                "scope": "shared",
+                "kind": "semantic_case",
+                "memory_type": "semantic",
+                "session_id": "eval_session:eval_44349ebfe4e2",
+                "run_id": "1778846073-676e8d48-run",
+                "source": "critic_confidence_policy",
+                "created_by": "critic",
+                "agent_role": "critic",
+                "agent_perspective": "quality_gate",
+                "task_phase": "final_review",
+                "confidence": 0.9,
+                "trace_ref": {
+                  "run_id": "1778846073-676e8d48-run"
+                },
+                "content": {
+                  "text": "执行后审查完成",
+                  "agent_perspective": "quality_gate",
+                  "decision_pattern": "receipt_count=0 -> blocked_count=0 -> failed_count=0",
+                  "applicable_conditions": [
+                    "参考上一次排查 lesson 继续分析本次延迟异常"
+                  ],
+                  "failure_boundary": [
+                    "low_evidence_or_low_confidence_should_not_reuse"
+                  ],
+                  "evidence_refs": [
+                    "run_trace:1778846073-676e8d48-run",
+                    "final_output:1778846073-676e8d48-run"
+                  ],
+                  "snapshot_text": "decision_pattern=receipt_count=0 -> blocked_count=0 -> failed_count=0 conditions=参考上一次排查 lesson 继续分析本次延迟异常 boundary=low_evidence_or_low_confidence_should_not_reuse"
+                },
+                "tags": [
+                  "experience",
+                  "few_shot",
+                  "critic"
+                ],
+                "schema_version": "memory_entry.v1",
+                "entry_id": "mem_9190390810e148ffa1e57898e75b12ae",
+                "ts_ms": 1778846296946,
+                "reusable_snippet": {
+                  "decision_pattern": "receipt_count=0 -> blocked_count=0 -> failed_count=0",
+                  "failure_boundary": [
+                    "low_evidence_or_low_confidence_should_not_reuse"
+                  ],
+                  "applicable_conditions": [
+                    "参考上一次排查 lesson 继续分析本次延迟异常"
+                  ],
+                  "evidence_refs": [
+                    "run_trace:1778846073-676e8d48-run",
+                    "final_output:1778846073-676e8d48-run"
+                  ]
+                }
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "shared_memory_board",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "item_count": 10
+              },
+              "payload": {
+                "items": [
+                  {
+                    "entry_id": "mem_680b88ab3f814ed1976d150fd1d2206c",
+                    "agent_role": "critic",
+                    "agent_perspective": "quality_gate",
+                    "task_phase": "planning",
+                    "confidence": 0.95,
+                    "trace_ref": {
+                      "run_id": "eval_44349ebfe4e2",
+                      "kind": "bootstrap"
+                    },
+                    "summary_text": "历史 lesson 表明 延迟异常应先复用已验证的排查路径 并给出建议. 参考上一次排查 lesson 继续分析本次延迟异常",
+                    "kind": "semantic_case",
+                    "memory_type": "semantic"
+                  },
+                  {
+                    "entry_id": "mem_9190390810e148ffa1e57898e75b12ae",
+                    "agent_role": "critic",
+                    "agent_perspective": "quality_gate",
+                    "task_phase": "final_review",
+                    "confidence": 0.9,
+                    "trace_ref": {
+                      "run_id": "1778846073-676e8d48-run"
+                    },
+                    "summary_text": "执行后审查完成",
+                    "kind": "semantic_case",
+                    "memory_type": "semantic"
+                  },
+                  {
+                    "entry_id": "mem_a24aa1aecb8a4e25947e2dcf71b78666",
+                    "agent_role": "critic",
+                    "agent_perspective": "quality_gate",
+                    "task_phase": "execution",
+                    "confidence": 1.0,
+                    "trace_ref": {
+                      "run_id": "1778846073-676e8d48-run"
+                    },
+                    "summary_text": "lesson receipt_count=0 ; blocked_count=0 ; failed_count=0",
+                    "kind": "lesson",
+                    "memory_type": "procedural"
+                  },
+                  {
+                    "entry_id": "mem_54de1d78bd1e48a3bef138941cd59f51",
+                    "agent_role": "critic",
+                    "agent_perspective": "quality_gate",
+                    "task_phase": "execution",
+                    "confidence": 1.0,
+                    "trace_ref": {
+                      "run_id": "1778846073-676e8d48-run"
+                    },
+                    "summary_text": "执行后审查完成",
+                    "kind": "final",
+                    "memory_type": "episodic"
+                  },
+                  {
+                    "entry_id": "mem_02ee23e934b34c2c92f60dc5f66439be",
+                    "agent_role": "orchestrator",
+                    "agent_perspective": "global_planning",
+                    "task_phase": "execution",
+                    "confidence": 1.0,
+                    "trace_ref": {
+                      "run_id": "1778846073-676e8d48-run",
+                      "step_id": "step_1",
+                      "command_id": null
+                    },
+                    "summary_text": "step step_1 kind=finalize status=completed task=参考上一次排查 lesson 继续分析本次延迟异常",
+                    "kind": "working_memory",
+                    "memory_type": "episodic"
+                  },
+                  {
+                    "entry_id": "mem_63fe91f96ae54fb1a44cb8166636119b",
+                    "agent_role": "orchestrator",
+                    "agent_perspective": "global_planning",
+                    "task_phase": "execution",
+                    "confidence": 1.0,
+                    "trace_ref": {
+                      "run_id": "1778846073-676e8d48-run"
+                    },
+                    "summary_text": "继续执行任务,基于上一次 lesson 排查的结果,分析本次延迟异常",
+                    "kind": "plan",
+                    "memory_type": "episodic"
+                  },
+                  {
+                    "entry_id": "mem_709640f978534761beaaf4ce07b8420b",
+                    "agent_role": "critic",
+                    "agent_perspective": "quality_gate",
+                    "task_phase": "planning",
+                    "confidence": 0.95,
+                    "trace_ref": {
+                      "run_id": "eval_44349ebfe4e2",
+                      "kind": "bootstrap"
+                    },
+                    "summary_text": "历史 lesson 表明 延迟异常应先复用已验证的排查路径 并给出建议. 参考上一次排查 lesson 继续分析本次延迟异常",
+                    "kind": "semantic_case",
+                    "memory_type": "semantic"
+                  },
+                  {
+                    "entry_id": "mem_b203db00750d4f8e8ed1db67f4c71498",
+                    "agent_role": "critic",
+                    "agent_perspective": "quality_gate",
+                    "task_phase": "final_review",
+                    "confidence": 0.9,
+                    "trace_ref": {
+                      "run_id": "1778845764-b61d25ec-run"
+                    },
+                    "summary_text": "执行后审查完成",
+                    "kind": "semantic_case",
+                    "memory_type": "semantic"
+                  },
+                  {
+                    "entry_id": "mem_2cfeba6faa854a0fa53eb577ef7648af",
+                    "agent_role": "critic",
+                    "agent_perspective": "quality_gate",
+                    "task_phase": "execution",
+                    "confidence": 1.0,
+                    "trace_ref": {
+                      "run_id": "1778845764-b61d25ec-run"
+                    },
+                    "summary_text": "lesson receipt_count=0 ; blocked_count=0 ; failed_count=0",
+                    "kind": "lesson",
+                    "memory_type": "procedural"
+                  },
+                  {
+                    "entry_id": "mem_44e6dae3289d47e4ae6eeb65a401f25d",
+                    "agent_role": "critic",
+                    "agent_perspective": "quality_gate",
+                    "task_phase": "execution",
+                    "confidence": 1.0,
+                    "trace_ref": {
+                      "run_id": "1778845764-b61d25ec-run"
+                    },
+                    "summary_text": "执行后审查完成",
+                    "kind": "final",
+                    "memory_type": "episodic"
+                  }
+                ]
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "run_summary",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "keys": [
+                  "key_points",
+                  "receipt_command_ids",
+                  "session_id",
+                  "task_id",
+                  "text"
+                ]
+              },
+              "payload": {
+                "text": "执行后审查完成",
+                "key_points": [
+                  "receipt_count=0",
+                  "blocked_count=0",
+                  "failed_count=0"
+                ],
+                "receipt_command_ids": [],
+                "task_id": "eval_44349ebfe4e2",
+                "session_id": "eval_session:eval_44349ebfe4e2"
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "procedural_lesson",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "kind": "lesson",
+                "memory_type": "procedural"
+              },
+              "payload": {
+                "agent_id": "critic",
+                "scope": "shared",
+                "kind": "lesson",
+                "memory_type": "procedural",
+                "session_id": "eval_session:eval_44349ebfe4e2",
+                "run_id": "1778846311-b7b2a1f5-run",
+                "source": "critic_final_review",
+                "created_by": "critic",
+                "trace_ref": {
+                  "run_id": "1778846311-b7b2a1f5-run"
+                },
+                "content": {
+                  "text": "lesson receipt_count=0 ; blocked_count=0 ; failed_count=0",
+                  "task_id": "eval_44349ebfe4e2",
+                  "key_points": [
+                    "receipt_count=0",
+                    "blocked_count=0",
+                    "failed_count=0"
+                  ],
+                  "receipt_command_ids": []
+                },
+                "tags": [
+                  "lesson",
+                  "procedure"
+                ],
+                "schema_version": "memory_entry.v1",
+                "entry_id": "mem_d55c5575d23241469171cb251cfe7b42",
+                "ts_ms": 1778846668551,
+                "confidence": 1.0
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "long_term_experience",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "kind": "semantic_case",
+                "memory_type": "semantic"
+              },
+              "payload": {
+                "agent_id": "critic",
+                "scope": "shared",
+                "kind": "semantic_case",
+                "memory_type": "semantic",
+                "session_id": "eval_session:eval_44349ebfe4e2",
+                "run_id": "1778846311-b7b2a1f5-run",
+                "source": "critic_confidence_policy",
+                "created_by": "critic",
+                "agent_role": "critic",
+                "agent_perspective": "quality_gate",
+                "task_phase": "final_review",
+                "confidence": 0.9,
+                "trace_ref": {
+                  "run_id": "1778846311-b7b2a1f5-run"
+                },
+                "content": {
+                  "text": "执行后审查完成",
+                  "agent_perspective": "quality_gate",
+                  "decision_pattern": "receipt_count=0 -> blocked_count=0 -> failed_count=0",
+                  "applicable_conditions": [
+                    "参考上一次排查 lesson 继续分析本次延迟异常"
+                  ],
+                  "failure_boundary": [
+                    "low_evidence_or_low_confidence_should_not_reuse"
+                  ],
+                  "evidence_refs": [
+                    "run_trace:1778846311-b7b2a1f5-run",
+                    "final_output:1778846311-b7b2a1f5-run"
+                  ],
+                  "snapshot_text": "decision_pattern=receipt_count=0 -> blocked_count=0 -> failed_count=0 conditions=参考上一次排查 lesson 继续分析本次延迟异常 boundary=low_evidence_or_low_confidence_should_not_reuse"
+                },
+                "tags": [
+                  "experience",
+                  "few_shot",
+                  "critic"
+                ],
+                "schema_version": "memory_entry.v1",
+                "entry_id": "mem_3977fca8888141118cdc9d5b3a713ef9",
+                "ts_ms": 1778846668552
+              }
+            },
+            {
+              "category": "memory",
+              "trace_type": "memory_policy",
+              "timestamp_ms": 1778846668557,
+              "status": "recorded",
+              "summary": {
+                "accepted": true,
+                "confidence": 0.9
+              },
+              "payload": {
+                "accepted": true,
+                "confidence": 0.9,
+                "threshold": 0.85,
+                "reasons": [
+                  "accepted"
+                ],
+                "evidence_refs": [
+                  "run_trace:1778846311-b7b2a1f5-run",
+                  "final_output:1778846311-b7b2a1f5-run"
+                ]
+              }
+            },
+            {
+              "category": "final",
+              "trace_type": "run_finished",
+              "timestamp_ms": 1778846668557,
+              "status": "completed",
+              "summary": {
+                "status": "completed",
+                "latency_ms": 357284.57498550415,
+                "tokens_total": null
+              },
+              "payload": {
+                "final_output": {
+                  "summary": "风险分析已完成\n风险分析已完成",
+                  "sources": [
+                    "step_1",
+                    "step_2"
+                  ],
+                  "receipt_command_ids": [],
+                  "finalize_reason": "整合分析结果,形成完整的一致的延迟异常分析报告",
+                  "task_graph_completed": true,
+                  "critic_run_summary": {
+                    "text": "执行后审查完成",
+                    "key_points": [
+                      "receipt_count=0",
+                      "blocked_count=0",
+                      "failed_count=0"
+                    ],
+                    "receipt_command_ids": []
+                  }
+                },
+                "errors": [],
+                "task_graph_execution": {
+                  "status": "completed",
+                  "completed_steps": [
+                    "step_1",
+                    "step_2",
+                    "step_3"
+                  ],
+                  "failed_step_id": null,
+                  "blocked_step_id": null,
+                  "errors": [],
+                  "node_outputs": {
+                    "step_1": {
+                      "schema_version": "risk_analyst_output.v1",
+                      "report": "风险分析已完成",
+                      "key_facts": {},
+                      "confidence": 0.7,
+                      "evidence": {
+                        "fields": [
+                          "task"
+                        ]
+                      }
+                    },
+                    "step_2": {
+                      "schema_version": "risk_analyst_output.v1",
+                      "report": "风险分析已完成",
+                      "key_facts": {},
+                      "confidence": 0.7,
+                      "evidence": {
+                        "fields": [
+                          "task"
+                        ]
+                      }
+                    },
+                    "step_3": {
+                      "summary": "风险分析已完成\n风险分析已完成",
+                      "sources": [
+                        "step_1",
+                        "step_2"
+                      ],
+                      "receipt_command_ids": [],
+                      "finalize_reason": "整合分析结果,形成完整的一致的延迟异常分析报告",
+                      "task_graph_completed": true
+                    }
+                  },
+                  "delegate_outputs": {
+                    "risk_analyst": {
+                      "schema_version": "risk_analyst_output.v1",
+                      "report": "风险分析已完成",
+                      "key_facts": {},
+                      "confidence": 0.7,
+                      "evidence": {
+                        "fields": [
+                          "task"
+                        ]
+                      }
+                    }
+                  },
+                  "retry_records": [],
+                  "resume_history": [],
+                  "resume_ready": false,
+                  "receipts": [],
+                  "approval_records": [],
+                  "trace": [
+                    {
+                      "step_id": "step_1",
+                      "kind": "delegate",
+                      "status": "completed",
+                      "target_agent": "risk_analyst",
+                      "requested_target_agent": "memory_agent",
+                      "tool_name": null,
+                      "command_id": null,
+                      "error": null,
+                      "attempt_count": 1,
+                      "failure_classification": null,
+                      "started_at_ms": 1778846558225.2878,
+                      "finished_at_ms": 1778846663949.774,
+                      "latency_ms": 105724.48608398438,
+                      "input_sources": [],
+                      "receipt_command_ids": [],
+                      "approval_record": null
+                    },
+                    {
+                      "step_id": "step_2",
+                      "kind": "delegate",
+                      "status": "completed",
+                      "target_agent": "risk_analyst",
+                      "requested_target_agent": "analysis_agent",
+                      "tool_name": null,
+                      "command_id": null,
+                      "error": null,
+                      "attempt_count": 1,
+                      "failure_classification": null,
+                      "started_at_ms": 1778846558228.1978,
+                      "finished_at_ms": 1778846668538.75,
+                      "latency_ms": 110310.55224609375,
+                      "input_sources": [],
+                      "receipt_command_ids": [],
+                      "approval_record": null
+                    },
+                    {
+                      "step_id": "step_3",
+                      "kind": "finalize",
+                      "status": "completed",
+                      "target_agent": "finalize_agent",
+                      "requested_target_agent": null,
+                      "tool_name": null,
+                      "command_id": null,
+                      "error": null,
+                      "attempt_count": 1,
+                      "failure_classification": null,
+                      "started_at_ms": 1778846668548.396,
+                      "finished_at_ms": 1778846668548.408,
+                      "latency_ms": 0.011962890625,
+                      "input_sources": [
+                        "step_1",
+                        "step_2"
+                      ],
+                      "receipt_command_ids": [],
+                      "approval_record": null
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "comparison": {}
+}

@@ -298,20 +298,29 @@ class MemoryMetrics:
         memory_hit_rate: 规划前记忆命中率 (0-1)
         memory_usefulness: 记忆有用性 (0-1)
         resume_success_rate: 恢复成功率 (0-1)
+        few_shot_reuse_rate: few-shot 经验复用率 (0-1)
+        role_drift_rate: 角色漂移率 (0-1, 越低越好)
+        memory_cross_talk_rate: 私有记忆串扰率 (0-1, 越低越好)
     """
 
     memory_hit_rate: float = 0.0
     memory_usefulness: float = 0.0
     resume_success_rate: float = 0.0
+    few_shot_reuse_rate: float = 0.0
+    role_drift_rate: float = 0.0
+    memory_cross_talk_rate: float = 0.0
 
     @property
     def overall_memory(self) -> float:
         """综合记忆评分."""
-        weights = [0.35, 0.4, 0.25]
+        weights = [0.22, 0.24, 0.16, 0.16, 0.11, 0.11]
         values = [
             self.memory_hit_rate,
             self.memory_usefulness,
             self.resume_success_rate,
+            self.few_shot_reuse_rate,
+            1.0 - self.role_drift_rate,
+            1.0 - self.memory_cross_talk_rate,
         ]
         return sum(w * v for w, v in zip(weights, values))
 
@@ -320,6 +329,9 @@ class MemoryMetrics:
             "memory_hit_rate": round(self.memory_hit_rate, 4),
             "memory_usefulness": round(self.memory_usefulness, 4),
             "resume_success_rate": round(self.resume_success_rate, 4),
+            "few_shot_reuse_rate": round(self.few_shot_reuse_rate, 4),
+            "role_drift_rate": round(self.role_drift_rate, 4),
+            "memory_cross_talk_rate": round(self.memory_cross_talk_rate, 4),
             "overall_memory": round(self.overall_memory, 4),
         }
 
@@ -343,6 +355,9 @@ class BehavioralMetrics:
     memory_hit_rate: float = 0.0
     memory_usefulness: float = 0.0
     resume_success_rate: float = 0.0
+    few_shot_reuse_rate: float = 0.0
+    role_drift_rate: float = 0.0
+    memory_cross_talk_rate: float = 0.0
     dangerous_action_block_rate: float = 0.0
     message_trace_completeness: float = 0.0
     factuality_score: float = 0.0
@@ -367,7 +382,10 @@ class BehavioralMetrics:
             0.05,
             0.05,
             0.04,
-            0.08,
+            0.05,
+            0.04,
+            0.04,
+            0.06,
             0.03,
             0.03,
             0.02,
@@ -384,6 +402,9 @@ class BehavioralMetrics:
             self.memory_hit_rate,
             self.memory_usefulness,
             self.resume_success_rate,
+            self.few_shot_reuse_rate,
+            1.0 - self.role_drift_rate,
+            1.0 - self.memory_cross_talk_rate,
             self.dangerous_action_block_rate,
             self.message_trace_completeness,
             self.factuality_score,
@@ -404,6 +425,9 @@ class BehavioralMetrics:
             "memory_hit_rate": round(self.memory_hit_rate, 4),
             "memory_usefulness": round(self.memory_usefulness, 4),
             "resume_success_rate": round(self.resume_success_rate, 4),
+            "few_shot_reuse_rate": round(self.few_shot_reuse_rate, 4),
+            "role_drift_rate": round(self.role_drift_rate, 4),
+            "memory_cross_talk_rate": round(self.memory_cross_talk_rate, 4),
             "dangerous_action_block_rate": round(self.dangerous_action_block_rate, 4),
             "message_trace_completeness": round(self.message_trace_completeness, 4),
             "factuality_score": round(self.factuality_score, 4),

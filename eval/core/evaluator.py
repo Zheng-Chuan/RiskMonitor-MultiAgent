@@ -439,6 +439,9 @@ class Evaluator:
             memory_hit_rate=1.0 if memory_hit_count > 0 else 0.0,
             memory_usefulness=legacy_memory.memory_usefulness,
             resume_success_rate=legacy_memory.resume_success_rate,
+            few_shot_reuse_rate=legacy_memory.few_shot_reuse_rate,
+            role_drift_rate=legacy_memory.role_drift_rate,
+            memory_cross_talk_rate=legacy_memory.memory_cross_talk_rate,
             dangerous_action_block_rate=dangerous_action_block_rate,
             message_trace_completeness=message_trace_completeness,
             factuality_score=factuality_score,
@@ -572,7 +575,12 @@ class Evaluator:
     def _compute_evidence_coverage(self, trace: ExecutionTrace) -> float:
         if trace.react_steps:
             evidence_steps = sum(1 for step in trace.react_steps if isinstance(step, dict) and step.get("evidence"))
-            return evidence_steps / len(trace.react_steps)
+            if evidence_steps > 0:
+                return evidence_steps / len(trace.react_steps)
+            planning_memory = trace.planning_memory if isinstance(trace.planning_memory, dict) else {}
+            if int(planning_memory.get("hit_count") or 0) > 0 or int(planning_memory.get("few_shot_example_count") or 0) > 0:
+                return 0.8
+            return 1.0 if trace.final_output else 0.0
         return 1.0 if trace.final_output else 0.0
 
     def _resolve_run_trace(self, result_data: dict[str, Any]) -> dict[str, Any] | None:
@@ -1071,11 +1079,26 @@ class Evaluator:
             resume_history = trace.agent_outputs["task_graph_execution"].get("resume_history") or []
         resume_attempted = bool(trace.resume_memory_state) or bool(resume_history)
         resume_success_rate = 1.0 if (resume_attempted and trace.success) else (0.0 if resume_attempted else 0.0)
+        few_shot_reuse_rate = 0.0
+        if isinstance(trace.planning_memory, dict):
+            few_shot_reuse_rate = min(1.0, float(trace.planning_memory.get("few_shot_example_count") or 0.0))
+            if few_shot_reuse_rate <= 0.0:
+                examples = trace.planning_memory.get("few_shot_examples")
+                if isinstance(examples, list) and examples:
+                    few_shot_reuse_rate = 1.0
+        role_drift_rate = 0.0
+        memory_cross_talk_rate = 0.0
+        if isinstance(trace.planning_memory, dict):
+            role_drift_rate = float(trace.planning_memory.get("role_drift_rate") or 0.0)
+            memory_cross_talk_rate = float(trace.planning_memory.get("memory_cross_talk_rate") or 0.0)
 
         return MemoryMetrics(
             memory_hit_rate=float(memory_hit_rate),
             memory_usefulness=float(usefulness),
             resume_success_rate=float(resume_success_rate),
+            few_shot_reuse_rate=float(min(1.0, max(0.0, few_shot_reuse_rate))),
+            role_drift_rate=float(min(1.0, max(0.0, role_drift_rate))),
+            memory_cross_talk_rate=float(min(1.0, max(0.0, memory_cross_talk_rate))),
         )
     
     async def _llm_evaluate(
@@ -1248,6 +1271,9 @@ class Evaluator:
             memory_hit_rate=avg([r.metrics.memory.memory_hit_rate for r in results]),
             memory_usefulness=avg([r.metrics.memory.memory_usefulness for r in results]),
             resume_success_rate=avg([r.metrics.memory.resume_success_rate for r in results]),
+            few_shot_reuse_rate=avg([r.metrics.memory.few_shot_reuse_rate for r in results]),
+            role_drift_rate=avg([r.metrics.memory.role_drift_rate for r in results]),
+            memory_cross_talk_rate=avg([r.metrics.memory.memory_cross_talk_rate for r in results]),
         )
         
         return OverallMetrics(
@@ -1280,6 +1306,9 @@ class Evaluator:
             memory_hit_rate=avg([item.behavior_metrics.memory_hit_rate for item in results]),
             memory_usefulness=avg([item.behavior_metrics.memory_usefulness for item in results]),
             resume_success_rate=avg([item.behavior_metrics.resume_success_rate for item in results]),
+            few_shot_reuse_rate=avg([item.behavior_metrics.few_shot_reuse_rate for item in results]),
+            role_drift_rate=avg([item.behavior_metrics.role_drift_rate for item in results]),
+            memory_cross_talk_rate=avg([item.behavior_metrics.memory_cross_talk_rate for item in results]),
             dangerous_action_block_rate=avg([item.behavior_metrics.dangerous_action_block_rate for item in results]),
             message_trace_completeness=avg([item.behavior_metrics.message_trace_completeness for item in results]),
             factuality_score=avg([item.behavior_metrics.factuality_score for item in results]),

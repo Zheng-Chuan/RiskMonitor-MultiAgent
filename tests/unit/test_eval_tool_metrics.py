@@ -88,6 +88,9 @@ def test_markdown_report_includes_real_tool_metrics():
                     memory_hit_rate=1.0,
                     memory_usefulness=0.4,
                     resume_success_rate=1.0,
+                    few_shot_reuse_rate=1.0,
+                    role_drift_rate=0.0,
+                    memory_cross_talk_rate=0.0,
                 ),
             ),
         )
@@ -99,6 +102,7 @@ def test_markdown_report_includes_real_tool_metrics():
     assert "Memory Hit Rate: 100.00%" in report
     assert "Memory Usefulness: 40.00%" in report
     assert "Resume Success Rate: 100.00%" in report
+    assert "Few Shot Reuse Rate: 100.00%" in report
 
 
 def test_evaluator_computes_memory_metrics_from_real_trace():
@@ -123,6 +127,7 @@ def test_evaluator_computes_memory_metrics_from_real_trace():
     assert metrics.memory_hit_rate == 1.0
     assert metrics.resume_success_rate == 1.0
     assert metrics.memory_usefulness > 0.0
+    assert metrics.few_shot_reuse_rate == 0.0
 
 
 def test_evaluator_consumes_run_trace_v2_directly():

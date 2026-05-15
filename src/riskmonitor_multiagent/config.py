@@ -109,7 +109,7 @@ def get_llm_api_key() -> str:
     """
     获取 LLM API Key.
     必须设置 LLM_API_KEY 环境变量.
-    切换平台时在 .env 中更换为对应平台的 Key 即可.
+    当前项目默认使用火山引擎 Coding API 的 Key.
 
     异常:
         ValueError: 如果未设置 LLM_API_KEY.
@@ -124,7 +124,7 @@ def get_llm_api_key() -> str:
 
 
 def get_llm_base_url() -> str:
-    """获取 LLM 主机 Base URL(OpenAI 兼容接口). 必须设置 LLM_BASE_URL 环境变量."""
+    """获取 LLM 主机 Base URL. 当前项目默认使用火山引擎 Coding API."""
     value = os.getenv("LLM_BASE_URL")
     if value is None or not value.strip():
         _try_load_repo_dotenv()
@@ -136,14 +136,14 @@ def get_llm_base_url() -> str:
 
 
 def get_llm_model() -> str:
-    """获取 LLM 模型 ID;优先读 LLM_MODEL,默认 qwen3-8b. 切换平台时在 .env 中改为目标模型名."""
+    """获取 LLM 模型 ID;优先读 LLM_MODEL,默认 ark-code-latest."""
     value = os.getenv("LLM_MODEL")
     if value is None or not value.strip():
         _try_load_repo_dotenv()
         value = os.getenv("LLM_MODEL")
     if value and value.strip():
         return value.strip()
-    return "qwen3-8b"
+    return "ark-code-latest"
 
 
 def get_llm_http_referer() -> str:

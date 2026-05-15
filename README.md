@@ -22,7 +22,7 @@
 
 ## 代码入口
 
-- 编排入口: `src/riskmonitor_multiagent/orchestration/orchestrator_workflow.py`
+- 编排入口: `src/riskmonitor_multiagent/orchestration/proactive_workflow.py`
 - 主工作流: `src/riskmonitor_multiagent/orchestration/proactive_workflow.py`
 - 任务图执行: `src/riskmonitor_multiagent/orchestration/task_graph_executor.py`
 - 工具治理: `src/riskmonitor_multiagent/orchestration/tool_executor.py`

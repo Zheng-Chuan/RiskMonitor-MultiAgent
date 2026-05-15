@@ -1,0 +1,70 @@
+{
+  "generated_at": "20260515_195830",
+  "category": "memory",
+  "limit": 1,
+  "runs": {
+    "memory_on": {
+      "baseline_mode": "primary",
+      "result_path": "eval/results/memory_ab/20260515_195830_memory_on.json",
+      "metrics": {
+        "task_success_rate": 0.6667,
+        "evidence_coverage": 0.8,
+        "memory_hit_rate": 1.0,
+        "memory_usefulness": 0.6,
+        "resume_success_rate": 0.0,
+        "few_shot_reuse_rate": 1.0,
+        "role_drift_rate": 0.0,
+        "memory_cross_talk_rate": 0.0
+      },
+      "delta_vs_memory_on": {}
+    },
+    "memory_off": {
+      "baseline_mode": "memory_off",
+      "result_path": "eval/results/memory_ab/20260515_195830_memory_off.json",
+      "metrics": {
+        "task_success_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "memory_hit_rate": 0.0,
+        "memory_usefulness": 0.0,
+        "resume_success_rate": 0.0,
+        "few_shot_reuse_rate": 0.0,
+        "role_drift_rate": 0.0,
+        "memory_cross_talk_rate": 0.0
+      },
+      "delta_vs_memory_on": {
+        "task_success_rate": -0.3333,
+        "evidence_coverage": -0.2,
+        "memory_hit_rate": 1.0,
+        "memory_usefulness": 0.6,
+        "resume_success_rate": 0.0,
+        "few_shot_reuse_rate": 1.0,
+        "role_drift_rate": 0.0,
+        "memory_cross_talk_rate": 0.0
+      }
+    },
+    "private_disabled": {
+      "baseline_mode": "private_disabled",
+      "result_path": "eval/results/memory_ab/20260515_195830_private_disabled.json",
+      "metrics": {
+        "task_success_rate": 0.6667,
+        "evidence_coverage": 0.8,
+        "memory_hit_rate": 1.0,
+        "memory_usefulness": 0.6,
+        "resume_success_rate": 0.0,
+        "few_shot_reuse_rate": 1.0,
+        "role_drift_rate": 0.0,
+        "memory_cross_talk_rate": 0.0
+      },
+      "delta_vs_memory_on": {
+        "task_success_rate": 0.0,
+        "evidence_coverage": 0.0,
+        "memory_hit_rate": 0.0,
+        "memory_usefulness": 0.0,
+        "resume_success_rate": 0.0,
+        "few_shot_reuse_rate": 0.0,
+        "role_drift_rate": 0.0,
+        "memory_cross_talk_rate": 0.0
+      }
+    }
+  }
+}

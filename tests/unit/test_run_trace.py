@@ -61,8 +61,12 @@ def test_build_run_trace_snapshot_collects_unified_timeline() -> None:
             "memory_hits": [{"entry_id": "mem-1", "kind": "analysis", "memory_type": "episodic"}],
             "planning_memory": {"summary": "memory"},
             "resume_memory_state": [{"entry_id": "mem-r1", "kind": "approval", "memory_type": "episodic"}],
+            "shared_memory_board": [{"entry_id": "board-1", "agent_role": "risk_analyst"}],
+            "private_memory_state": {"risk_analyst": [{"entry_id": "pm-1", "kind": "private_task_state"}]},
             "run_summary": {"summary": "done"},
             "procedural_lesson": {"memory_type": "procedural", "kind": "lesson"},
+            "long_term_experience": {"entry_id": "exp-1", "memory_type": "semantic", "kind": "semantic_case"},
+            "memory_policy": {"accepted": True, "confidence": 0.95},
             "approval_memory": [{"entry_id": "approval-1"}],
             "final_output": {"summary": "ok"},
             "errors": ["tool_timeout"],
@@ -95,6 +99,10 @@ def test_build_run_trace_snapshot_collects_unified_timeline() -> None:
     assert "receipt" in trace_types
     assert "approval" in trace_types
     assert "planning_memory" in trace_types
+    assert "shared_memory_board" in trace_types
+    assert "private_memory_state" in trace_types
+    assert "long_term_experience" in trace_types
+    assert "memory_policy" in trace_types
     assert "run_finished" in trace_types
     assert "step" in categories
     step_entry = next(entry for entry in snapshot.entries if entry["trace_type"] == "task_graph_step" and entry["payload"].get("step_id") == "s2")

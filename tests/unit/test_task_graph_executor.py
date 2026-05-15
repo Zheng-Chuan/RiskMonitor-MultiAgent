@@ -182,6 +182,56 @@ def test_task_graph_executor_records_parallel_timeline_for_delegate_branches():
     assert s2["started_at_ms"] <= s1["finished_at_ms"]
 
 
+def test_task_graph_executor_accepts_delegate_target_aliases():
+    async def _fake_analyst(*, task, context=None):
+        del task, context
+        return ProactiveAgentResult(
+            ok=True,
+            output={"report": "别名角色已正确路由到风险分析"},
+        )
+
+    executor = TaskGraphExecutor(
+        delegate_handlers={
+            "risk_analyst": _fake_analyst,
+        }
+    )
+    graph = build_task_graph_from_plan_steps(
+        [
+            {
+                "kind": "delegate",
+                "step_id": "s1",
+                "reason": "先读取历史经验",
+                "target_agent": "memory_agent",
+            },
+            {
+                "kind": "delegate",
+                "step_id": "s2",
+                "reason": "再做业务分析",
+                "target_agent": "analysis_agent",
+            },
+            {
+                "kind": "finalize",
+                "step_id": "s3",
+                "reason": "最后汇总",
+            },
+        ]
+    )
+
+    result = asyncio.run(
+        executor.execute(
+            task={"task_id": "tg-alias-1", "payload": {"content": "验证 delegate 角色别名"}},
+            task_graph=graph,
+        )
+    )
+
+    assert result.get("status") == "completed"
+    summary = (result.get("final_output") or {}).get("summary", "")
+    assert "别名角色已正确路由到风险分析" in summary
+    trace = ((result.get("task_graph_execution") or {}).get("trace") or [])
+    delegate_steps = [item for item in trace if item.get("kind") == "delegate"]
+    assert [item.get("target_agent") for item in delegate_steps] == ["risk_analyst", "risk_analyst"]
+
+
 def test_task_graph_executor_runs_tool_call_via_tool_executor_and_emits_receipt():
     executor = TaskGraphExecutor(delegate_handlers={})
     graph = {

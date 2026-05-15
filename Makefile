@@ -40,7 +40,7 @@ help:
 	@echo "make eval-run         - Run benchmark, usage: make eval-run RUN_TAG=run1 REPEATS=2"
 	@echo "make eval-compare     - Compare two runs, usage: make eval-compare BASE=run1 CAND=run2"
 	@echo "make eval-gate        - Apply quality gate, usage: make eval-gate RUN_TAG=run1"
-	@echo "make check-llm        - Verify LLM connection (.env: LLM_API_KEY)"
+	@echo "make check-llm        - Verify Volcengine LLM connection (.env: LLM_API_KEY)"
 
 install:
 	pip install -r requirements.txt

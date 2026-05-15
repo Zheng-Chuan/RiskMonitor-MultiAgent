@@ -607,6 +607,33 @@ def _build_memory_entries(*, result: dict[str, Any]) -> list[dict[str, Any]]:
                 "payload": hit,
             }
         )
+    shared_memory_board = result.get("shared_memory_board") if isinstance(result.get("shared_memory_board"), list) else []
+    if shared_memory_board:
+        entries.append(
+            {
+                "memory_id": "shared_memory_board",
+                "trace_type": "shared_memory_board",
+                "timestamp_ms": now_ms(),
+                "summary": {"item_count": len(shared_memory_board)},
+                "payload": {"items": shared_memory_board},
+            }
+        )
+    private_memory_state = result.get("private_memory_state") if isinstance(result.get("private_memory_state"), dict) else {}
+    for agent_id, items in private_memory_state.items():
+        if not isinstance(items, list) or not items:
+            continue
+        entries.append(
+            {
+                "memory_id": f"private_memory:{agent_id}",
+                "trace_type": "private_memory_state",
+                "timestamp_ms": now_ms(),
+                "summary": {"agent_id": agent_id, "item_count": len(items)},
+                "payload": {
+                    "agent_id": agent_id,
+                    "items": items,
+                },
+            }
+        )
     run_summary = result.get("run_summary") if isinstance(result.get("run_summary"), dict) else {}
     if run_summary:
         entries.append(
@@ -627,6 +654,39 @@ def _build_memory_entries(*, result: dict[str, Any]) -> list[dict[str, Any]]:
                 "timestamp_ms": now_ms(),
                 "summary": {"kind": lesson.get("kind"), "memory_type": lesson.get("memory_type")},
                 "payload": lesson,
+            }
+        )
+    long_term_experience = result.get("long_term_experience") if isinstance(result.get("long_term_experience"), dict) else {}
+    if long_term_experience:
+        entries.append(
+            {
+                "memory_id": str(long_term_experience.get("entry_id") or "long_term_experience"),
+                "trace_type": "long_term_experience",
+                "timestamp_ms": now_ms(),
+                "summary": {"kind": long_term_experience.get("kind"), "memory_type": long_term_experience.get("memory_type")},
+                "payload": long_term_experience,
+            }
+        )
+    rejected_experience = result.get("rejected_experience") if isinstance(result.get("rejected_experience"), dict) else {}
+    if rejected_experience:
+        entries.append(
+            {
+                "memory_id": str(rejected_experience.get("entry_id") or "rejected_experience"),
+                "trace_type": "rejected_experience",
+                "timestamp_ms": now_ms(),
+                "summary": {"kind": rejected_experience.get("kind"), "memory_type": rejected_experience.get("memory_type")},
+                "payload": rejected_experience,
+            }
+        )
+    memory_policy = result.get("memory_policy") if isinstance(result.get("memory_policy"), dict) else {}
+    if memory_policy:
+        entries.append(
+            {
+                "memory_id": "memory_policy",
+                "trace_type": "memory_policy",
+                "timestamp_ms": now_ms(),
+                "summary": {"accepted": memory_policy.get("accepted"), "confidence": memory_policy.get("confidence")},
+                "payload": memory_policy,
             }
         )
     for idx, item in enumerate(result.get("approval_memory", []) or [], start=1):

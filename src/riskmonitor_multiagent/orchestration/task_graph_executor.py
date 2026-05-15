@@ -32,6 +32,17 @@ from riskmonitor_multiagent.utils.ids import new_command_id, new_run_id
 DelegateHandler = Callable[..., Awaitable[ProactiveAgentResult]]
 NodeResultHandler = Callable[..., Awaitable[None]]
 
+_DELEGATE_TARGET_ALIASES = {
+    "analysis_agent": "risk_analyst",
+    "risk_assessment_agent": "risk_analyst",
+    "memory_agent": "risk_analyst",
+    "engineer_agent": "system_engineer",
+    "system_engineer_agent": "system_engineer",
+    "orchestrator_agent": "orchestrator",
+    "critic_agent": "critic",
+    "manager_agent": "manager",
+}
+
 
 class TaskGraphExecutor:
     """执行最小 TaskGraph."""
@@ -44,6 +55,12 @@ class TaskGraphExecutor:
     ) -> None:
         self._delegate_handlers = dict(delegate_handlers)
         self._on_node_completed = on_node_completed
+
+    @staticmethod
+    def _resolve_delegate_target(target_agent: str) -> str:
+        """兼容编排阶段产出的历史角色别名."""
+        normalized_target = target_agent.strip()
+        return _DELEGATE_TARGET_ALIASES.get(normalized_target, normalized_target)
 
     async def execute(
         self,
@@ -188,7 +205,12 @@ class TaskGraphExecutor:
                         "step_id": step_id,
                         "kind": node.get("kind"),
                         "status": node_result["status"],
-                        "target_agent": node.get("target_agent"),
+                        "target_agent": (
+                            self._resolve_delegate_target(str(node.get("target_agent") or ""))
+                            if node.get("kind") == "delegate"
+                            else node.get("target_agent")
+                        ),
+                        "requested_target_agent": node.get("target_agent") if node.get("kind") == "delegate" else None,
                         "tool_name": node_result.get("tool_name") or node.get("tool_name"),
                         "command_id": node_result.get("command_id"),
                         "error": node_result.get("error"),
@@ -377,10 +399,11 @@ class TaskGraphExecutor:
             return step_approval_result
 
         if kind == "delegate":
-            target_agent = str(node.get("target_agent") or "").strip()
+            raw_target_agent = str(node.get("target_agent") or "").strip()
+            target_agent = self._resolve_delegate_target(raw_target_agent)
             handler = self._delegate_handlers.get(target_agent)
             if handler is None:
-                return {"status": "failed", "error": f"unsupported_delegate_target:{target_agent or 'unknown'}"}
+                return {"status": "failed", "error": f"unsupported_delegate_target:{raw_target_agent or target_agent or 'unknown'}"}
 
             result = await handler(
                 task=task,
@@ -402,7 +425,11 @@ class TaskGraphExecutor:
                 "output": result.output if isinstance(result.output, dict) else {},
                 "delegate_result": result,
                 "output_ref": target_agent,
-                "evidence": {"task_graph_step_id": step_id, "delegate_agent": target_agent},
+                "evidence": {
+                    "task_graph_step_id": step_id,
+                    "delegate_agent": target_agent,
+                    "requested_delegate_agent": raw_target_agent,
+                },
                 "error": None if result.ok else f"delegate_failed:{target_agent}",
             }
 

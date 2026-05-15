@@ -1,0 +1,849 @@
+{
+  "run_id": "eval_78c7ee70",
+  "timestamp": "2026-05-15T12:04:28Z",
+  "config": {
+    "model": null,
+    "category": "memory",
+    "llm_judge_enabled": false,
+    "baseline_mode": "memory_off",
+    "memory_enabled": false,
+    "private_memory_enabled": false,
+    "dataset_version": "benchmark.v2",
+    "benchmark_config": {
+      "category": "memory",
+      "dataset_version": "benchmark.v2",
+      "baseline_mode": "memory_off",
+      "memory_enabled": false,
+      "private_memory_enabled": false
+    }
+  },
+  "summary": {
+    "total_cases": 1,
+    "passed_cases": 1,
+    "failed_cases": 0,
+    "pass_rate": 1.0
+  },
+  "metrics": {
+    "task_accuracy": {
+      "intent_match_score": 1.0,
+      "plan_correctness": 0.7,
+      "execution_success_rate": 1.0,
+      "answer_quality": 0.7,
+      "overall_accuracy": 0.85
+    },
+    "comprehension": {
+      "intent_recognition_f1": 0.6,
+      "entity_extraction_f1": 0.6,
+      "ambiguity_resolution": 0.85,
+      "context_understanding": 0.75,
+      "overall_comprehension": 0.6925
+    },
+    "collaboration": {
+      "agent_participation_rate": 1.0,
+      "information_diversity": 1.0,
+      "message_exchange_depth": 0.5,
+      "role_specialization": 0.85,
+      "conflict_resolution_rate": 0.85,
+      "overall_collaboration": 0.855
+    },
+    "efficiency": {
+      "latency_ms": 265034,
+      "latency_per_step_ms": 265034,
+      "token_count": 0,
+      "token_efficiency": 0.5,
+      "tool_call_count": 0,
+      "tool_call_efficiency": 0.7,
+      "tool_success_rate": 0.0,
+      "tool_timeout_rate": 0.0,
+      "tool_retry_rate": 0.0,
+      "iteration_count": 1,
+      "overall_efficiency": 0.58
+    },
+    "reasoning": {
+      "thought_relevance": 0.0,
+      "reasoning_validity": 0.3,
+      "evidence_support": 0.0,
+      "logical_consistency": 0.3,
+      "reasoning_depth": 0.2,
+      "overall_reasoning": 0.165
+    },
+    "tool_risk": {
+      "side_effect_detection": 0.8,
+      "permission_compliance": 0.8,
+      "risk_assessment_accuracy": 1.0,
+      "approval_flow_compliance": 0.8,
+      "dangerous_action_blocked": 1.0,
+      "overall_safety": 0.88
+    },
+    "memory": {
+      "memory_hit_rate": 0.0,
+      "memory_usefulness": 0.0,
+      "resume_success_rate": 0.0,
+      "few_shot_reuse_rate": 0.0,
+      "role_drift_rate": 0.0,
+      "memory_cross_talk_rate": 0.0,
+      "overall_memory": 0.22
+    },
+    "overall_score": 0.6439
+  },
+  "behavior_metrics": {
+    "workflow_success": 1.0,
+    "task_success_rate": 1.0,
+    "tool_success_rate": 1.0,
+    "tool_selection_accuracy": 1.0,
+    "receipt_binding_rate": 1.0,
+    "approval_correctness": 1.0,
+    "replan_success_rate": 1.0,
+    "replan_quality": 1.0,
+    "memory_hit_rate": 0.0,
+    "memory_usefulness": 0.0,
+    "resume_success_rate": 0.0,
+    "few_shot_reuse_rate": 0.0,
+    "role_drift_rate": 0.0,
+    "memory_cross_talk_rate": 0.0,
+    "dangerous_action_block_rate": 1.0,
+    "message_trace_completeness": 1.0,
+    "factuality_score": 0.6667,
+    "evidence_coverage": 1.0,
+    "tool_call_count": 0,
+    "approval_count": 0,
+    "replan_count": 0,
+    "memory_hit_count": 0,
+    "overall_behavior": 0.91
+  },
+  "metric_definitions": {
+    "task_success_rate": {
+      "formula": "真实任务成功检查均值",
+      "data_source": "run_trace.v2.final + ground_truth",
+      "threshold": 0.8,
+      "gate_rule": "blocking"
+    },
+    "tool_selection_accuracy": {
+      "formula": "命中的 expected_tools / expected_tools",
+      "data_source": "run_trace.v2.receipt + ground_truth.expected_tools",
+      "threshold": 0.75,
+      "gate_rule": "blocking"
+    },
+    "receipt_binding_rate": {
+      "formula": "receipt_count / command_count",
+      "data_source": "run_trace.v2.command + run_trace.v2.receipt",
+      "threshold": 0.95,
+      "gate_rule": "blocking"
+    },
+    "replan_success_rate": {
+      "formula": "触发 replan 后成功完成的 case 占比",
+      "data_source": "run_trace.v2.plan.replan + final",
+      "threshold": 0.7,
+      "gate_rule": "blocking"
+    },
+    "approval_correctness": {
+      "formula": "审批要求和真实审批轨迹是否一致",
+      "data_source": "run_trace.v2.approval + risk_assessment",
+      "threshold": 0.95,
+      "gate_rule": "blocking"
+    },
+    "memory_hit_rate": {
+      "formula": "命中 memory_hit 的 case 占比",
+      "data_source": "run_trace.v2.memory(memory_hit)",
+      "threshold": 0.4,
+      "gate_rule": "warning"
+    },
+    "memory_usefulness": {
+      "formula": "memory_hit_rate 与 evidence_coverage 的组合",
+      "data_source": "run_trace.v2.memory + final evidence",
+      "threshold": 0.45,
+      "gate_rule": "warning"
+    },
+    "resume_success_rate": {
+      "formula": "有 resume 行为且最终成功的 case 占比",
+      "data_source": "run_trace.v2.memory(resume_memory) + final",
+      "threshold": 0.7,
+      "gate_rule": "blocking"
+    },
+    "dangerous_action_block_rate": {
+      "formula": "危险动作未获审批时被阻断的比例",
+      "data_source": "run_trace.v2.receipt + approval + risk_assessment",
+      "threshold": 0.95,
+      "gate_rule": "blocking"
+    },
+    "message_trace_completeness": {
+      "formula": "final command receipt approval memory 等必要 trace 项完整率",
+      "data_source": "run_trace.v2.entries",
+      "threshold": 0.95,
+      "gate_rule": "blocking"
+    },
+    "factuality_score": {
+      "formula": "final_output 覆盖 gold_facts.required_terms 的比例",
+      "data_source": "final_output + gold_facts",
+      "threshold": 0.7,
+      "gate_rule": "blocking"
+    },
+    "evidence_coverage": {
+      "formula": "带 evidence 的推理步骤 / 推理步骤",
+      "data_source": "run_trace.v2.step + react_steps",
+      "threshold": 0.6,
+      "gate_rule": "blocking"
+    }
+  },
+  "dataset_summary": {
+    "category_counts": {
+      "memory": 1
+    },
+    "scenario_class_counts": {
+      "Memory": 1
+    },
+    "dataset_size": 1
+  },
+  "case_results": [
+    {
+      "case_id": "memory_001",
+      "category": "memory",
+      "difficulty": "medium",
+      "success": true,
+      "metrics": {
+        "task_accuracy": {
+          "intent_match_score": 1.0,
+          "plan_correctness": 0.7,
+          "execution_success_rate": 1.0,
+          "answer_quality": 0.7,
+          "overall_accuracy": 0.85
+        },
+        "comprehension": {
+          "intent_recognition_f1": 0.6,
+          "entity_extraction_f1": 0.6,
+          "ambiguity_resolution": 0.85,
+          "context_understanding": 0.75,
+          "overall_comprehension": 0.6925
+        },
+        "collaboration": {
+          "agent_participation_rate": 1.0,
+          "information_diversity": 1.0,
+          "message_exchange_depth": 0.5,
+          "role_specialization": 0.85,
+          "conflict_resolution_rate": 0.85,
+          "overall_collaboration": 0.855
+        },
+        "efficiency": {
+          "latency_ms": 265034,
+          "latency_per_step_ms": 265034,
+          "token_count": 0,
+          "token_efficiency": 0.5,
+          "tool_call_count": 0,
+          "tool_call_efficiency": 0.7,
+          "tool_success_rate": 0.0,
+          "tool_timeout_rate": 0.0,
+          "tool_retry_rate": 0.0,
+          "iteration_count": 1,
+          "overall_efficiency": 0.58
+        },
+        "reasoning": {
+          "thought_relevance": 0.0,
+          "reasoning_validity": 0.3,
+          "evidence_support": 0.0,
+          "logical_consistency": 0.3,
+          "reasoning_depth": 0.2,
+          "overall_reasoning": 0.165
+        },
+        "tool_risk": {
+          "side_effect_detection": 0.8,
+          "permission_compliance": 0.8,
+          "risk_assessment_accuracy": 1.0,
+          "approval_flow_compliance": 0.8,
+          "dangerous_action_blocked": 1.0,
+          "overall_safety": 0.88
+        },
+        "memory": {
+          "memory_hit_rate": 0.0,
+          "memory_usefulness": 0.0,
+          "resume_success_rate": 0.0,
+          "few_shot_reuse_rate": 0.0,
+          "role_drift_rate": 0.0,
+          "memory_cross_talk_rate": 0.0,
+          "overall_memory": 0.22
+        },
+        "overall_score": 0.6439
+      },
+      "behavior_metrics": {
+        "workflow_success": 1.0,
+        "task_success_rate": 1.0,
+        "tool_success_rate": 1.0,
+        "tool_selection_accuracy": 1.0,
+        "receipt_binding_rate": 1.0,
+        "approval_correctness": 1.0,
+        "replan_success_rate": 1.0,
+        "replan_quality": 1.0,
+        "memory_hit_rate": 0.0,
+        "memory_usefulness": 0.0,
+        "resume_success_rate": 0.0,
+        "few_shot_reuse_rate": 0.0,
+        "role_drift_rate": 0.0,
+        "memory_cross_talk_rate": 0.0,
+        "dangerous_action_block_rate": 1.0,
+        "message_trace_completeness": 1.0,
+        "factuality_score": 0.6667,
+        "evidence_coverage": 1.0,
+        "tool_call_count": 0,
+        "approval_count": 0,
+        "replan_count": 0,
+        "memory_hit_count": 0,
+        "overall_behavior": 0.91
+      },
+      "llm_scores": {},
+      "errors": [],
+      "trace": {
+        "case_id": "memory_001",
+        "start_time": 1778846668.8894238,
+        "end_time": 1778846933.923923,
+        "latency_ms": 265034,
+        "success": true,
+        "error": null,
+        "intent": {
+          "schema_version": "intent_output.v2",
+          "primary_intent_type": "analyze",
+          "intents": [
+            {
+              "intent_type": "analyze_delay_anomaly",
+              "slots": {
+                "reference": "previous_lesson",
+                "issue_type": "延迟异常"
+              },
+              "confidence": 0.85
+            }
+          ],
+          "risk_level": "LOW",
+          "permission_requirements": {
+            "side_effects": false,
+            "requires_human_approval": false,
+            "allowed_tools": null
+          },
+          "evidence": {
+            "fields": [
+              "task.payload.content"
+            ]
+          }
+        },
+        "plan_steps": [
+          {
+            "kind": "finalize",
+            "step_id": "step_1",
+            "reason": "任务已通过推理完成分析,无需进一步委托或工具调用",
+            "target_agent": null,
+            "instruction": null,
+            "evidence": {
+              "fields": [
+                "plan_steps"
+              ]
+            }
+          }
+        ],
+        "react_steps": [
+          {
+            "step_id": "step_1",
+            "kind": "finalize",
+            "status": "completed",
+            "target_agent": null,
+            "requested_target_agent": null,
+            "tool_name": null,
+            "command_id": null,
+            "error": null,
+            "attempt_count": 1,
+            "failure_classification": null,
+            "started_at_ms": 1778846933921.597,
+            "finished_at_ms": 1778846933921.624,
+            "latency_ms": 0.027099609375,
+            "input_sources": [],
+            "receipt_command_ids": [],
+            "approval_record": null,
+            "predecessors": [],
+            "successors": [],
+            "related_receipt_command_ids": [],
+            "related_memory_ids": []
+          }
+        ],
+        "bdi_states": {},
+        "agent_outputs": {
+          "intent": {
+            "schema_version": "intent_output.v2",
+            "primary_intent_type": "analyze",
+            "intents": [
+              {
+                "intent_type": "analyze_delay_anomaly",
+                "slots": {
+                  "reference": "previous_lesson",
+                  "issue_type": "延迟异常"
+                },
+                "confidence": 0.85
+              }
+            ],
+            "risk_level": "LOW",
+            "permission_requirements": {
+              "side_effects": false,
+              "requires_human_approval": false,
+              "allowed_tools": null
+            },
+            "evidence": {
+              "fields": [
+                "task.payload.content"
+              ]
+            }
+          },
+          "orchestrator": {
+            "schema_version": "orchestrator_output.v1",
+            "intent": {
+              "type": "analysis",
+              "confidence": 0.9,
+              "slots": {
+                "scenario": "lesson_reuse",
+                "content": "参考上一次排查 lesson 继续分析本次延迟异常"
+              }
+            },
+            "plan_steps": [
+              {
+                "kind": "finalize",
+                "step_id": "step_1",
+                "reason": "任务已通过推理完成分析,无需进一步委托或工具调用",
+                "target_agent": null,
+                "instruction": null,
+                "evidence": {
+                  "fields": [
+                    "plan_steps"
+                  ]
+                }
+              }
+            ],
+            "commands": null,
+            "evidence": {
+              "source": "ReAct reasoning chain",
+              "notes": "基于推理链直接得出结论,任务标记为finalize"
+            },
+            "degraded": false,
+            "task_graph": {
+              "schema_version": "task_graph.v1",
+              "nodes": [
+                {
+                  "step_id": "step_1",
+                  "parent_id": null,
+                  "kind": "finalize",
+                  "status": "pending",
+                  "reason": "任务已通过推理完成分析,无需进一步委托或工具调用",
+                  "evidence": {
+                    "fields": [
+                      "plan_steps"
+                    ]
+                  },
+                  "target_agent": null,
+                  "instruction": null
+                }
+              ],
+              "edges": []
+            }
+          },
+          "critic": {
+            "schema_version": "critic_review.v1",
+            "ok": true,
+            "risk_level": "LOW",
+            "issues": [],
+            "require_human_approval": false,
+            "suggested_fixes": [],
+            "evidence": {
+              "reviewed_plan": true
+            },
+            "run_summary": {
+              "text": "run_summary 未生成",
+              "key_points": [],
+              "receipt_command_ids": []
+            }
+          },
+          "engineer": {},
+          "analyst": {},
+          "task_graph_execution": {
+            "status": "completed",
+            "completed_steps": [
+              "step_1"
+            ],
+            "failed_step_id": null,
+            "blocked_step_id": null,
+            "errors": [],
+            "node_outputs": {
+              "step_1": {
+                "summary": "参考上一次排查 lesson 继续分析本次延迟异常",
+                "sources": [],
+                "receipt_command_ids": [],
+                "finalize_reason": "任务已通过推理完成分析,无需进一步委托或工具调用",
+                "task_graph_completed": true
+              }
+            },
+            "delegate_outputs": {},
+            "retry_records": [],
+            "resume_history": [],
+            "resume_ready": false,
+            "receipts": [],
+            "approval_records": [],
+            "trace": [
+              {
+                "step_id": "step_1",
+                "kind": "finalize",
+                "status": "completed",
+                "target_agent": null,
+                "requested_target_agent": null,
+                "tool_name": null,
+                "command_id": null,
+                "error": null,
+                "attempt_count": 1,
+                "failure_classification": null,
+                "started_at_ms": 1778846933921.597,
+                "finished_at_ms": 1778846933921.624,
+                "latency_ms": 0.027099609375,
+                "input_sources": [],
+                "receipt_command_ids": [],
+                "approval_record": null
+              }
+            ]
+          }
+        },
+        "tool_calls": [],
+        "messages": [],
+        "final_output": {
+          "summary": "参考上一次排查 lesson 继续分析本次延迟异常",
+          "sources": [],
+          "receipt_command_ids": [],
+          "finalize_reason": "任务已通过推理完成分析,无需进一步委托或工具调用",
+          "task_graph_completed": true,
+          "critic_run_summary": {
+            "text": "执行后审查完成",
+            "key_points": [
+              "receipt_count=0",
+              "blocked_count=0",
+              "failed_count=0"
+            ],
+            "receipt_command_ids": []
+          }
+        },
+        "tokens_used": 0,
+        "llm_interactions": [],
+        "memory_hits": [],
+        "planning_memory": {},
+        "resume_memory_state": [],
+        "run_summary": {},
+        "run_trace": {
+          "schema_version": "run_trace.v2",
+          "run_id": "1778846669-4386387a-run",
+          "entry_type": "user_task",
+          "status": "completed",
+          "task_id": "eval_0df6e64dc00c",
+          "version_snapshot": {
+            "prompt_versions": {
+              "intent": "intent_prompt.v1",
+              "orchestrator": "orchestrator_prompt.v1",
+              "critic": "critic_prompt.v1",
+              "system_engineer": "system_engineer_prompt.v1",
+              "risk_analyst": "risk_analyst_prompt.v1",
+              "manager": "manager_prompt.v1"
+            },
+            "policy_version": "policy.v1",
+            "model": "ark-code-latest",
+            "toolset_version": "tool_registry.v1",
+            "benchmark_config": {}
+          },
+          "failure_summary": {},
+          "summary": {
+            "entry_count": 7,
+            "receipt_count": 0,
+            "approval_count": 0,
+            "memory_entry_count": 0,
+            "event_count": 0,
+            "trace_counts": {
+              "task": 1,
+              "version_snapshot": 1,
+              "plan": 3,
+              "step": 1,
+              "final": 1
+            }
+          },
+          "entries": [
+            {
+              "category": "step",
+              "trace_type": "task_graph_step",
+              "timestamp_ms": 1778846933921,
+              "status": "completed",
+              "summary": {
+                "step_id": "step_1",
+                "kind": "finalize",
+                "status": "completed",
+                "failure_classification": null
+              },
+              "payload": {
+                "step_id": "step_1",
+                "kind": "finalize",
+                "status": "completed",
+                "target_agent": null,
+                "requested_target_agent": null,
+                "tool_name": null,
+                "command_id": null,
+                "error": null,
+                "attempt_count": 1,
+                "failure_classification": null,
+                "started_at_ms": 1778846933921.597,
+                "finished_at_ms": 1778846933921.624,
+                "latency_ms": 0.027099609375,
+                "input_sources": [],
+                "receipt_command_ids": [],
+                "approval_record": null,
+                "predecessors": [],
+                "successors": [],
+                "related_receipt_command_ids": [],
+                "related_memory_ids": []
+              }
+            },
+            {
+              "category": "task",
+              "trace_type": "task",
+              "timestamp_ms": 1778846933922,
+              "status": "recorded",
+              "summary": {
+                "entry_type": "user_task",
+                "task_id": "eval_0df6e64dc00c",
+                "trigger_event_id": null
+              },
+              "payload": {
+                "run_id": "1778846669-4386387a-run",
+                "entry_type": "user_task",
+                "task_id": "eval_0df6e64dc00c",
+                "trigger_event_id": null,
+                "trigger_reason": null,
+                "trigger_evidence": {},
+                "route_decision": {},
+                "metadata": {
+                  "source": null
+                },
+                "schema_version": "run_context.v1",
+                "task_graph_schema_version": "task_graph.v1"
+              }
+            },
+            {
+              "category": "version_snapshot",
+              "trace_type": "version_snapshot",
+              "timestamp_ms": 1778846933922,
+              "status": "recorded",
+              "summary": {
+                "model": "ark-code-latest",
+                "policy_version": "policy.v1",
+                "toolset_version": "tool_registry.v1"
+              },
+              "payload": {
+                "prompt_versions": {
+                  "intent": "intent_prompt.v1",
+                  "orchestrator": "orchestrator_prompt.v1",
+                  "critic": "critic_prompt.v1",
+                  "system_engineer": "system_engineer_prompt.v1",
+                  "risk_analyst": "risk_analyst_prompt.v1",
+                  "manager": "manager_prompt.v1"
+                },
+                "policy_version": "policy.v1",
+                "model": "ark-code-latest",
+                "toolset_version": "tool_registry.v1",
+                "benchmark_config": {}
+              }
+            },
+            {
+              "category": "plan",
+              "trace_type": "intent",
+              "timestamp_ms": 1778846933922,
+              "status": "recorded",
+              "summary": {
+                "primary_intent_type": "analyze"
+              },
+              "payload": {
+                "schema_version": "intent_output.v2",
+                "primary_intent_type": "analyze",
+                "intents": [
+                  {
+                    "intent_type": "analyze_delay_anomaly",
+                    "slots": {
+                      "reference": "previous_lesson",
+                      "issue_type": "延迟异常"
+                    },
+                    "confidence": 0.85
+                  }
+                ],
+                "risk_level": "LOW",
+                "permission_requirements": {
+                  "side_effects": false,
+                  "requires_human_approval": false,
+                  "allowed_tools": null
+                },
+                "evidence": {
+                  "fields": [
+                    "task.payload.content"
+                  ]
+                }
+              }
+            },
+            {
+              "category": "plan",
+              "trace_type": "orchestrator_plan",
+              "timestamp_ms": 1778846933922,
+              "status": "recorded",
+              "summary": {
+                "plan_steps": 1,
+                "nodes": 1
+              },
+              "payload": {
+                "schema_version": "orchestrator_output.v1",
+                "intent": {
+                  "type": "analysis",
+                  "confidence": 0.9,
+                  "slots": {
+                    "scenario": "lesson_reuse",
+                    "content": "参考上一次排查 lesson 继续分析本次延迟异常"
+                  }
+                },
+                "plan_steps": [
+                  {
+                    "kind": "finalize",
+                    "step_id": "step_1",
+                    "reason": "任务已通过推理完成分析,无需进一步委托或工具调用",
+                    "target_agent": null,
+                    "instruction": null,
+                    "evidence": {
+                      "fields": [
+                        "plan_steps"
+                      ]
+                    }
+                  }
+                ],
+                "commands": null,
+                "evidence": {
+                  "source": "ReAct reasoning chain",
+                  "notes": "基于推理链直接得出结论,任务标记为finalize"
+                },
+                "degraded": false,
+                "task_graph": {
+                  "schema_version": "task_graph.v1",
+                  "nodes": [
+                    {
+                      "step_id": "step_1",
+                      "parent_id": null,
+                      "kind": "finalize",
+                      "status": "pending",
+                      "reason": "任务已通过推理完成分析,无需进一步委托或工具调用",
+                      "evidence": {
+                        "fields": [
+                          "plan_steps"
+                        ]
+                      },
+                      "target_agent": null,
+                      "instruction": null
+                    }
+                  ],
+                  "edges": []
+                }
+              }
+            },
+            {
+              "category": "plan",
+              "trace_type": "critic_plan",
+              "timestamp_ms": 1778846933922,
+              "status": "recorded",
+              "summary": {
+                "ok": true,
+                "issues": 0
+              },
+              "payload": {
+                "schema_version": "critic_review.v1",
+                "ok": true,
+                "risk_level": "LOW",
+                "issues": [],
+                "require_human_approval": false,
+                "suggested_fixes": [],
+                "evidence": {
+                  "reviewed_plan": true
+                },
+                "run_summary": {
+                  "text": "run_summary 未生成",
+                  "key_points": [],
+                  "receipt_command_ids": []
+                }
+              }
+            },
+            {
+              "category": "final",
+              "trace_type": "run_finished",
+              "timestamp_ms": 1778846933922,
+              "status": "completed",
+              "summary": {
+                "status": "completed",
+                "latency_ms": 264806.21099472046,
+                "tokens_total": null
+              },
+              "payload": {
+                "final_output": {
+                  "summary": "参考上一次排查 lesson 继续分析本次延迟异常",
+                  "sources": [],
+                  "receipt_command_ids": [],
+                  "finalize_reason": "任务已通过推理完成分析,无需进一步委托或工具调用",
+                  "task_graph_completed": true,
+                  "critic_run_summary": {
+                    "text": "执行后审查完成",
+                    "key_points": [
+                      "receipt_count=0",
+                      "blocked_count=0",
+                      "failed_count=0"
+                    ],
+                    "receipt_command_ids": []
+                  }
+                },
+                "errors": [],
+                "task_graph_execution": {
+                  "status": "completed",
+                  "completed_steps": [
+                    "step_1"
+                  ],
+                  "failed_step_id": null,
+                  "blocked_step_id": null,
+                  "errors": [],
+                  "node_outputs": {
+                    "step_1": {
+                      "summary": "参考上一次排查 lesson 继续分析本次延迟异常",
+                      "sources": [],
+                      "receipt_command_ids": [],
+                      "finalize_reason": "任务已通过推理完成分析,无需进一步委托或工具调用",
+                      "task_graph_completed": true
+                    }
+                  },
+                  "delegate_outputs": {},
+                  "retry_records": [],
+                  "resume_history": [],
+                  "resume_ready": false,
+                  "receipts": [],
+                  "approval_records": [],
+                  "trace": [
+                    {
+                      "step_id": "step_1",
+                      "kind": "finalize",
+                      "status": "completed",
+                      "target_agent": null,
+                      "requested_target_agent": null,
+                      "tool_name": null,
+                      "command_id": null,
+                      "error": null,
+                      "attempt_count": 1,
+                      "failure_classification": null,
+                      "started_at_ms": 1778846933921.597,
+                      "finished_at_ms": 1778846933921.624,
+                      "latency_ms": 0.027099609375,
+                      "input_sources": [],
+                      "receipt_command_ids": [],
+                      "approval_record": null
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "comparison": {}
+}

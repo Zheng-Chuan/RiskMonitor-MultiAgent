@@ -12,7 +12,7 @@ if str(_SRC_ROOT) not in sys.path:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatch):
+async def test_proactive_workflow_runs_and_writes_memory(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTEXT_STORE_DIR", str(tmp_path / "ctx"))
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
     monkeypatch.setenv("LLM_API_KEY", "test")
@@ -101,7 +101,7 @@ async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatc
 
     monkeypatch.setattr(llm_client.LlmClient, "chat_completions", _fake_chat, raising=True)
 
-    from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
+    from riskmonitor_multiagent.orchestration.proactive_workflow import run_proactive_workflow
     from riskmonitor_multiagent.memory import get_memory_store
 
     task = {
@@ -111,7 +111,7 @@ async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatc
         "payload": {"content": "检查系统延迟与可能原因 并给出下一步建议"},
     }
 
-    out = await run_orchestrator_workflow(task=task)
+    out = await run_proactive_workflow(task=task)
     assert out.get("ok") is True
 
     result = out
@@ -162,7 +162,7 @@ async def test_orchestrator_workflow_runs_and_writes_memory(tmp_path, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_path, monkeypatch):
+async def test_proactive_workflow_requires_human_when_not_auto_approved(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTEXT_STORE_DIR", str(tmp_path / "ctx"))
     monkeypatch.setenv("ENABLE_LANGGRAPH", "1")
     monkeypatch.setenv("LLM_API_KEY", "test")
@@ -216,7 +216,7 @@ async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_p
 
     monkeypatch.setattr(llm_client.LlmClient, "chat_completions", _fake_chat, raising=True)
 
-    from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
+    from riskmonitor_multiagent.orchestration.proactive_workflow import run_proactive_workflow
     from riskmonitor_multiagent.memory import get_memory_store
 
     task = {
@@ -226,7 +226,7 @@ async def test_orchestrator_workflow_requires_human_when_not_auto_approved(tmp_p
         "payload": {"content": "对系统执行可能有副作用的操作前先人工确认"},
     }
 
-    out = await run_orchestrator_workflow(task=task)
+    out = await run_proactive_workflow(task=task)
     assert out.get("ok") is True
 
     result = out
@@ -261,7 +261,7 @@ async def test_orchestrator_commands_generate_receipts_and_critic_can_see(tmp_pa
 
     from riskmonitor_multiagent.agents.base import AgentResult
     from riskmonitor_multiagent.orchestration.tool_executor import new_agent_command
-    from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
+    from riskmonitor_multiagent.orchestration.proactive_workflow import run_proactive_workflow
 
     seen = {"receipts": None}
 
@@ -339,7 +339,7 @@ async def test_orchestrator_commands_generate_receipts_and_critic_can_see(tmp_pa
 
     monkeypatch.setattr("riskmonitor_multiagent.agents.roles.IntentAgent.recognize", _fake_intent)
 
-    out = await run_orchestrator_workflow(
+    out = await run_proactive_workflow(
         task={"task_id": "task_cmd", "session_id": "s_cmd", "source": "human", "payload": {"content": "写入告警并检查指标"}}
     )
     assert out.get("ok") is True
@@ -358,7 +358,7 @@ async def test_orchestrator_unknown_step_kind_is_not_silent(tmp_path, monkeypatc
     monkeypatch.setenv("MEMORY_SQLITE_PATH", str(tmp_path / "memory.sqlite"))
 
     from riskmonitor_multiagent.agents.base import AgentResult
-    from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
+    from riskmonitor_multiagent.orchestration.proactive_workflow import run_proactive_workflow
 
     async def _fake_orchestrate(self, *, task, context=None, max_tokens=None):
         phase = context.get("phase") if isinstance(context, dict) else ""
@@ -419,7 +419,7 @@ async def test_orchestrator_unknown_step_kind_is_not_silent(tmp_path, monkeypatc
         )
 
     monkeypatch.setattr("riskmonitor_multiagent.agents.roles.IntentAgent.recognize", _fake_intent)
-    out = await run_orchestrator_workflow(task={"task_id": "task_unknown", "session_id": "s_u", "source": "human", "payload": {"content": "测试未知step"}})
+    out = await run_proactive_workflow(task={"task_id": "task_unknown", "session_id": "s_u", "source": "human", "payload": {"content": "测试未知step"}})
     result = out if isinstance(out, dict) else {}
     errors = result.get("errors") if isinstance(result.get("errors"), list) else []
     assert any(str(x).startswith("unknown_step_kind:") for x in errors)
@@ -435,7 +435,7 @@ async def test_multi_intent_disambiguation_written_to_shared_memory(tmp_path, mo
 
     from riskmonitor_multiagent.agents.base import AgentResult
     from riskmonitor_multiagent.memory import get_memory_store
-    from riskmonitor_multiagent.orchestration.orchestrator_workflow import run_orchestrator_workflow
+    from riskmonitor_multiagent.orchestration.proactive_workflow import run_proactive_workflow
     from riskmonitor_multiagent.llm import llm_client
 
     async def _fake_chat(self, *, messages, model=None, temperature=0.2, max_tokens=None):
@@ -500,8 +500,8 @@ async def test_multi_intent_disambiguation_written_to_shared_memory(tmp_path, mo
         )
 
     monkeypatch.setattr("riskmonitor_multiagent.agents.roles.IntentAgent.recognize", _fake_intent)
-    out1 = await run_orchestrator_workflow(task={"task_id": "task_m1", "session_id": "s_m", "source": "human", "payload": {"content": "查头寸并可能写告警"}})
-    out2 = await run_orchestrator_workflow(task={"task_id": "task_m2", "session_id": "s_m", "source": "human", "payload": {"content": "查头寸并可能写告警"}})
+    out1 = await run_proactive_workflow(task={"task_id": "task_m1", "session_id": "s_m", "source": "human", "payload": {"content": "查头寸并可能写告警"}})
+    out2 = await run_proactive_workflow(task={"task_id": "task_m2", "session_id": "s_m", "source": "human", "payload": {"content": "查头寸并可能写告警"}})
     i1 = ((out1.get("intent") or {}).get("intents"))
     i2 = ((out2.get("intent") or {}).get("intents"))
     assert i1 == i2
