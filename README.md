@@ -34,3 +34,14 @@
 
 - [docs/ARCHETECTURE.md](docs/ARCHETECTURE.md)
 - [docs/PRD.md](docs/PRD.md)
+
+## 测试入口
+
+- `tests/unit`: 纯逻辑和 contract 测试
+- `tests/integration`: 真实 adapter 和基础设施对接测试
+- `tests/workflows`: 面向主工作流的回归测试 当前先收敛 monitoring 和 unified memory 两条稳定主链
+- `tests/acceptance`: 发布前验收测试
+- 推荐执行: `pytest tests/unit`
+- 基础设施接线: `pytest tests/integration`
+- 主工作流回归: `pytest tests/workflows`
+- 发布前验收: `pytest tests/acceptance`

@@ -64,3 +64,7 @@ eval/results/.gitkeep
 uv.lock
 poetry.lock
 .cursor/
+.qoder/
+
+# Runtime traces
+results/run_traces/
