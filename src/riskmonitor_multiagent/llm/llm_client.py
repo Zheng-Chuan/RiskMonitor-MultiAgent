@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import socket
+import time
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -17,6 +19,8 @@ import aiohttp
 
 from riskmonitor_multiagent import config
 from riskmonitor_multiagent.llm.cache import get_llm_cache
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -117,6 +121,7 @@ class LlmClient:
         返回:
             原始响应 JSON(dict)
         """
+        _request_start = time.perf_counter()
         if not isinstance(messages, list) or not messages:
             raise LLMError(code="INVALID_INPUT", message="messages 不能为空")
 
@@ -215,7 +220,26 @@ class LlmClient:
                                 max_tokens=max_tokens,
                                 response=data,
                             )
-                        
+
+                        # 采集真实 token 用量
+                        _elapsed_ms = (time.perf_counter() - _request_start) * 1000.0
+                        usage = data.get("usage")
+                        if usage and isinstance(usage, dict):
+                            from riskmonitor_multiagent.llm.token_tracker import record_token_usage
+                            record_token_usage(
+                                model=used_model,
+                                prompt_tokens=usage.get("prompt_tokens", 0),
+                                completion_tokens=usage.get("completion_tokens", 0),
+                                total_tokens=usage.get("total_tokens", 0),
+                                latency_ms=_elapsed_ms,
+                                cached=False,
+                            )
+                        else:
+                            logger.warning(
+                                "LLM response missing usage field",
+                                extra={"model": used_model, "status": resp.status},
+                            )
+
                         return data
 
                 except LLMError as e:

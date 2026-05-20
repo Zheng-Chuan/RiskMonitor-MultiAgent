@@ -119,6 +119,37 @@ async def metrics_endpoint(request: Request) -> Response:
     return Response(content=metrics_text, media_type="text/plain; version=0.0.4")
 
 
+@mcp.custom_route("/api/llm/usage", methods=["GET"], include_in_schema=False)
+async def llm_usage_endpoint(request: Request) -> Response:
+    """LLM Token 用量摘要端点（内部监控，无需认证）.
+
+    返回滑动窗口内的 token 累计用量、按模型分组的明细，
+    以及当前的告警阈值与触发状态。tracker 为空（首次启动）时
+    会返回各项为 0 的安全默认值。
+    """
+    del request
+    try:
+        from riskmonitor_multiagent.llm.token_tracker import get_token_tracker
+
+        tracker = get_token_tracker()
+        summary = tracker.summary()
+    except Exception:  # pragma: no cover - 防御性兜底
+        summary = {
+            "window_hours": 1,
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "calls": 0,
+            "by_model": {},
+            "alert_threshold_hourly": 0,
+            "alert_threshold_daily": 0,
+            "hourly_alert_triggered": False,
+            "daily_alert_triggered": False,
+            "daily_total_tokens": 0,
+        }
+    return JSONResponse(summary)
+
+
 def _install_signal_handlers() -> None:
     # 在收到退出信号时, 先将就绪状态置为 not_ready.
     def _handler(signum: int, frame: object) -> None:
