@@ -256,14 +256,14 @@ class TestEndToEndBusinessFlow:
 
     def test_read_positions_compute_exposure_detect_breach(self, real_db_cursor, real_db_connection):
         """从真实DB读取头寸 → 计算敞口 → 检测breach."""
-        # 1. 从 DB 读取 Equities desk 的头寸
+        # 1. 从 DB 读取 Equity Derivatives desk 的头寸
         real_db_cursor.execute(
             "SELECT position_id, trader_id, desk, security_id, quantity, delta, currency "
             "FROM positions WHERE desk = %s",
-            ("Equities",),
+            ("Equity Derivatives",),
         )
         rows = real_db_cursor.fetchall()
-        assert len(rows) > 0, "Equities desk 应有测试数据"
+        assert len(rows) > 0, "Equity Derivatives desk 应有测试数据"
 
         # 2. 构造 positions 列表供 exposure 计算
         positions = []

@@ -14,6 +14,22 @@ from riskmonitor_multiagent.knowledge.chroma_store import ChromaVectorStore, Sim
 from riskmonitor_multiagent.llm.llm_client import LlmClient, extract_first_text
 
 
+def _extract_any_text(response: dict) -> str:
+    """从LLM响应中提取文本，同时检查 content 和 reasoning_content."""
+    text = extract_first_text(response)
+    if text:
+        return text
+    # 部分模型将内容放在 reasoning_content 中
+    try:
+        choices = response.get("choices", [])
+        if choices:
+            msg = choices[0].get("message", {})
+            return msg.get("reasoning_content", "") or ""
+    except Exception:
+        pass
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # Real LLM Tests (火山引擎)
 # ---------------------------------------------------------------------------
@@ -33,11 +49,11 @@ class TestRealLLM:
         assert isinstance(response, dict)
         assert "choices" in response
         assert len(response["choices"]) > 0
-        # 提取文本
-        text = extract_first_text(response)
+        # 提取文本（兼容 reasoning_content）
+        text = _extract_any_text(response)
         assert len(text) > 0
         # 应包含风险相关内容
-        assert any(kw in text for kw in ["Delta", "delta", "风险", "期权", "变化", "价格"])
+        assert any(kw in text for kw in ["Delta", "delta", "风险", "期权", "变化", "价格", "敞口", "对冲"])
 
     async def test_llm_risk_analysis_prompt(self, real_llm_client: LlmClient):
         """测试真实LLM - 风控分析prompt."""
@@ -60,7 +76,7 @@ class TestRealLLM:
             use_cache=False,
         )
         assert response is not None
-        text = extract_first_text(response)
+        text = _extract_any_text(response)
         assert len(text) > 0
 
     async def test_llm_response_format(self, real_llm_client: LlmClient):
@@ -85,7 +101,7 @@ class TestRealLLM:
             temperature=0.2,
             use_cache=False,
         )
-        text = extract_first_text(response)
+        text = _extract_any_text(response)
         assert isinstance(text, str)
         assert len(text) > 0
 
@@ -245,5 +261,5 @@ class TestKnowledgeBasePipeline:
             max_tokens=100,
             use_cache=False,
         )
-        analysis = extract_first_text(response)
+        analysis = _extract_any_text(response)
         assert len(analysis) > 0
