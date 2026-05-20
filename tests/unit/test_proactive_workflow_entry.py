@@ -320,8 +320,8 @@ async def test_orchestrator_commands_generate_receipts_and_critic_can_see(tmp_pa
             },
         )
 
-    monkeypatch.setattr("riskmonitor_multiagent.agents.roles.OrchestratorAgent.orchestrate", _fake_orchestrate)
-    monkeypatch.setattr("riskmonitor_multiagent.agents.roles.CriticAgent.review", _fake_critic_review)
+    monkeypatch.setattr("riskmonitor_multiagent.proactive_agents.roles.ProactiveOrchestratorAgent.orchestrate", _fake_orchestrate)
+    monkeypatch.setattr("riskmonitor_multiagent.proactive_agents.roles.ProactiveCriticAgent.review", _fake_critic_review)
     async def _fake_intent(self, *, task, metadata=None, max_tokens=None):
         return AgentResult(
             ok=True,
@@ -337,7 +337,7 @@ async def test_orchestrator_commands_generate_receipts_and_critic_can_see(tmp_pa
             },
         )
 
-    monkeypatch.setattr("riskmonitor_multiagent.agents.roles.IntentAgent.recognize", _fake_intent)
+    monkeypatch.setattr("riskmonitor_multiagent.proactive_agents.roles.ProactiveIntentAgent.recognize", _fake_intent)
 
     out = await run_proactive_workflow(
         task={"task_id": "task_cmd", "session_id": "s_cmd", "source": "human", "payload": {"content": "写入告警并检查指标"}}
@@ -401,8 +401,8 @@ async def test_orchestrator_unknown_step_kind_is_not_silent(tmp_path, monkeypatc
             },
         )
 
-    monkeypatch.setattr("riskmonitor_multiagent.agents.roles.OrchestratorAgent.orchestrate", _fake_orchestrate)
-    monkeypatch.setattr("riskmonitor_multiagent.agents.roles.CriticAgent.review", _fake_critic_review)
+    monkeypatch.setattr("riskmonitor_multiagent.proactive_agents.roles.ProactiveOrchestratorAgent.orchestrate", _fake_orchestrate)
+    monkeypatch.setattr("riskmonitor_multiagent.proactive_agents.roles.ProactiveCriticAgent.review", _fake_critic_review)
     async def _fake_intent(self, *, task, metadata=None, max_tokens=None):
         return AgentResult(
             ok=True,
@@ -418,7 +418,7 @@ async def test_orchestrator_unknown_step_kind_is_not_silent(tmp_path, monkeypatc
             },
         )
 
-    monkeypatch.setattr("riskmonitor_multiagent.agents.roles.IntentAgent.recognize", _fake_intent)
+    monkeypatch.setattr("riskmonitor_multiagent.proactive_agents.roles.ProactiveIntentAgent.recognize", _fake_intent)
     out = await run_proactive_workflow(task={"task_id": "task_unknown", "session_id": "s_u", "source": "human", "payload": {"content": "测试未知step"}})
     result = out if isinstance(out, dict) else {}
     errors = result.get("errors") if isinstance(result.get("errors"), list) else []
@@ -499,7 +499,7 @@ async def test_multi_intent_disambiguation_written_to_shared_memory(tmp_path, mo
             },
         )
 
-    monkeypatch.setattr("riskmonitor_multiagent.agents.roles.IntentAgent.recognize", _fake_intent)
+    monkeypatch.setattr("riskmonitor_multiagent.proactive_agents.roles.ProactiveIntentAgent.recognize", _fake_intent)
     out1 = await run_proactive_workflow(task={"task_id": "task_m1", "session_id": "s_m", "source": "human", "payload": {"content": "查头寸并可能写告警"}})
     out2 = await run_proactive_workflow(task={"task_id": "task_m2", "session_id": "s_m", "source": "human", "payload": {"content": "查头寸并可能写告警"}})
     i1 = ((out1.get("intent") or {}).get("intents"))

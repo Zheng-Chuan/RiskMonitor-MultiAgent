@@ -1,0 +1,584 @@
+{
+  "entries": [
+    {
+      "category": "step",
+      "payload": {
+        "approval_record": null,
+        "attempt_count": 1,
+        "command_id": null,
+        "error": null,
+        "failure_classification": null,
+        "finished_at_ms": 1779241483991.245,
+        "input_sources": [],
+        "kind": "delegate",
+        "latency_ms": 31.119140625,
+        "predecessors": [],
+        "receipt_command_ids": [],
+        "related_memory_ids": [],
+        "related_receipt_command_ids": [],
+        "requested_target_agent": "system_engineer",
+        "started_at_ms": 1779241483960.126,
+        "status": "completed",
+        "step_id": "s1",
+        "successors": [
+          "s3"
+        ],
+        "target_agent": "system_engineer",
+        "tool_name": null
+      },
+      "status": "completed",
+      "summary": {
+        "failure_classification": null,
+        "kind": "delegate",
+        "status": "completed",
+        "step_id": "s1"
+      },
+      "timestamp_ms": 1779241483960,
+      "trace_type": "task_graph_step"
+    },
+    {
+      "category": "step",
+      "payload": {
+        "approval_record": null,
+        "attempt_count": 1,
+        "command_id": null,
+        "error": null,
+        "failure_classification": null,
+        "finished_at_ms": 1779241483991.2551,
+        "input_sources": [],
+        "kind": "delegate",
+        "latency_ms": 31.109130859375,
+        "predecessors": [],
+        "receipt_command_ids": [],
+        "related_memory_ids": [],
+        "related_receipt_command_ids": [],
+        "requested_target_agent": "risk_analyst",
+        "started_at_ms": 1779241483960.146,
+        "status": "completed",
+        "step_id": "s2",
+        "successors": [
+          "s3"
+        ],
+        "target_agent": "risk_analyst",
+        "tool_name": null
+      },
+      "status": "completed",
+      "summary": {
+        "failure_classification": null,
+        "kind": "delegate",
+        "status": "completed",
+        "step_id": "s2"
+      },
+      "timestamp_ms": 1779241483960,
+      "trace_type": "task_graph_step"
+    },
+    {
+      "category": "step",
+      "payload": {
+        "approval_record": null,
+        "attempt_count": 1,
+        "command_id": null,
+        "error": null,
+        "failure_classification": null,
+        "finished_at_ms": 1779241483998.941,
+        "input_sources": [
+          "s1",
+          "s2"
+        ],
+        "kind": "finalize",
+        "latency_ms": 0.0068359375,
+        "predecessors": [
+          "s1",
+          "s2"
+        ],
+        "receipt_command_ids": [],
+        "related_memory_ids": [],
+        "related_receipt_command_ids": [],
+        "requested_target_agent": null,
+        "started_at_ms": 1779241483998.934,
+        "status": "completed",
+        "step_id": "s3",
+        "successors": [],
+        "target_agent": null,
+        "tool_name": null
+      },
+      "status": "completed",
+      "summary": {
+        "failure_classification": null,
+        "kind": "finalize",
+        "status": "completed",
+        "step_id": "s3"
+      },
+      "timestamp_ms": 1779241483998,
+      "trace_type": "task_graph_step"
+    },
+    {
+      "category": "task",
+      "payload": {
+        "entry_type": "user_task",
+        "metadata": {
+          "source": "human"
+        },
+        "route_decision": {},
+        "run_id": "1779241483-dc04a5ac-run",
+        "schema_version": "run_context.v1",
+        "task_graph_schema_version": "task_graph.v1",
+        "task_id": "parallel-1",
+        "trigger_event_id": null,
+        "trigger_evidence": {},
+        "trigger_reason": null
+      },
+      "status": "recorded",
+      "summary": {
+        "entry_type": "user_task",
+        "task_id": "parallel-1",
+        "trigger_event_id": null
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "task"
+    },
+    {
+      "category": "version_snapshot",
+      "payload": {
+        "benchmark_config": {},
+        "model": "ark-code-latest",
+        "policy_version": "policy.v1",
+        "prompt_versions": {
+          "critic": "critic_prompt.v1",
+          "intent": "intent_prompt.v1",
+          "manager": "manager_prompt.v1",
+          "orchestrator": "orchestrator_prompt.v1",
+          "risk_analyst": "risk_analyst_prompt.v1",
+          "system_engineer": "system_engineer_prompt.v1"
+        },
+        "toolset_version": "tool_registry.v1"
+      },
+      "status": "recorded",
+      "summary": {
+        "model": "ark-code-latest",
+        "policy_version": "policy.v1",
+        "toolset_version": "tool_registry.v1"
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "version_snapshot"
+    },
+    {
+      "category": "plan",
+      "payload": {
+        "primary_intent_type": "parallel_analysis"
+      },
+      "status": "recorded",
+      "summary": {
+        "primary_intent_type": "parallel_analysis"
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "intent"
+    },
+    {
+      "category": "plan",
+      "payload": {
+        "plan_steps": [
+          {
+            "instruction": "分析系统影响",
+            "kind": "delegate",
+            "reason": "并行做系统侧分析",
+            "step_id": "s1",
+            "target_agent": "system_engineer"
+          },
+          {
+            "instruction": "分析业务影响",
+            "kind": "delegate",
+            "reason": "并行做业务侧分析",
+            "step_id": "s2",
+            "target_agent": "risk_analyst"
+          },
+          {
+            "instruction": "输出结论",
+            "kind": "finalize",
+            "reason": "汇总双分支结果",
+            "step_id": "s3"
+          }
+        ]
+      },
+      "status": "recorded",
+      "summary": {
+        "nodes": 3,
+        "plan_steps": 3
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "orchestrator_plan"
+    },
+    {
+      "category": "plan",
+      "payload": {
+        "issues": [],
+        "ok": true,
+        "run_summary": {
+          "key_points": [],
+          "receipt_command_ids": [],
+          "text": "critic_plan_review"
+        },
+        "suggested_fixes": []
+      },
+      "status": "recorded",
+      "summary": {
+        "issues": 0,
+        "ok": true
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "critic_plan"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "few_shot_example_count": 0,
+        "few_shot_examples": [],
+        "hit_count": 0,
+        "memory_cross_talk_rate": 0.0,
+        "memory_hits": [],
+        "private_memory": {
+          "critic": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "critic"
+          },
+          "orchestrator": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "orchestrator"
+          },
+          "risk_analyst": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "risk_analyst"
+          },
+          "system_engineer": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "system_engineer"
+          }
+        },
+        "role_drift_rate": 0.0,
+        "shared_board": {
+          "by_role": {},
+          "item_count": 0,
+          "latest": []
+        },
+        "texts": []
+      },
+      "status": "recorded",
+      "summary": {
+        "keys": [
+          "few_shot_example_count",
+          "few_shot_examples",
+          "hit_count",
+          "memory_cross_talk_rate",
+          "memory_hits"
+        ]
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "planning_memory"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "key_points": [],
+        "receipt_command_ids": [],
+        "session_id": null,
+        "task_id": "parallel-1",
+        "text": "critic_final_review"
+      },
+      "status": "recorded",
+      "summary": {
+        "keys": [
+          "key_points",
+          "receipt_command_ids",
+          "session_id",
+          "task_id",
+          "text"
+        ]
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "run_summary"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "agent_id": "critic",
+        "confidence": 1.0,
+        "content": {
+          "key_points": [],
+          "receipt_command_ids": [],
+          "task_id": "parallel-1",
+          "text": "lesson based on summary critic_final_review"
+        },
+        "created_by": "critic",
+        "entry_id": "mem_a4f2a4403ba54361bbab51bd814dc9e1",
+        "kind": "lesson",
+        "memory_type": "procedural",
+        "run_id": "1779241483-dc04a5ac-run",
+        "schema_version": "memory_entry.v1",
+        "scope": "shared",
+        "session_id": null,
+        "source": "critic_final_review",
+        "tags": [
+          "lesson",
+          "procedure"
+        ],
+        "trace_ref": {
+          "run_id": "1779241483-dc04a5ac-run"
+        },
+        "ts_ms": 1779241484001
+      },
+      "status": "recorded",
+      "summary": {
+        "kind": "lesson",
+        "memory_type": "procedural"
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "procedural_lesson"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "agent_id": "critic",
+        "agent_perspective": "quality_gate",
+        "agent_role": "critic",
+        "confidence": 0.9,
+        "content": {
+          "agent_perspective": "quality_gate",
+          "applicable_conditions": [
+            "需要系统侧和业务侧并行分析"
+          ],
+          "decision_pattern": "use receipts to validate final answer",
+          "evidence_refs": [
+            "run_trace:1779241483-dc04a5ac-run",
+            "final_output:1779241483-dc04a5ac-run"
+          ],
+          "failure_boundary": [
+            "low_evidence_or_low_confidence_should_not_reuse"
+          ],
+          "snapshot_text": "decision_pattern=use receipts to validate final answer conditions=需要系统侧和业务侧并行分析 boundary=low_evidence_or_low_confidence_should_not_reuse",
+          "text": "critic_final_review"
+        },
+        "created_by": "critic",
+        "entry_id": "mem_c3c4b498843e4c0495cda42e1c8a1c8d",
+        "kind": "semantic_case",
+        "memory_type": "semantic",
+        "run_id": "1779241483-dc04a5ac-run",
+        "schema_version": "memory_entry.v1",
+        "scope": "shared",
+        "session_id": null,
+        "source": "critic_confidence_policy",
+        "tags": [
+          "experience",
+          "few_shot",
+          "critic"
+        ],
+        "task_phase": "final_review",
+        "trace_ref": {
+          "run_id": "1779241483-dc04a5ac-run"
+        },
+        "ts_ms": 1779241484002
+      },
+      "status": "recorded",
+      "summary": {
+        "kind": "semantic_case",
+        "memory_type": "semantic"
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "long_term_experience"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "accepted": true,
+        "confidence": 0.9,
+        "evidence_refs": [
+          "run_trace:1779241483-dc04a5ac-run",
+          "final_output:1779241483-dc04a5ac-run"
+        ],
+        "reasons": [
+          "accepted"
+        ],
+        "threshold": 0.85
+      },
+      "status": "recorded",
+      "summary": {
+        "accepted": true,
+        "confidence": 0.9
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "memory_policy"
+    },
+    {
+      "category": "final",
+      "payload": {
+        "errors": [],
+        "final_output": {
+          "critic_run_summary": {
+            "key_points": [],
+            "receipt_command_ids": [],
+            "text": "critic_final_review"
+          },
+          "finalize_reason": "汇总双分支结果",
+          "receipt_command_ids": [],
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "summary": "系统侧确认链路正常\n业务侧确认敞口可控",
+          "task_graph_completed": true
+        },
+        "task_graph_execution": {
+          "approval_records": [],
+          "blocked_step_id": null,
+          "completed_steps": [
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "delegate_outputs": {
+            "risk_analyst": {
+              "report": "业务侧确认敞口可控"
+            },
+            "system_engineer": {
+              "summary": "系统侧确认链路正常"
+            }
+          },
+          "errors": [],
+          "failed_step_id": null,
+          "node_outputs": {
+            "s1": {
+              "summary": "系统侧确认链路正常"
+            },
+            "s2": {
+              "report": "业务侧确认敞口可控"
+            },
+            "s3": {
+              "finalize_reason": "汇总双分支结果",
+              "receipt_command_ids": [],
+              "sources": [
+                "s1",
+                "s2"
+              ],
+              "summary": "系统侧确认链路正常\n业务侧确认敞口可控",
+              "task_graph_completed": true
+            }
+          },
+          "receipts": [],
+          "resume_history": [],
+          "resume_ready": false,
+          "retry_records": [],
+          "status": "completed",
+          "trace": [
+            {
+              "approval_record": null,
+              "attempt_count": 1,
+              "command_id": null,
+              "error": null,
+              "failure_classification": null,
+              "finished_at_ms": 1779241483991.245,
+              "input_sources": [],
+              "kind": "delegate",
+              "latency_ms": 31.119140625,
+              "receipt_command_ids": [],
+              "requested_target_agent": "system_engineer",
+              "started_at_ms": 1779241483960.126,
+              "status": "completed",
+              "step_id": "s1",
+              "target_agent": "system_engineer",
+              "tool_name": null
+            },
+            {
+              "approval_record": null,
+              "attempt_count": 1,
+              "command_id": null,
+              "error": null,
+              "failure_classification": null,
+              "finished_at_ms": 1779241483991.2551,
+              "input_sources": [],
+              "kind": "delegate",
+              "latency_ms": 31.109130859375,
+              "receipt_command_ids": [],
+              "requested_target_agent": "risk_analyst",
+              "started_at_ms": 1779241483960.146,
+              "status": "completed",
+              "step_id": "s2",
+              "target_agent": "risk_analyst",
+              "tool_name": null
+            },
+            {
+              "approval_record": null,
+              "attempt_count": 1,
+              "command_id": null,
+              "error": null,
+              "failure_classification": null,
+              "finished_at_ms": 1779241483998.941,
+              "input_sources": [
+                "s1",
+                "s2"
+              ],
+              "kind": "finalize",
+              "latency_ms": 0.0068359375,
+              "receipt_command_ids": [],
+              "requested_target_agent": null,
+              "started_at_ms": 1779241483998.934,
+              "status": "completed",
+              "step_id": "s3",
+              "target_agent": null,
+              "tool_name": null
+            }
+          ]
+        }
+      },
+      "status": "completed",
+      "summary": {
+        "latency_ms": 48.6598014831543,
+        "status": "completed",
+        "tokens_total": null
+      },
+      "timestamp_ms": 1779241484007,
+      "trace_type": "run_finished"
+    }
+  ],
+  "entry_type": "user_task",
+  "failure_summary": {},
+  "run_id": "1779241483-dc04a5ac-run",
+  "schema_version": "run_trace.v2",
+  "status": "completed",
+  "summary": {
+    "approval_count": 0,
+    "entry_count": 14,
+    "event_count": 0,
+    "memory_entry_count": 5,
+    "receipt_count": 0,
+    "trace_counts": {
+      "final": 1,
+      "memory": 5,
+      "plan": 3,
+      "step": 3,
+      "task": 1,
+      "version_snapshot": 1
+    }
+  },
+  "task_id": "parallel-1",
+  "version_snapshot": {
+    "benchmark_config": {},
+    "model": "ark-code-latest",
+    "policy_version": "policy.v1",
+    "prompt_versions": {
+      "critic": "critic_prompt.v1",
+      "intent": "intent_prompt.v1",
+      "manager": "manager_prompt.v1",
+      "orchestrator": "orchestrator_prompt.v1",
+      "risk_analyst": "risk_analyst_prompt.v1",
+      "system_engineer": "system_engineer_prompt.v1"
+    },
+    "toolset_version": "tool_registry.v1"
+  }
+}

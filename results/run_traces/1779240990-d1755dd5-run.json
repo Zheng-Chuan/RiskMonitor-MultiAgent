@@ -1,0 +1,488 @@
+{
+  "entries": [
+    {
+      "category": "step",
+      "payload": {
+        "approval_record": null,
+        "attempt_count": 1,
+        "command_id": null,
+        "error": "unknown_step_kind:mystery_kind",
+        "failure_classification": null,
+        "finished_at_ms": 1779240990968.631,
+        "input_sources": [],
+        "kind": "mystery_kind",
+        "latency_ms": 0.003173828125,
+        "predecessors": [],
+        "receipt_command_ids": [],
+        "related_memory_ids": [],
+        "related_receipt_command_ids": [],
+        "requested_target_agent": null,
+        "started_at_ms": 1779240990968.628,
+        "status": "failed",
+        "step_id": "s1",
+        "successors": [],
+        "target_agent": null,
+        "tool_name": null
+      },
+      "status": "failed",
+      "summary": {
+        "failure_classification": null,
+        "kind": "mystery_kind",
+        "status": "failed",
+        "step_id": "s1"
+      },
+      "timestamp_ms": 1779240990968,
+      "trace_type": "task_graph_step"
+    },
+    {
+      "category": "task",
+      "payload": {
+        "entry_type": "user_task",
+        "metadata": {
+          "source": "human"
+        },
+        "route_decision": {},
+        "run_id": "1779240990-d1755dd5-run",
+        "schema_version": "run_context.v1",
+        "task_graph_schema_version": "task_graph.v1",
+        "task_id": "task_unknown",
+        "trigger_event_id": null,
+        "trigger_evidence": {},
+        "trigger_reason": null
+      },
+      "status": "recorded",
+      "summary": {
+        "entry_type": "user_task",
+        "task_id": "task_unknown",
+        "trigger_event_id": null
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "task"
+    },
+    {
+      "category": "version_snapshot",
+      "payload": {
+        "benchmark_config": {},
+        "model": "ark-code-latest",
+        "policy_version": "policy.v1",
+        "prompt_versions": {
+          "critic": "critic_prompt.v1",
+          "intent": "intent_prompt.v1",
+          "manager": "manager_prompt.v1",
+          "orchestrator": "orchestrator_prompt.v1",
+          "risk_analyst": "risk_analyst_prompt.v1",
+          "system_engineer": "system_engineer_prompt.v1"
+        },
+        "toolset_version": "tool_registry.v1"
+      },
+      "status": "recorded",
+      "summary": {
+        "model": "ark-code-latest",
+        "policy_version": "policy.v1",
+        "toolset_version": "tool_registry.v1"
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "version_snapshot"
+    },
+    {
+      "category": "plan",
+      "payload": {
+        "degraded": false,
+        "disambiguation": {
+          "explanation": "",
+          "has_multiple": false,
+          "notes": []
+        },
+        "evidence": {
+          "fields": [
+            "task.payload.content"
+          ]
+        },
+        "intents": [
+          {
+            "confidence": 0.4,
+            "intent_type": "unknown",
+            "slots": {}
+          }
+        ],
+        "permission_requirements": {
+          "allowed_tools": null,
+          "requires_human_approval": false,
+          "side_effects": false
+        },
+        "primary_intent_type": "unknown",
+        "risk_level": "LOW",
+        "schema_version": "intent_output.v2"
+      },
+      "status": "recorded",
+      "summary": {
+        "primary_intent_type": "unknown"
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "intent"
+    },
+    {
+      "category": "plan",
+      "payload": {
+        "commands": null,
+        "degraded": false,
+        "evidence": {
+          "fields": [
+            "task.payload.content"
+          ]
+        },
+        "intent": {
+          "confidence": 0.2,
+          "slots": {},
+          "type": "unknown"
+        },
+        "plan_steps": [
+          {
+            "kind": "mystery_kind",
+            "reason": "测试未知分支",
+            "step_id": "s1"
+          }
+        ],
+        "schema_version": "orchestrator_output.v1"
+      },
+      "status": "recorded",
+      "summary": {
+        "nodes": 1,
+        "plan_steps": 1
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "orchestrator_plan"
+    },
+    {
+      "category": "plan",
+      "payload": {
+        "evidence": {
+          "fields": [
+            "task.payload.content"
+          ]
+        },
+        "issues": [],
+        "ok": true,
+        "require_human_approval": false,
+        "risk_level": "LOW",
+        "run_summary": {
+          "key_points": [],
+          "receipt_command_ids": [],
+          "text": "ok"
+        },
+        "schema_version": "critic_review.v1",
+        "suggested_fixes": []
+      },
+      "status": "recorded",
+      "summary": {
+        "issues": 0,
+        "ok": true
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "critic_plan"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "few_shot_example_count": 0,
+        "few_shot_examples": [],
+        "hit_count": 0,
+        "memory_cross_talk_rate": 0.0,
+        "memory_hits": [],
+        "private_memory": {
+          "critic": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "critic"
+          },
+          "orchestrator": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "orchestrator"
+          },
+          "risk_analyst": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "risk_analyst"
+          },
+          "system_engineer": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "system_engineer"
+          }
+        },
+        "role_drift_rate": 0.0,
+        "shared_board": {
+          "by_role": {},
+          "item_count": 0,
+          "latest": []
+        },
+        "texts": []
+      },
+      "status": "recorded",
+      "summary": {
+        "keys": [
+          "few_shot_example_count",
+          "few_shot_examples",
+          "hit_count",
+          "memory_cross_talk_rate",
+          "memory_hits"
+        ]
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "planning_memory"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "key_points": [],
+        "receipt_command_ids": [],
+        "session_id": "s_u",
+        "task_id": "task_unknown",
+        "text": "ok"
+      },
+      "status": "recorded",
+      "summary": {
+        "keys": [
+          "key_points",
+          "receipt_command_ids",
+          "session_id",
+          "task_id",
+          "text"
+        ]
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "run_summary"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "agent_id": "critic",
+        "confidence": 1.0,
+        "content": {
+          "key_points": [],
+          "receipt_command_ids": [],
+          "task_id": "task_unknown",
+          "text": "lesson based on summary ok"
+        },
+        "created_by": "critic",
+        "entry_id": "mem_5fc14bb939d5422d9015400b01dff894",
+        "kind": "lesson",
+        "memory_type": "procedural",
+        "run_id": "1779240990-d1755dd5-run",
+        "schema_version": "memory_entry.v1",
+        "scope": "shared",
+        "session_id": "s_u",
+        "source": "critic_final_review",
+        "tags": [
+          "lesson",
+          "procedure"
+        ],
+        "trace_ref": {
+          "run_id": "1779240990-d1755dd5-run"
+        },
+        "ts_ms": 1779240990972
+      },
+      "status": "recorded",
+      "summary": {
+        "kind": "lesson",
+        "memory_type": "procedural"
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "procedural_lesson"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "agent_id": "critic",
+        "agent_perspective": "quality_gate",
+        "agent_role": "critic",
+        "confidence": 0.9,
+        "content": {
+          "agent_perspective": "quality_gate",
+          "applicable_conditions": [
+            "测试未知step"
+          ],
+          "decision_pattern": "use receipts to validate final answer",
+          "evidence_refs": [
+            "run_trace:1779240990-d1755dd5-run",
+            "final_output:1779240990-d1755dd5-run"
+          ],
+          "failure_boundary": [
+            "low_evidence_or_low_confidence_should_not_reuse"
+          ],
+          "snapshot_text": "decision_pattern=use receipts to validate final answer conditions=测试未知step boundary=low_evidence_or_low_confidence_should_not_reuse",
+          "text": "ok"
+        },
+        "created_by": "critic",
+        "entry_id": "mem_617c7bc1f6184e4fa2df9dc453bb406d",
+        "kind": "semantic_case",
+        "memory_type": "semantic",
+        "run_id": "1779240990-d1755dd5-run",
+        "schema_version": "memory_entry.v1",
+        "scope": "shared",
+        "session_id": "s_u",
+        "source": "critic_confidence_policy",
+        "tags": [
+          "experience",
+          "few_shot",
+          "critic"
+        ],
+        "task_phase": "final_review",
+        "trace_ref": {
+          "run_id": "1779240990-d1755dd5-run"
+        },
+        "ts_ms": 1779240990973
+      },
+      "status": "recorded",
+      "summary": {
+        "kind": "semantic_case",
+        "memory_type": "semantic"
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "long_term_experience"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "accepted": true,
+        "confidence": 0.9,
+        "evidence_refs": [
+          "run_trace:1779240990-d1755dd5-run",
+          "final_output:1779240990-d1755dd5-run"
+        ],
+        "reasons": [
+          "accepted"
+        ],
+        "threshold": 0.85
+      },
+      "status": "recorded",
+      "summary": {
+        "accepted": true,
+        "confidence": 0.9
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "memory_policy"
+    },
+    {
+      "category": "final",
+      "payload": {
+        "errors": [
+          "unknown_step_kind:mystery_kind"
+        ],
+        "final_output": {
+          "critic_run_summary": {
+            "key_points": [],
+            "receipt_command_ids": [],
+            "text": "ok"
+          },
+          "finalize_reason": "自动生成最终结论",
+          "receipt_command_ids": [],
+          "sources": [],
+          "summary": "测试未知step",
+          "task_graph_completed": true
+        },
+        "task_graph_execution": {
+          "approval_records": [],
+          "blocked_step_id": null,
+          "completed_steps": [],
+          "delegate_outputs": {},
+          "errors": [
+            "unknown_step_kind:mystery_kind"
+          ],
+          "failed_step_id": "s1",
+          "node_outputs": {},
+          "receipts": [],
+          "resume_history": [],
+          "resume_ready": true,
+          "retry_records": [
+            {
+              "attempt": 1,
+              "error": "unknown_step_kind:mystery_kind",
+              "failure_classification": "runtime",
+              "retry_scheduled": false,
+              "step_id": "s1"
+            }
+          ],
+          "status": "failed",
+          "trace": [
+            {
+              "approval_record": null,
+              "attempt_count": 1,
+              "command_id": null,
+              "error": "unknown_step_kind:mystery_kind",
+              "failure_classification": null,
+              "finished_at_ms": 1779240990968.631,
+              "input_sources": [],
+              "kind": "mystery_kind",
+              "latency_ms": 0.003173828125,
+              "receipt_command_ids": [],
+              "requested_target_agent": null,
+              "started_at_ms": 1779240990968.628,
+              "status": "failed",
+              "step_id": "s1",
+              "target_agent": null,
+              "tool_name": null
+            }
+          ]
+        }
+      },
+      "status": "failed",
+      "summary": {
+        "latency_ms": 14.847993850708008,
+        "status": "failed",
+        "tokens_total": null
+      },
+      "timestamp_ms": 1779240990976,
+      "trace_type": "run_finished"
+    }
+  ],
+  "entry_type": "user_task",
+  "failure_summary": {
+    "command_id": null,
+    "error": "unknown_step_kind:mystery_kind",
+    "failure_classification": null,
+    "related_memory_ids": [],
+    "related_receipt_command_ids": [],
+    "run_status": "failed",
+    "status": "failed",
+    "step_id": "s1"
+  },
+  "run_id": "1779240990-d1755dd5-run",
+  "schema_version": "run_trace.v2",
+  "status": "failed",
+  "summary": {
+    "approval_count": 0,
+    "entry_count": 12,
+    "event_count": 0,
+    "memory_entry_count": 5,
+    "receipt_count": 0,
+    "trace_counts": {
+      "final": 1,
+      "memory": 5,
+      "plan": 3,
+      "step": 1,
+      "task": 1,
+      "version_snapshot": 1
+    }
+  },
+  "task_id": "task_unknown",
+  "version_snapshot": {
+    "benchmark_config": {},
+    "model": "ark-code-latest",
+    "policy_version": "policy.v1",
+    "prompt_versions": {
+      "critic": "critic_prompt.v1",
+      "intent": "intent_prompt.v1",
+      "manager": "manager_prompt.v1",
+      "orchestrator": "orchestrator_prompt.v1",
+      "risk_analyst": "risk_analyst_prompt.v1",
+      "system_engineer": "system_engineer_prompt.v1"
+    },
+    "toolset_version": "tool_registry.v1"
+  }
+}

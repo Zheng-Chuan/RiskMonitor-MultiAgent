@@ -1,0 +1,273 @@
+{
+  "entries": [
+    {
+      "category": "task",
+      "payload": {
+        "entry_type": "system_event",
+        "metadata": {
+          "event_type": "task_created",
+          "source_agent": "monitor"
+        },
+        "route_decision": {
+          "candidate_agents": [
+            "orchestrator"
+          ],
+          "conflict_id": null,
+          "conflict_type": null,
+          "context_summary": {
+            "entry_type": "system_event",
+            "run_id": "1779240990-563b3c50-run",
+            "task_id": "evt_task_001"
+          },
+          "decision_id": "moderator_1779240990840",
+          "decision_source": "rule",
+          "discarded_candidates": [],
+          "discarded_path_reason": "single_candidate:只有一个候选 agent",
+          "event_id": "evt_602d2017cc52",
+          "event_type": "task_created",
+          "reason": "只有一个候选 agent",
+          "rule_name": "single_candidate",
+          "selected_agent": "orchestrator",
+          "timestamp_ms": 1779240990840
+        },
+        "run_id": "1779240990-563b3c50-run",
+        "schema_version": "run_context.v1",
+        "task_graph_schema_version": null,
+        "task_id": null,
+        "trigger_event_id": "evt_602d2017cc52",
+        "trigger_evidence": {
+          "event_type": "task_created",
+          "payload": {
+            "content": "请处理告警事件",
+            "task_id": "evt_task_001"
+          },
+          "source_agent": "monitor"
+        },
+        "trigger_reason": "只有一个候选 agent"
+      },
+      "status": "recorded",
+      "summary": {
+        "entry_type": "system_event",
+        "task_id": null,
+        "trigger_event_id": "evt_602d2017cc52"
+      },
+      "timestamp_ms": 1779240990840,
+      "trace_type": "task"
+    },
+    {
+      "category": "version_snapshot",
+      "payload": {
+        "benchmark_config": {},
+        "model": "ark-code-latest",
+        "policy_version": "policy.v1",
+        "prompt_versions": {
+          "critic": "critic_prompt.v1",
+          "intent": "intent_prompt.v1",
+          "manager": "manager_prompt.v1",
+          "orchestrator": "orchestrator_prompt.v1",
+          "risk_analyst": "risk_analyst_prompt.v1",
+          "system_engineer": "system_engineer_prompt.v1"
+        },
+        "toolset_version": "tool_registry.v1"
+      },
+      "status": "recorded",
+      "summary": {
+        "model": "ark-code-latest",
+        "policy_version": "policy.v1",
+        "toolset_version": "tool_registry.v1"
+      },
+      "timestamp_ms": 1779240990840,
+      "trace_type": "version_snapshot"
+    },
+    {
+      "category": "message",
+      "payload": {
+        "causation_id": null,
+        "correlation_id": null,
+        "event_id": "evt_602d2017cc52",
+        "event_type": "task_created",
+        "payload": {
+          "content": "请处理告警事件",
+          "task_id": "evt_task_001"
+        },
+        "priority": "normal",
+        "requires_ack": false,
+        "schema_version": "event.v1",
+        "source_agent": "monitor",
+        "target_agent": null,
+        "timestamp_ms": 1779240990840
+      },
+      "status": "recorded",
+      "summary": {
+        "event_id": "evt_602d2017cc52",
+        "event_type": "task_created",
+        "source_agent": "monitor"
+      },
+      "timestamp_ms": 1779240990840,
+      "trace_type": "source_event"
+    },
+    {
+      "category": "message",
+      "payload": {
+        "causation_id": null,
+        "correlation_id": null,
+        "event_id": "evt_602d2017cc52",
+        "event_type": "task_created",
+        "payload": {
+          "content": "请处理告警事件",
+          "task_id": "evt_task_001"
+        },
+        "priority": "normal",
+        "requires_ack": false,
+        "schema_version": "event.v1",
+        "source_agent": "monitor",
+        "target_agent": null,
+        "timestamp_ms": 1779240990840
+      },
+      "status": "recorded",
+      "summary": {
+        "event_id": "evt_602d2017cc52",
+        "event_type": "task_created"
+      },
+      "timestamp_ms": 1779240990840,
+      "trace_type": "event_history"
+    },
+    {
+      "category": "message",
+      "payload": {
+        "causation_id": "evt_602d2017cc52",
+        "correlation_id": "evt_602d2017cc52",
+        "event_id": "evt_00f34c668aa3",
+        "event_type": "moderator_decision",
+        "payload": {
+          "candidate_agents": [
+            "orchestrator"
+          ],
+          "conflict_id": null,
+          "conflict_type": null,
+          "context_summary": {
+            "entry_type": "system_event",
+            "run_id": "1779240990-563b3c50-run",
+            "task_id": "evt_task_001"
+          },
+          "decision_id": "moderator_1779240990840",
+          "decision_source": "rule",
+          "discarded_candidates": [],
+          "discarded_path_reason": "single_candidate:只有一个候选 agent",
+          "event_id": "evt_602d2017cc52",
+          "event_type": "task_created",
+          "reason": "只有一个候选 agent",
+          "rule_name": "single_candidate",
+          "selected_agent": "orchestrator",
+          "timestamp_ms": 1779240990840
+        },
+        "priority": "normal",
+        "requires_ack": false,
+        "schema_version": "event.v1",
+        "source_agent": "moderator",
+        "target_agent": "orchestrator",
+        "timestamp_ms": 1779240990840
+      },
+      "status": "recorded",
+      "summary": {
+        "event_id": "evt_00f34c668aa3",
+        "event_type": "moderator_decision"
+      },
+      "timestamp_ms": 1779240990840,
+      "trace_type": "event_history"
+    },
+    {
+      "category": "message",
+      "payload": {
+        "delivery_errors": [],
+        "event_id": "evt_602d2017cc52",
+        "event_type": "task_created",
+        "source_agent": "monitor",
+        "status": "accepted",
+        "subscriber_count": 0,
+        "target_agent": null,
+        "timestamp_ms": 1779240990840,
+        "trace_id": "trace_31011f8add10"
+      },
+      "status": "accepted",
+      "summary": {
+        "event_id": "evt_602d2017cc52",
+        "event_type": "task_created",
+        "subscriber_count": 0
+      },
+      "timestamp_ms": 1779240990840,
+      "trace_type": "event_trace"
+    },
+    {
+      "category": "message",
+      "payload": {
+        "delivery_errors": [],
+        "event_id": "evt_00f34c668aa3",
+        "event_type": "moderator_decision",
+        "source_agent": "moderator",
+        "status": "accepted",
+        "subscriber_count": 0,
+        "target_agent": "orchestrator",
+        "timestamp_ms": 1779240990840,
+        "trace_id": "trace_93a4291c618e"
+      },
+      "status": "accepted",
+      "summary": {
+        "event_id": "evt_00f34c668aa3",
+        "event_type": "moderator_decision",
+        "subscriber_count": 0
+      },
+      "timestamp_ms": 1779240990840,
+      "trace_type": "event_trace"
+    },
+    {
+      "category": "final",
+      "payload": {
+        "errors": [],
+        "final_output": {},
+        "task_graph_execution": {}
+      },
+      "status": "completed",
+      "summary": {
+        "latency_ms": null,
+        "status": "completed",
+        "tokens_total": null
+      },
+      "timestamp_ms": 1779240990840,
+      "trace_type": "run_finished"
+    }
+  ],
+  "entry_type": "system_event",
+  "failure_summary": {},
+  "run_id": "1779240990-563b3c50-run",
+  "schema_version": "run_trace.v2",
+  "status": "completed",
+  "summary": {
+    "approval_count": 0,
+    "entry_count": 8,
+    "event_count": 2,
+    "memory_entry_count": 0,
+    "receipt_count": 0,
+    "trace_counts": {
+      "final": 1,
+      "message": 5,
+      "task": 1,
+      "version_snapshot": 1
+    }
+  },
+  "task_id": null,
+  "version_snapshot": {
+    "benchmark_config": {},
+    "model": "ark-code-latest",
+    "policy_version": "policy.v1",
+    "prompt_versions": {
+      "critic": "critic_prompt.v1",
+      "intent": "intent_prompt.v1",
+      "manager": "manager_prompt.v1",
+      "orchestrator": "orchestrator_prompt.v1",
+      "risk_analyst": "risk_analyst_prompt.v1",
+      "system_engineer": "system_engineer_prompt.v1"
+    },
+    "toolset_version": "tool_registry.v1"
+  }
+}

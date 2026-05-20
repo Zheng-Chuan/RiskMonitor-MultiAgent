@@ -1,0 +1,798 @@
+{
+  "entries": [
+    {
+      "category": "step",
+      "payload": {
+        "approval_record": null,
+        "attempt_count": 1,
+        "command_id": "cmd-63d6f663f075",
+        "error": null,
+        "failure_classification": null,
+        "finished_at_ms": 1779241483780.1963,
+        "input_sources": [],
+        "kind": "tool_call",
+        "latency_ms": 0.191162109375,
+        "predecessors": [],
+        "receipt_command_ids": [
+          "cmd-63d6f663f075"
+        ],
+        "related_memory_ids": [],
+        "related_receipt_command_ids": [
+          "cmd-63d6f663f075"
+        ],
+        "requested_target_agent": null,
+        "started_at_ms": 1779241483780.0051,
+        "status": "completed",
+        "step_id": "s1",
+        "successors": [
+          "s2"
+        ],
+        "target_agent": null,
+        "tool_name": "collect_metrics"
+      },
+      "status": "completed",
+      "summary": {
+        "failure_classification": null,
+        "kind": "tool_call",
+        "status": "completed",
+        "step_id": "s1"
+      },
+      "timestamp_ms": 1779241483780,
+      "trace_type": "task_graph_step"
+    },
+    {
+      "category": "step",
+      "payload": {
+        "approval_record": null,
+        "attempt_count": 1,
+        "command_id": null,
+        "error": null,
+        "failure_classification": null,
+        "finished_at_ms": 1779241483780.9392,
+        "input_sources": [
+          "s1"
+        ],
+        "kind": "finalize",
+        "latency_ms": 0.00537109375,
+        "predecessors": [
+          "s1"
+        ],
+        "receipt_command_ids": [],
+        "related_memory_ids": [],
+        "related_receipt_command_ids": [],
+        "requested_target_agent": null,
+        "started_at_ms": 1779241483780.9338,
+        "status": "completed",
+        "step_id": "s2",
+        "successors": [],
+        "target_agent": null,
+        "tool_name": null
+      },
+      "status": "completed",
+      "summary": {
+        "failure_classification": null,
+        "kind": "finalize",
+        "status": "completed",
+        "step_id": "s2"
+      },
+      "timestamp_ms": 1779241483780,
+      "trace_type": "task_graph_step"
+    },
+    {
+      "category": "task",
+      "payload": {
+        "entry_type": "user_task",
+        "metadata": {
+          "source": "human"
+        },
+        "route_decision": {},
+        "run_id": "1779241483-7ceedb7e-run",
+        "schema_version": "run_context.v1",
+        "task_graph_schema_version": "task_graph.v1",
+        "task_id": "task_cmd",
+        "trigger_event_id": null,
+        "trigger_evidence": {},
+        "trigger_reason": null
+      },
+      "status": "recorded",
+      "summary": {
+        "entry_type": "user_task",
+        "task_id": "task_cmd",
+        "trigger_event_id": null
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "task"
+    },
+    {
+      "category": "version_snapshot",
+      "payload": {
+        "benchmark_config": {},
+        "model": "ark-code-latest",
+        "policy_version": "policy.v1",
+        "prompt_versions": {
+          "critic": "critic_prompt.v1",
+          "intent": "intent_prompt.v1",
+          "manager": "manager_prompt.v1",
+          "orchestrator": "orchestrator_prompt.v1",
+          "risk_analyst": "risk_analyst_prompt.v1",
+          "system_engineer": "system_engineer_prompt.v1"
+        },
+        "toolset_version": "tool_registry.v1"
+      },
+      "status": "recorded",
+      "summary": {
+        "model": "ark-code-latest",
+        "policy_version": "policy.v1",
+        "toolset_version": "tool_registry.v1"
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "version_snapshot"
+    },
+    {
+      "category": "plan",
+      "payload": {
+        "degraded": false,
+        "disambiguation": {
+          "explanation": "",
+          "has_multiple": false,
+          "notes": []
+        },
+        "evidence": {
+          "fields": [
+            "task.payload.content"
+          ]
+        },
+        "intents": [
+          {
+            "confidence": 0.9,
+            "intent_type": "write_alert",
+            "slots": {}
+          }
+        ],
+        "permission_requirements": {
+          "allowed_tools": null,
+          "requires_human_approval": true,
+          "side_effects": true
+        },
+        "primary_intent_type": "write_alert",
+        "risk_level": "HIGH",
+        "schema_version": "intent_output.v2"
+      },
+      "status": "recorded",
+      "summary": {
+        "primary_intent_type": "write_alert"
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "intent"
+    },
+    {
+      "category": "plan",
+      "payload": {
+        "commands": [
+          {
+            "action": "write_alert",
+            "command_id": "cmd_write_alert_1",
+            "expected_output_schema": "tool_result.v1",
+            "params": {
+              "alert": {
+                "alert_id": "a-1",
+                "desk": "eq",
+                "severity": "WARNING"
+              }
+            },
+            "retry_budget": 0,
+            "run_id": "run_case_cmd",
+            "schema_version": "agent_command.v1",
+            "target_agent": "manager",
+            "timeout_ms": 1000
+          }
+        ],
+        "degraded": false,
+        "evidence": {
+          "fields": [
+            "task.payload.content"
+          ]
+        },
+        "intent": {
+          "confidence": 0.9,
+          "slots": {},
+          "type": "write_alert"
+        },
+        "plan_steps": [
+          {
+            "kind": "tool_call",
+            "params": {},
+            "reason": "先采集只读指标",
+            "step_id": "s1",
+            "tool_name": "collect_metrics"
+          },
+          {
+            "instruction": "输出结论",
+            "kind": "finalize",
+            "reason": "汇总输出结果",
+            "step_id": "s2"
+          }
+        ],
+        "schema_version": "orchestrator_output.v1"
+      },
+      "status": "recorded",
+      "summary": {
+        "nodes": 2,
+        "plan_steps": 2
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "orchestrator_plan"
+    },
+    {
+      "category": "plan",
+      "payload": {
+        "evidence": {
+          "fields": [
+            "task.payload.content"
+          ],
+          "receipt_command_ids": []
+        },
+        "issues": [],
+        "ok": true,
+        "require_human_approval": false,
+        "risk_level": "LOW",
+        "run_summary": {
+          "key_points": [
+            "有收据"
+          ],
+          "receipt_command_ids": [],
+          "text": "命令执行完成"
+        },
+        "schema_version": "critic_review.v1",
+        "suggested_fixes": []
+      },
+      "status": "recorded",
+      "summary": {
+        "issues": 0,
+        "ok": true
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "critic_plan"
+    },
+    {
+      "category": "command",
+      "payload": {
+        "command_id": "cmd-63d6f663f075",
+        "expected_output_schema": null,
+        "inputs": {},
+        "step_id": "s1",
+        "target_agent": "system_engineer",
+        "tool_name": "collect_metrics"
+      },
+      "status": "completed",
+      "summary": {
+        "command_id": "cmd-63d6f663f075",
+        "step_id": "s1",
+        "target_agent": "system_engineer",
+        "tool_name": "collect_metrics"
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "command"
+    },
+    {
+      "category": "receipt",
+      "payload": {
+        "action": "collect_metrics",
+        "approval_request": null,
+        "approval_state": "not_required",
+        "approval_trace": {
+          "current_state": "not_required",
+          "history": [
+            {
+              "reason": "read_only_tool",
+              "state": "not_required",
+              "ts_ms": 1779241483780
+            }
+          ],
+          "required": false
+        },
+        "artifacts": [
+          {
+            "action": "collect_metrics",
+            "kind": "tool_result"
+          }
+        ],
+        "command_id": "cmd-63d6f663f075",
+        "error": null,
+        "evidence": {
+          "action": "collect_metrics",
+          "retry_records": [
+            {
+              "attempt": 1,
+              "error": null,
+              "failure_classification": null,
+              "ok": true
+            }
+          ]
+        },
+        "failure_classification": null,
+        "inputs": {},
+        "latency_ms": 0.004250003257766366,
+        "ok": true,
+        "output": {
+          "action": "collect_metrics",
+          "result": {
+            "latency_ms": 0.0023339962353929877,
+            "ok": true,
+            "summary": {
+              "tools": {},
+              "uptime_seconds": 0.14685606956481934
+            }
+          }
+        },
+        "outputs": {
+          "action": "collect_metrics",
+          "result": {
+            "latency_ms": 0.0023339962353929877,
+            "ok": true,
+            "summary": {
+              "tools": {},
+              "uptime_seconds": 0.14685606956481934
+            }
+          }
+        },
+        "retry_budget": 0,
+        "retry_count": 0,
+        "run_id": "task_cmd",
+        "schema_version": "agent_receipt.v1",
+        "side_effect": false,
+        "status": "completed",
+        "step_id": "s1",
+        "target_agent": "system_engineer",
+        "timeout_ms": 1000,
+        "tool_name": "collect_metrics"
+      },
+      "status": "completed",
+      "summary": {
+        "approval_state": "not_required",
+        "command_id": "cmd-63d6f663f075",
+        "tool_name": "collect_metrics"
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "receipt"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "few_shot_example_count": 0,
+        "few_shot_examples": [],
+        "hit_count": 0,
+        "memory_cross_talk_rate": 0.0,
+        "memory_hits": [],
+        "private_memory": {
+          "critic": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "critic"
+          },
+          "orchestrator": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "orchestrator"
+          },
+          "risk_analyst": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "risk_analyst"
+          },
+          "system_engineer": {
+            "count": 0,
+            "current_progress": null,
+            "next_intended_action": null,
+            "role": "system_engineer"
+          }
+        },
+        "role_drift_rate": 0.0,
+        "shared_board": {
+          "by_role": {},
+          "item_count": 0,
+          "latest": []
+        },
+        "texts": []
+      },
+      "status": "recorded",
+      "summary": {
+        "keys": [
+          "few_shot_example_count",
+          "few_shot_examples",
+          "hit_count",
+          "memory_cross_talk_rate",
+          "memory_hits"
+        ]
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "planning_memory"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "key_points": [
+          "有收据"
+        ],
+        "receipt_command_ids": [
+          "cmd-63d6f663f075"
+        ],
+        "session_id": "s_cmd",
+        "task_id": "task_cmd",
+        "text": "命令执行完成"
+      },
+      "status": "recorded",
+      "summary": {
+        "keys": [
+          "key_points",
+          "receipt_command_ids",
+          "session_id",
+          "task_id",
+          "text"
+        ]
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "run_summary"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "agent_id": "critic",
+        "confidence": 1.0,
+        "content": {
+          "key_points": [
+            "有收据"
+          ],
+          "receipt_command_ids": [
+            "cmd-63d6f663f075"
+          ],
+          "task_id": "task_cmd",
+          "text": "lesson 有收据"
+        },
+        "created_by": "critic",
+        "entry_id": "mem_6bfbcfef00214140a2f9e23d9646ec70",
+        "kind": "lesson",
+        "memory_type": "procedural",
+        "run_id": "1779241483-7ceedb7e-run",
+        "schema_version": "memory_entry.v1",
+        "scope": "shared",
+        "session_id": "s_cmd",
+        "source": "critic_final_review",
+        "tags": [
+          "lesson",
+          "procedure"
+        ],
+        "trace_ref": {
+          "run_id": "1779241483-7ceedb7e-run"
+        },
+        "ts_ms": 1779241483782
+      },
+      "status": "recorded",
+      "summary": {
+        "kind": "lesson",
+        "memory_type": "procedural"
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "procedural_lesson"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "agent_id": "critic",
+        "agent_perspective": "quality_gate",
+        "agent_role": "critic",
+        "confidence": 0.9,
+        "content": {
+          "agent_perspective": "quality_gate",
+          "applicable_conditions": [
+            "写入告警并检查指标"
+          ],
+          "decision_pattern": "有收据",
+          "evidence_refs": [
+            "cmd-63d6f663f075"
+          ],
+          "failure_boundary": [
+            "low_evidence_or_low_confidence_should_not_reuse"
+          ],
+          "snapshot_text": "decision_pattern=有收据 conditions=写入告警并检查指标 boundary=low_evidence_or_low_confidence_should_not_reuse",
+          "text": "命令执行完成"
+        },
+        "created_by": "critic",
+        "entry_id": "mem_03929b0f7caf46cb8acf0439b28a60fc",
+        "kind": "semantic_case",
+        "memory_type": "semantic",
+        "run_id": "1779241483-7ceedb7e-run",
+        "schema_version": "memory_entry.v1",
+        "scope": "shared",
+        "session_id": "s_cmd",
+        "source": "critic_confidence_policy",
+        "tags": [
+          "experience",
+          "few_shot",
+          "critic"
+        ],
+        "task_phase": "final_review",
+        "trace_ref": {
+          "run_id": "1779241483-7ceedb7e-run"
+        },
+        "ts_ms": 1779241483783
+      },
+      "status": "recorded",
+      "summary": {
+        "kind": "semantic_case",
+        "memory_type": "semantic"
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "long_term_experience"
+    },
+    {
+      "category": "memory",
+      "payload": {
+        "accepted": true,
+        "confidence": 0.9,
+        "evidence_refs": [
+          "cmd-63d6f663f075"
+        ],
+        "reasons": [
+          "accepted"
+        ],
+        "threshold": 0.85
+      },
+      "status": "recorded",
+      "summary": {
+        "accepted": true,
+        "confidence": 0.9
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "memory_policy"
+    },
+    {
+      "category": "final",
+      "payload": {
+        "errors": [],
+        "final_output": {
+          "critic_run_summary": {
+            "key_points": [
+              "有收据"
+            ],
+            "receipt_command_ids": [
+              "cmd-63d6f663f075"
+            ],
+            "text": "命令执行完成"
+          },
+          "finalize_reason": "汇总输出结果",
+          "receipt_command_ids": [
+            "cmd-63d6f663f075"
+          ],
+          "sources": [
+            "s1"
+          ],
+          "summary": "tool collect_metrics completed cmd:cmd-63d6f663f075",
+          "task_graph_completed": true
+        },
+        "task_graph_execution": {
+          "approval_records": [],
+          "blocked_step_id": null,
+          "completed_steps": [
+            "s1",
+            "s2"
+          ],
+          "delegate_outputs": {},
+          "errors": [],
+          "failed_step_id": null,
+          "node_outputs": {
+            "s1": {
+              "approval_state": "not_required",
+              "approval_trace": {
+                "current_state": "not_required",
+                "history": [
+                  {
+                    "reason": "read_only_tool",
+                    "state": "not_required",
+                    "ts_ms": 1779241483780
+                  }
+                ],
+                "required": false
+              },
+              "command_id": "cmd-63d6f663f075",
+              "receipt_command_ids": [
+                "cmd-63d6f663f075"
+              ],
+              "result": {
+                "action": "collect_metrics",
+                "result": {
+                  "latency_ms": 0.0023339962353929877,
+                  "ok": true,
+                  "summary": {
+                    "tools": {},
+                    "uptime_seconds": 0.14685606956481934
+                  }
+                }
+              },
+              "summary": "tool collect_metrics completed cmd:cmd-63d6f663f075",
+              "tool_name": "collect_metrics"
+            },
+            "s2": {
+              "finalize_reason": "汇总输出结果",
+              "receipt_command_ids": [
+                "cmd-63d6f663f075"
+              ],
+              "sources": [
+                "s1"
+              ],
+              "summary": "tool collect_metrics completed cmd:cmd-63d6f663f075",
+              "task_graph_completed": true
+            }
+          },
+          "receipts": [
+            {
+              "action": "collect_metrics",
+              "approval_request": null,
+              "approval_state": "not_required",
+              "approval_trace": {
+                "current_state": "not_required",
+                "history": [
+                  {
+                    "reason": "read_only_tool",
+                    "state": "not_required",
+                    "ts_ms": 1779241483780
+                  }
+                ],
+                "required": false
+              },
+              "artifacts": [
+                {
+                  "action": "collect_metrics",
+                  "kind": "tool_result"
+                }
+              ],
+              "command_id": "cmd-63d6f663f075",
+              "error": null,
+              "evidence": {
+                "action": "collect_metrics",
+                "retry_records": [
+                  {
+                    "attempt": 1,
+                    "error": null,
+                    "failure_classification": null,
+                    "ok": true
+                  }
+                ]
+              },
+              "failure_classification": null,
+              "inputs": {},
+              "latency_ms": 0.004250003257766366,
+              "ok": true,
+              "output": {
+                "action": "collect_metrics",
+                "result": {
+                  "latency_ms": 0.0023339962353929877,
+                  "ok": true,
+                  "summary": {
+                    "tools": {},
+                    "uptime_seconds": 0.14685606956481934
+                  }
+                }
+              },
+              "outputs": {
+                "action": "collect_metrics",
+                "result": {
+                  "latency_ms": 0.0023339962353929877,
+                  "ok": true,
+                  "summary": {
+                    "tools": {},
+                    "uptime_seconds": 0.14685606956481934
+                  }
+                }
+              },
+              "retry_budget": 0,
+              "retry_count": 0,
+              "run_id": "task_cmd",
+              "schema_version": "agent_receipt.v1",
+              "side_effect": false,
+              "status": "completed",
+              "step_id": "s1",
+              "target_agent": "system_engineer",
+              "timeout_ms": 1000,
+              "tool_name": "collect_metrics"
+            }
+          ],
+          "resume_history": [],
+          "resume_ready": false,
+          "retry_records": [],
+          "status": "completed",
+          "trace": [
+            {
+              "approval_record": null,
+              "attempt_count": 1,
+              "command_id": "cmd-63d6f663f075",
+              "error": null,
+              "failure_classification": null,
+              "finished_at_ms": 1779241483780.1963,
+              "input_sources": [],
+              "kind": "tool_call",
+              "latency_ms": 0.191162109375,
+              "receipt_command_ids": [
+                "cmd-63d6f663f075"
+              ],
+              "requested_target_agent": null,
+              "started_at_ms": 1779241483780.0051,
+              "status": "completed",
+              "step_id": "s1",
+              "target_agent": null,
+              "tool_name": "collect_metrics"
+            },
+            {
+              "approval_record": null,
+              "attempt_count": 1,
+              "command_id": null,
+              "error": null,
+              "failure_classification": null,
+              "finished_at_ms": 1779241483780.9392,
+              "input_sources": [
+                "s1"
+              ],
+              "kind": "finalize",
+              "latency_ms": 0.00537109375,
+              "receipt_command_ids": [],
+              "requested_target_agent": null,
+              "started_at_ms": 1779241483780.9338,
+              "status": "completed",
+              "step_id": "s2",
+              "target_agent": null,
+              "tool_name": null
+            }
+          ]
+        }
+      },
+      "status": "completed",
+      "summary": {
+        "latency_ms": 11.76595687866211,
+        "status": "completed",
+        "tokens_total": null
+      },
+      "timestamp_ms": 1779241483785,
+      "trace_type": "run_finished"
+    }
+  ],
+  "entry_type": "user_task",
+  "failure_summary": {},
+  "run_id": "1779241483-7ceedb7e-run",
+  "schema_version": "run_trace.v2",
+  "status": "completed",
+  "summary": {
+    "approval_count": 0,
+    "entry_count": 15,
+    "event_count": 0,
+    "memory_entry_count": 5,
+    "receipt_count": 1,
+    "trace_counts": {
+      "command": 1,
+      "final": 1,
+      "memory": 5,
+      "plan": 3,
+      "receipt": 1,
+      "step": 2,
+      "task": 1,
+      "version_snapshot": 1
+    }
+  },
+  "task_id": "task_cmd",
+  "version_snapshot": {
+    "benchmark_config": {},
+    "model": "ark-code-latest",
+    "policy_version": "policy.v1",
+    "prompt_versions": {
+      "critic": "critic_prompt.v1",
+      "intent": "intent_prompt.v1",
+      "manager": "manager_prompt.v1",
+      "orchestrator": "orchestrator_prompt.v1",
+      "risk_analyst": "risk_analyst_prompt.v1",
+      "system_engineer": "system_engineer_prompt.v1"
+    },
+    "toolset_version": "tool_registry.v1"
+  }
+}

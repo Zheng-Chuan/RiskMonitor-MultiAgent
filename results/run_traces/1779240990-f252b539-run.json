@@ -1,0 +1,185 @@
+{
+  "entries": [
+    {
+      "category": "task",
+      "payload": {
+        "entry_type": "system_event",
+        "metadata": {
+          "event_type": "task_created",
+          "source_agent": "monitor"
+        },
+        "route_decision": {},
+        "run_id": "1779240990-f252b539-run",
+        "schema_version": "run_context.v1",
+        "task_graph_schema_version": null,
+        "task_id": "evt_d7cb31a214ef",
+        "trigger_event_id": "evt_d7cb31a214ef",
+        "trigger_evidence": {
+          "event_type": "task_created",
+          "payload": {
+            "content": "请处理"
+          },
+          "source_agent": "monitor"
+        },
+        "trigger_reason": "pending_moderation"
+      },
+      "status": "recorded",
+      "summary": {
+        "entry_type": "system_event",
+        "task_id": "evt_d7cb31a214ef",
+        "trigger_event_id": "evt_d7cb31a214ef"
+      },
+      "timestamp_ms": 1779240990833,
+      "trace_type": "task"
+    },
+    {
+      "category": "version_snapshot",
+      "payload": {
+        "benchmark_config": {},
+        "model": "ark-code-latest",
+        "policy_version": "policy.v1",
+        "prompt_versions": {
+          "critic": "critic_prompt.v1",
+          "intent": "intent_prompt.v1",
+          "manager": "manager_prompt.v1",
+          "orchestrator": "orchestrator_prompt.v1",
+          "risk_analyst": "risk_analyst_prompt.v1",
+          "system_engineer": "system_engineer_prompt.v1"
+        },
+        "toolset_version": "tool_registry.v1"
+      },
+      "status": "recorded",
+      "summary": {
+        "model": "ark-code-latest",
+        "policy_version": "policy.v1",
+        "toolset_version": "tool_registry.v1"
+      },
+      "timestamp_ms": 1779240990833,
+      "trace_type": "version_snapshot"
+    },
+    {
+      "category": "message",
+      "payload": {
+        "causation_id": null,
+        "correlation_id": null,
+        "event_id": "evt_d7cb31a214ef",
+        "event_type": "task_created",
+        "payload": {
+          "content": "请处理"
+        },
+        "priority": "normal",
+        "requires_ack": false,
+        "schema_version": "event.v1",
+        "source_agent": "monitor",
+        "target_agent": null,
+        "timestamp_ms": 1779240990833
+      },
+      "status": "recorded",
+      "summary": {
+        "event_id": "evt_d7cb31a214ef",
+        "event_type": "task_created",
+        "source_agent": "monitor"
+      },
+      "timestamp_ms": 1779240990833,
+      "trace_type": "source_event"
+    },
+    {
+      "category": "message",
+      "payload": {
+        "causation_id": null,
+        "correlation_id": null,
+        "event_id": "evt_d7cb31a214ef",
+        "event_type": "task_created",
+        "payload": {
+          "content": "请处理"
+        },
+        "priority": "normal",
+        "requires_ack": false,
+        "schema_version": "event.v1",
+        "source_agent": "monitor",
+        "target_agent": null,
+        "timestamp_ms": 1779240990833
+      },
+      "status": "recorded",
+      "summary": {
+        "event_id": "evt_d7cb31a214ef",
+        "event_type": "task_created"
+      },
+      "timestamp_ms": 1779240990833,
+      "trace_type": "event_history"
+    },
+    {
+      "category": "message",
+      "payload": {
+        "delivery_errors": [],
+        "event_id": "evt_d7cb31a214ef",
+        "event_type": "task_created",
+        "source_agent": "monitor",
+        "status": "accepted",
+        "subscriber_count": 0,
+        "target_agent": null,
+        "timestamp_ms": 1779240990833,
+        "trace_id": "trace_b1481a621205"
+      },
+      "status": "accepted",
+      "summary": {
+        "event_id": "evt_d7cb31a214ef",
+        "event_type": "task_created",
+        "subscriber_count": 0
+      },
+      "timestamp_ms": 1779240990833,
+      "trace_type": "event_trace"
+    },
+    {
+      "category": "final",
+      "payload": {
+        "errors": [
+          "event_burst_limit_exceeded"
+        ],
+        "final_output": {},
+        "task_graph_execution": {}
+      },
+      "status": "blocked",
+      "summary": {
+        "latency_ms": 0.0,
+        "status": "blocked",
+        "tokens_total": null
+      },
+      "timestamp_ms": 1779240990833,
+      "trace_type": "run_finished"
+    }
+  ],
+  "entry_type": "system_event",
+  "failure_summary": {},
+  "run_id": "1779240990-f252b539-run",
+  "schema_version": "run_trace.v2",
+  "status": "blocked",
+  "summary": {
+    "approval_count": 0,
+    "entry_count": 6,
+    "event_count": 1,
+    "memory_entry_count": 0,
+    "receipt_count": 0,
+    "trace_counts": {
+      "final": 1,
+      "message": 3,
+      "task": 1,
+      "version_snapshot": 1
+    }
+  },
+  "task_id": "evt_d7cb31a214ef",
+  "version_snapshot": {
+    "benchmark_config": {},
+    "model": "ark-code-latest",
+    "policy_version": "policy.v1",
+    "prompt_versions": {
+      "critic": "critic_prompt.v1",
+      "intent": "intent_prompt.v1",
+      "manager": "manager_prompt.v1",
+      "orchestrator": "orchestrator_prompt.v1",
+      "risk_analyst": "risk_analyst_prompt.v1",
+      "system_engineer": "system_engineer_prompt.v1"
+    },
+    "toolset_version": "tool_registry.v1"
+  }
+}
