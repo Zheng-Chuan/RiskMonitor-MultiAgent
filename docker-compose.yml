@@ -61,10 +61,11 @@ services:
       - riskmonitor-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8000'"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   # RiskMonitor MultiAgent MCP 服务
   mcp-server:

@@ -64,6 +64,7 @@ from riskmonitor_multiagent.orchestration.workflow_events import (
     build_task_from_event,
     requires_manual_approval,
 )
+from riskmonitor_multiagent.skills import SkillProposer, SkillStore
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,7 @@ class ProactiveMultiAgentWorkflow:
         self._moderator = ModeratorAgent(message_bus=self._message_bus)
         self._proactive_budget = get_proactive_budget_manager()
         self._run_trace_store = get_run_trace_store()
+        self._skill_store = SkillStore()
         
         self._agents_started = False
     
@@ -494,6 +496,25 @@ class ProactiveMultiAgentWorkflow:
                     final_output=execution_result.get("final_output", {}),
                     critic_final=critic_final_result.output,
                 )
+            
+            # SkillProposer: 从高质量完成的 run 中提取可复用模式
+            try:
+                skill_proposer = SkillProposer(self._skill_store)
+                skill_proposal = await skill_proposer.propose(
+                    run_id=run_id,
+                    task=task,
+                    critic_final=critic_final_result.output,
+                    orchestrator_output=(
+                        orchestrator_result.output
+                        if isinstance(orchestrator_result.output, dict)
+                        else {}
+                    ),
+                    receipts=execution_result.get("receipts", []),
+                )
+                logger.info("skill_proposal: %s", skill_proposal)
+            except Exception as exc:
+                logger.warning("Skill proposal failed: %s", exc)
+                skill_proposal = {"action": "skipped", "reason": f"error: {exc}"}
             
             result = build_workflow_result(
                 run_id=run_id,
