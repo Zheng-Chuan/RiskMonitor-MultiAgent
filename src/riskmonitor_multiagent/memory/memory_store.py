@@ -29,8 +29,10 @@ from riskmonitor_multiagent.memory.memory_helpers import (
     to_shared_board_row,
 )
 from riskmonitor_multiagent.memory.memory_operations import MemoryWriteOperationsMixin
+from riskmonitor_multiagent.memory.persistence_backend import PersistenceBackend
 from riskmonitor_multiagent.memory.redis_backend import RedisBackend
 from riskmonitor_multiagent.memory.semantic_indexer import SemanticIndexer
+from riskmonitor_multiagent.memory.ttl_policy import TTLTier, TTLPolicyEngine
 
 
 @dataclass
@@ -49,6 +51,7 @@ class MemoryStore(MemoryWriteOperationsMixin):
     1. 短期记忆: Agent 独立 + 共享,支持 TTL
     2. 长期上下文: 完整运行状态,持久化
     3. 长期语义: 内置语义检索
+    4. MySQL 持久化: 关键数据落盘,支持恢复
     """
 
     def __init__(self, config: MemoryConfig | None = None) -> None:
@@ -59,11 +62,24 @@ class MemoryStore(MemoryWriteOperationsMixin):
         self._config = config
         self._backend = RedisBackend(config.redis_url)
         self._semantic = SemanticIndexer()
+        self._persistence: PersistenceBackend | None = None
+        self._ttl_engine = TTLPolicyEngine()
 
         # 向后兼容: 暴露内部 Redis 连接和语义索引
         self._redis = None
         self._semantic_index = self._semantic.index
         self._initialized = False
+
+    @property
+    def persistence(self) -> PersistenceBackend:
+        """获取持久化后端实例 (惰性初始化)."""
+        if self._persistence is None:
+            self._persistence = PersistenceBackend()
+        return self._persistence
+
+    def _set_persistence(self, backend: PersistenceBackend | None) -> None:
+        """注入持久化后端 (测试用)."""
+        self._persistence = backend
 
     def _default_config(self) -> MemoryConfig:
         """从环境变量加载默认配置."""
@@ -130,9 +146,14 @@ class MemoryStore(MemoryWriteOperationsMixin):
         else:
             key = "shared:memory"
 
+        # 使用 TTL 策略引擎分级设置 TTL
+        ttl_tier = self._ttl_engine.classify(nd)
+        nd["ttl_tier"] = ttl_tier.value
+        ttl_seconds = self._ttl_engine.get_ttl_seconds(nd)
+        effective_ttl = ttl if ttl is not None else (ttl_seconds if ttl_seconds is not None else self._config.default_ttl)
+
         # 存储到 Redis List
         entry_json = json.dumps(nd, ensure_ascii=False)
-        effective_ttl = ttl or self._config.default_ttl
         await self._backend.append_to_list(
             key, entry_json, max_len=self._config.max_list_len, ttl=effective_ttl,
         )
@@ -140,6 +161,11 @@ class MemoryStore(MemoryWriteOperationsMixin):
         # 异步索引到长期语义记忆
         if scope == "shared":
             await self._semantic.index_entry(nd)
+
+        # 异步落盘到 MySQL (fire-and-forget, 不阻塞主流程)
+        # 只有 long_term 和 permanent 级别的记忆需要落盘
+        if self._ttl_engine.should_persist(nd):
+            asyncio.ensure_future(self.persistence.persist_memory_entry(nd))
 
         return nd
 
@@ -399,16 +425,139 @@ class MemoryStore(MemoryWriteOperationsMixin):
                 break
         return board
 
+    # ==================== 持久化 ====================
+
+    async def flush_to_persistence(self) -> int:
+        """批量落盘当前 Redis 中的关键数据到 MySQL.
+
+        遍历 shared:memory 和各 agent 私有记忆,
+        将 lesson、semantic_case、procedural 类型的条目落盘.
+
+        Returns:
+            成功落盘的条目数
+        """
+        await self._ensure_connected()
+
+        entries_to_persist: list[dict[str, Any]] = []
+
+        # 加载 shared memory
+        shared_entries = await self.list_recent(
+            agent_id="orchestrator", scope="shared", limit=self._config.max_list_len,
+        )
+        for entry in shared_entries:
+            if self._ttl_engine.should_persist(entry):
+                entries_to_persist.append(entry)
+
+        # 加载各 agent 的私有记忆
+        for aid in _DEFAULT_PRIVATE_AGENT_IDS:
+            cid = canonical_agent_id(aid)
+            if not cid:
+                continue
+            private_entries = await self.list_recent(
+                agent_id=cid, scope="private", limit=self._config.max_list_len,
+            )
+            for entry in private_entries:
+                if self._ttl_engine.should_persist(entry):
+                    entries_to_persist.append(entry)
+
+        if not entries_to_persist:
+            return 0
+
+        return await self.persistence.batch_persist_memory(entries_to_persist)
+
+    async def cleanup_expired(self, *, now_ms: int | None = None) -> int:
+        """清理已过期的记忆条目.
+
+        扫描 Redis 中的记忆条目, 删除已过期但仍在 Redis 中的条目.
+        永久级别 (long_term, permanent) 不会被清理.
+        过期清理不影响运行中任务: 只删除已过期条目.
+
+        Args:
+            now_ms: 当前时间戳（毫秒）, 默认使用 time.time()
+
+        Returns:
+            清理的条目数量
+        """
+        await self._ensure_connected()
+        r = await self._backend.ensure_connected()
+        current_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+        cleaned = 0
+
+        # 收集所有需要扫描的 Redis List keys
+        scan_keys: list[str] = ["shared:memory"]
+        for aid in _DEFAULT_PRIVATE_AGENT_IDS:
+            cid = canonical_agent_id(aid)
+            if cid:
+                scan_keys.append(f"agent:{cid}:memory")
+
+        for key in scan_keys:
+            entries_json = await self._backend.list_from_key(key, limit=self._config.max_list_len)
+            expired_jsons: list[str] = []
+            for entry_json in entries_json:
+                try:
+                    parsed = json.loads(entry_json)
+                except json.JSONDecodeError:
+                    continue
+                if self._ttl_engine.is_expired(parsed, now_ms=current_ms):
+                    expired_jsons.append(entry_json)
+
+            # 从 Redis list 中删除过期条目
+            for entry_json in expired_jsons:
+                await r.lrem(key, 1, entry_json)
+                cleaned += 1
+
+        return cleaned
+
+    async def restore_from_persistence(self, *, run_id: str) -> int:
+        """从 MySQL 恢复数据到 Redis.
+
+        模拟 Redis 重启后的恢复操作.
+
+        Args:
+            run_id: 要恢复的运行 ID
+
+        Returns:
+            恢复的条目数
+        """
+        await self._ensure_connected()
+
+        entries = await self.persistence.load_memory_entries(run_id=run_id, limit=500)
+        if not entries:
+            return 0
+
+        for entry in entries:
+            entry_json = json.dumps(entry, ensure_ascii=False)
+            agent_id = str(entry.get("agent_id") or "shared")
+            scope = str(entry.get("scope") or "shared")
+            if scope == "private":
+                key = f"agent:{agent_id}:memory"
+            else:
+                key = "shared:memory"
+            await self._backend.append_to_list(
+                key, entry_json, max_len=self._config.max_list_len, ttl=self._config.default_ttl,
+            )
+            # 重建语义索引
+            if scope == "shared":
+                await self._semantic.index_entry(entry)
+
+        return len(entries)
+
     # ==================== 生命周期 ====================
 
     async def close(self) -> None:
         """关闭连接."""
         await self._backend.close()
+        if self._persistence is not None:
+            await self._persistence.close()
         self._redis = None
 
     async def health_check(self) -> bool:
         """健康检查."""
-        return await self._backend.health_check()
+        redis_ok = await self._backend.health_check()
+        if self._persistence is not None:
+            mysql_ok = await self._persistence.health_check()
+            return redis_ok and mysql_ok
+        return redis_ok
 
 
 # ==================== 全局实例管理 ====================

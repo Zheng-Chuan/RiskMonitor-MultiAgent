@@ -14,6 +14,10 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+      # 迁移脚本自动执行 (Phase 5-8 新增表)
+      - ./db/migrations/003_create_alerts_table.sql:/docker-entrypoint-initdb.d/003_create_alerts_table.sql
+      - ./db/migrations/004_create_audit_events_table.sql:/docker-entrypoint-initdb.d/004_create_audit_events_table.sql
+      - ./db/migrations/005_create_memory_store_table.sql:/docker-entrypoint-initdb.d/005_create_memory_store_table.sql
     command: >
       --default-authentication-plugin=mysql_native_password
       --character-set-server=utf8mb4
@@ -38,6 +42,7 @@ services:
     container_name: riskmonitor-redis
     ports:
       - "6379:6379"
+    command: redis-server --appendonly yes --save 60 1000
     volumes:
       - redis_data:/data
     networks:

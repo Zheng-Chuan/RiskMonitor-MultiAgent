@@ -12,9 +12,11 @@ Skill 存储系统.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
+from riskmonitor_multiagent.memory.persistence_backend import PersistenceBackend
 from riskmonitor_multiagent.memory.semantic_indexer import SemanticIndexer
 from riskmonitor_multiagent.skills.skill_contract import (
     new_skill_id,
@@ -35,6 +37,18 @@ class SkillStore:
         self._store: dict[str, dict[str, Any]] = {}
         self._indexer: SemanticIndexer = SemanticIndexer()
         self._redis_url = redis_url
+        self._persistence: PersistenceBackend | None = None
+
+    @property
+    def persistence(self) -> PersistenceBackend:
+        """获取持久化后端实例 (惰性初始化)."""
+        if self._persistence is None:
+            self._persistence = PersistenceBackend()
+        return self._persistence
+
+    def _set_persistence(self, backend: PersistenceBackend | None) -> None:
+        """注入持久化后端 (测试用)."""
+        self._persistence = backend
 
     # ==================== 内部工具 ====================
 
@@ -89,12 +103,14 @@ class SkillStore:
     async def create(self, skill: dict[str, Any]) -> dict[str, Any]:
         """创建 Skill.
 
-        流程: 验证 -> 生成 skill_id -> 存储 -> 索引 -> 返回.
+        流程: 验证 -> 生成 skill_id -> 存储 -> 索引 -> 异步落盘 -> 返回.
         """
         validated = validate_skill(skill)
         skill_id = validated["skill_id"]
         self._store[skill_id] = validated
         await self._index_skill(validated)
+        # 异步落盘到 MySQL (fire-and-forget)
+        asyncio.ensure_future(self.persistence.persist_skill(validated))
         return dict(validated)
 
     async def get(self, skill_id: str) -> dict[str, Any] | None:
@@ -105,7 +121,7 @@ class SkillStore:
     async def update(self, skill_id: str, patch: dict[str, Any]) -> dict[str, Any]:
         """更新 Skill.
 
-        合并 patch -> 保留 skill_id 和 created_at -> 刷新 updated_at -> 重新索引.
+        合并 patch -> 保留 skill_id 和 created_at -> 刷新 updated_at -> 重新索引 -> 异步落盘.
         """
         existing = self._store.get(skill_id)
         if existing is None:
@@ -119,6 +135,8 @@ class SkillStore:
         validated = validate_skill(merged)
         self._store[skill_id] = validated
         await self._reindex(validated)
+        # 异步落盘到 MySQL (fire-and-forget)
+        asyncio.ensure_future(self.persistence.persist_skill(validated))
         return dict(validated)
 
     async def delete(self, skill_id: str) -> bool:
@@ -246,6 +264,40 @@ class SkillStore:
         self._store[skill_id] = updated
         await self._reindex(updated)
         return dict(updated)
+
+    # ==================== 持久化 ====================
+
+    async def flush_to_persistence(self) -> int:
+        """批量落盘所有 Skill 到 MySQL.
+
+        Returns:
+            成功落盘的条目数
+        """
+        all_skills = list(self._store.values())
+        if not all_skills:
+            return 0
+        count = 0
+        for skill in all_skills:
+            ok = await self.persistence.persist_skill(skill)
+            if ok:
+                count += 1
+        return count
+
+    async def restore_from_persistence(self) -> int:
+        """从 MySQL 加载所有 Skill 到内存.
+
+        Returns:
+            恢复的 Skill 数量
+        """
+        skills = await self.persistence.load_skills()
+        if not skills:
+            return 0
+        for skill in skills:
+            skill_id = skill.get("skill_id")
+            if skill_id:
+                self._store[skill_id] = skill
+                await self._index_skill(skill)
+        return len(skills)
 
     # ==================== 健康检查 ====================
 

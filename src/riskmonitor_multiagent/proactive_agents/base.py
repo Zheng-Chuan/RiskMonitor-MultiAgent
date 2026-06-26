@@ -21,6 +21,14 @@ from riskmonitor_multiagent.agents.base import AgentResult, BaseAgent
 from riskmonitor_multiagent.contracts.event import EventType, new_event
 from riskmonitor_multiagent.observability.metrics import inc_counter, observe_ms
 
+# 向前兼容: TYPE_CHECKING 下导入 TieredPromptBuilder, 避免循环导入
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from riskmonitor_multiagent.prompts.tiered_prompt_builder import (
+        PromptTier,
+        TieredPromptBuilder,
+    )
+
 logger = logging.getLogger(__name__)
 
 
@@ -106,6 +114,8 @@ class BaseProactiveAgent:
         model: str | None = None,
         enable_background_monitor: bool = True,
         monitor_interval_seconds: int = 60,
+        enable_context_compression: bool = False,
+        context_compressor: Any | None = None,
     ) -> None:
         """
         初始化主动 Agent.
@@ -118,6 +128,8 @@ class BaseProactiveAgent:
             model: 模型名称
             enable_background_monitor: 是否启用后台监控
             monitor_interval_seconds: 后台监控间隔(秒)
+            enable_context_compression: 是否启用上下文压缩
+            context_compressor: 自定义 ContextCompressor 实例
         """
         self._name = name
         self._system_prompt = system_prompt
@@ -126,6 +138,15 @@ class BaseProactiveAgent:
         self._model = model
         self._enable_monitor = enable_background_monitor
         self._monitor_interval = monitor_interval_seconds
+
+        # 上下文压缩器
+        if context_compressor is not None:
+            self._context_compressor = context_compressor
+        elif enable_context_compression:
+            from riskmonitor_multiagent.memory.context_compressor import ContextCompressor
+            self._context_compressor = ContextCompressor(enable_llm_summary=False)
+        else:
+            self._context_compressor = None
         
         self._base_agent = BaseAgent(
             name=name,
@@ -145,7 +166,10 @@ class BaseProactiveAgent:
         self._is_running = False
         
         self._last_task_result: Optional[ProactiveAgentResult] = None
-        
+
+        # 三层 prompt 构建器 (可选增强, 默认 None)
+        self._prompt_builder: TieredPromptBuilder | None = None
+
         if self._enable_monitor:
             self._init_desires()
     
@@ -276,6 +300,47 @@ class BaseProactiveAgent:
     def clear_llm_interactions(self) -> None:
         """清空 LLM 交互记录."""
         self._llm_interactions.clear()
+
+    async def _maybe_compress_messages(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        task_context: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """在 LLM 调用前检查并压缩上下文.
+
+        如果压缩器已配置且消息超过阈值, 自动压缩.
+        压缩失败时返回原始消息, 不中断主流程.
+
+        Args:
+            messages: 原始消息列表
+            task_context: 可选的任务上下文
+
+        Returns:
+            压缩后或原始的消息列表
+        """
+        if not self._context_compressor:
+            return messages
+
+        try:
+            if self._context_compressor.should_compress(messages):
+                result = await self._context_compressor.compress(
+                    messages, task_context=task_context,
+                )
+                if result.compressed:
+                    logger.info(
+                        "[%s] Context compressed: %d -> %d tokens (%.1f%% ratio, %d messages summarized)",
+                        self._name,
+                        result.original_tokens,
+                        result.compressed_tokens,
+                        result.compression_ratio * 100,
+                        result.summarized_count,
+                    )
+                    return result.compressed_messages
+        except Exception as e:
+            logger.warning("[%s] Context compression failed, using original: %s", self._name, e)
+
+        return messages
     
     async def start_background_monitor(self) -> None:
         """启动后台监控(真正的主动性)."""
@@ -552,11 +617,15 @@ Only return the thought text, no JSON format."""
             
             start_time = time.time()
             client = LlmClient()
-            resp = await client.chat_completions(
-                messages=[
+            messages = await self._maybe_compress_messages(
+                [
                     {"role": "system", "content": self._system_prompt},
                     {"role": "user", "content": prompt},
                 ],
+                task_context=task,
+            )
+            resp = await client.chat_completions(
+                messages=messages,
                 model=self._model,
                 temperature=0.7,
                 max_tokens=128,
@@ -621,11 +690,15 @@ Only return the reasoning text, no JSON format."""
             
             start_time = time.time()
             client = LlmClient()
-            resp = await client.chat_completions(
-                messages=[
+            messages = await self._maybe_compress_messages(
+                [
                     {"role": "system", "content": self._system_prompt},
                     {"role": "user", "content": prompt},
                 ],
+                task_context=task,
+            )
+            resp = await client.chat_completions(
+                messages=messages,
                 model=self._model,
                 temperature=0.7,
                 max_tokens=256,
@@ -856,6 +929,63 @@ Generate a comprehensive final answer as JSON."""
             return "No context"
         
         return str(context)[:500]
+
+    # ------------------------------------------------------------------ #
+    # 三层 prompt 构建器集成 (可选增强)
+    # ------------------------------------------------------------------ #
+    def set_prompt_builder(self, builder: TieredPromptBuilder) -> None:
+        """设置三层 prompt 构建器.
+
+        设置后, 构建 LLM messages 时将使用三层分离策略;
+        未设置时使用现有逻辑.
+
+        Args:
+            builder: TieredPromptBuilder 实例
+        """
+        self._prompt_builder = builder
+        logger.info(f"[{self._name}] TieredPromptBuilder enabled")
+
+    def build_tiered_messages(
+        self,
+        *, 
+        agent_role: str | None = None,
+        tools_index: list[dict] | None = None,
+        behavior_rules: list[str] | None = None,
+        skills: list[dict] | None = None,
+        project_rules: list[str] | None = None,
+        memory_summary: dict[str, Any] | None = None,
+        current_event: dict[str, Any] | None = None,
+        task: dict[str, Any] | None = None,
+        react_history: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, str]]:
+        """使用三层 prompt 构建器组装 messages.
+
+        如果未设置 prompt_builder, 回退到现有的单 system_prompt 方式.
+
+        Returns:
+            messages 列表
+        """
+        if self._prompt_builder is None:
+            # 回退: 使用现有的单 system_prompt 方式
+            return [{"role": "system", "content": self._system_prompt}]
+
+        builder = self._prompt_builder
+        stable = builder.build_stable_tier(
+            agent_role=agent_role or self._system_prompt,
+            tools_index=tools_index or [],
+            behavior_rules=behavior_rules or [],
+        )
+        context = builder.build_context_tier(
+            skills=skills or [],
+            project_rules=project_rules or [],
+            memory_summary=memory_summary,
+        )
+        volatile = builder.build_volatile_tier(
+            current_event=current_event,
+            task=task or {},
+            react_history=react_history,
+        )
+        return builder.assemble_messages(stable, context, volatile)
 
 
 __all__ = [

@@ -2,7 +2,7 @@
 
 ## 状态
 
-待开始 ☐
+已完成 ✅
 
 ## 核心目标
 
@@ -40,25 +40,25 @@
 
 为系统增加原生的定时任务能力, 支持自然语言定义的周期性风控操作.
 
-- [ ] Checkpoint 14.5.1 CronManager 核心实现
+- [x] Checkpoint 14.5.1 CronManager 核心实现
   - 实现项: 新增 `src/riskmonitor_multiagent/scheduling/cron_manager.py`. 支持创建, 查询, 暂停, 删除定时任务. Cron 表达式和自然语言描述双模式. 每个 Cron 任务关联 `task_template` 和 `trigger_config`.
   - 验收方法: 运行 CronManager 单测和 3 个定时任务集成测试.
   - 验收证据: Cron 配置样例. 触发日志. 暂停和恢复记录.
   - 通过标准: Cron 按预期触发. 暂停后不触发. 恢复后继续触发.
 
-- [ ] Checkpoint 14.5.2 调度任务接入统一执行内核
+- [x] Checkpoint 14.5.2 调度任务接入统一执行内核
   - 实现项: Cron 触发的任务统一走 `system_event -> ModeratorAgent -> TaskGraphExecutor` 主链. 不允许调度任务绕过治理体系.
   - 验收方法: 运行 2 个 Cron 触发的完整任务 case.
   - 验收证据: Cron 触发的 run_trace. event 和 moderator decision 记录. 统一执行链路日志.
   - 通过标准: Cron 任务进入统一执行内核. 有完整 trace. 受预算和审批约束.
 
-- [ ] Checkpoint 14.5.3 调度预算隔离
+- [x] Checkpoint 14.5.3 调度预算隔离
   - 实现项: Cron 任务共享主动性预算 (ProactiveBudgetManager). 防止 Cron 递归创建无限任务. 单 Cron 失败不影响其他 Cron 和用户任务.
   - 验收方法: 运行 1 个 Cron 风暴模拟 case 和 1 个 Cron 失败隔离 case.
   - 验收证据: 预算限制日志. 递归防护记录. 隔离验证日志.
   - 通过标准: Cron 风暴被预算限制. 递归创建被阻断. 单 Cron 失败不影响其他任务.
 
-- [ ] Checkpoint 14.5.4 典型金融风控调度场景
+- [x] Checkpoint 14.5.4 典型金融风控调度场景
   - 实现项: 预置至少 3 个金融风控场景的调度模板: `每日盘后风险汇总` `定时阈值巡检` `周度合规报告`. 模板可被用户自然语言配置覆写.
   - 验收方法: 运行 3 个场景模板的端到端 case.
   - 验收证据: 模板配置. 自然语言覆写记录. 完整 run_trace.
@@ -70,19 +70,19 @@
 
 将系统从 MCP 单入口扩展为多通道统一适配架构, 支持告警推送和交互式查询.
 
-- [ ] Checkpoint 14.6.1 网关适配器抽象层
+- [x] Checkpoint 14.6.1 网关适配器抽象层
   - 实现项: 新增 `src/riskmonitor_multiagent/gateway/` 模块. 定义 `GatewayAdapter` 抽象基类, 包含 `receive_message()` `send_response()` `send_alert()` `platform_hints()`. 所有平台通过适配器映射到统一 `run_proactive_workflow()` 入口.
   - 验收方法: 运行适配器抽象层单测和 mock 平台集成测试.
   - 验收证据: 适配器接口定义. mock 测试通过记录.
   - 通过标准: 新增平台只需实现适配器. 核心逻辑无需修改.
 
-- [ ] Checkpoint 14.6.2 企业通讯平台适配器
+- [x] Checkpoint 14.6.2 企业通讯平台适配器
   - 实现项: 实现至少 2 个企业通讯平台适配器 (企业微信, Slack 或 Telegram). 支持告警推送, 审批交互, 状态查询三种消息模式.
   - 验收方法: 运行 2 个平台的消息收发集成测试.
   - 验收证据: 消息收发日志. 告警推送记录. 审批交互截图.
   - 通过标准: 告警可推送到目标平台. 审批可通过平台完成. 查询结果可正确返回.
 
-- [ ] Checkpoint 14.6.3 统一消息格式与路由
+- [x] Checkpoint 14.6.3 统一消息格式与路由
   - 实现项: 所有平台消息归一化为统一 `GatewayMessage` 格式. 路由层根据消息类型决定进入 `user_task` 还是 `system_event` 入口. 响应格式根据 `platform_hints` 适配.
   - 验收方法: 运行跨平台消息路由 case 和格式适配 case.
   - 验收证据: 归一化消息样例. 路由决策日志. 各平台适配后的响应格式.
@@ -108,10 +108,10 @@
 
 ## 交付物清单
 
-- [ ] 代码：CronManager, 调度预算隔离, GatewayAdapter, 平台适配器 (企业微信/Slack)
-- [ ] 测试：Cron 单测和集成测试, 风暴模拟测试, 平台消息收发测试
-- [ ] 文档：调度系统配置指南, 网关适配器开发指南
-- [ ] 评测：3 个金融场景调度模板端到端 case, 多平台集成验证
+- [x] 代码：CronManager, 调度预算隔离, GatewayAdapter, 平台适配器 (企业微信/Slack)
+- [x] 测试：Cron 单测和集成测试, 风暴模拟测试, 平台消息收发测试
+- [x] 文档：调度系统配置指南, 网关适配器开发指南
+- [x] 评测：3 个金融场景调度模板端到端 case, 多平台集成验证
 
 ## 相关文档
 

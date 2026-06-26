@@ -28,7 +28,7 @@ from riskmonitor_multiagent.contracts.run_context import (
 )
 from riskmonitor_multiagent.contracts.task_graph import append_replan_subgraph
 from riskmonitor_multiagent.governance.proactive_budget import get_proactive_budget_manager
-from riskmonitor_multiagent.memory import get_memory_store
+from riskmonitor_multiagent.memory import get_memory_store, SessionSegmenter
 from riskmonitor_multiagent.orchestration.message_bus import get_message_bus
 from riskmonitor_multiagent.observability.run_trace import (
     build_run_trace_snapshot,
@@ -64,7 +64,8 @@ from riskmonitor_multiagent.orchestration.workflow_events import (
     build_task_from_event,
     requires_manual_approval,
 )
-from riskmonitor_multiagent.skills import SkillProposer, SkillStore
+from riskmonitor_multiagent.scheduling.cron_manager import CronTask
+from riskmonitor_multiagent.skills import SkillProposer, SkillStore, SkillInjector, SkillUsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,9 @@ class ProactiveMultiAgentWorkflow:
         self._proactive_budget = get_proactive_budget_manager()
         self._run_trace_store = get_run_trace_store()
         self._skill_store = SkillStore()
-        
+        self._skill_usage_tracker = SkillUsageTracker(self._skill_store)
+        self._session_segmenter = SessionSegmenter()
+
         self._agents_started = False
     
     async def start_agents(self) -> None:
@@ -257,6 +260,65 @@ class ProactiveMultiAgentWorkflow:
         )
         return result
 
+    async def run_cron_triggered_workflow(self, cron_task: CronTask) -> dict[str, Any]:
+        """Cron 触发的任务统一走 system_event → ModeratorAgent → TaskGraphExecutor 主链.
+
+        不允许调度任务绕过治理体系.
+
+        Args:
+            cron_task: Cron 定时任务定义.
+
+        Returns:
+            工作流执行结果.
+        """
+        # 1. 构建 system_event
+        event = {
+            "event_id": f"cron_{cron_task.task_id}_{int(time.time() * 1000)}",
+            "event_type": "cron_triggered",
+            "source_agent": "cron_manager",
+            "payload": {
+                **cron_task.task_template,
+                "task_id": cron_task.task_id,
+            },
+            "priority": str((cron_task.trigger_config or {}).get("priority", "normal")),
+        }
+        trigger_reason = f"Cron task: {cron_task.name}"
+        event["payload"]["trigger_reason"] = trigger_reason
+
+        logger.info(
+            "[ProactiveWorkflow] Cron triggered: task_id=%s name=%s expr=%s",
+            cron_task.task_id,
+            cron_task.name,
+            cron_task.cron_expression,
+        )
+
+        # 2. 调用现有的 start_from_event (system_event 入口)
+        try:
+            result = await self.start_from_event(event=event)
+        except Exception as exc:
+            logger.exception(
+                "[ProactiveWorkflow] Cron workflow failed: task_id=%s err=%s",
+                cron_task.task_id,
+                exc,
+            )
+            result = {
+                "status": "failed",
+                "entry_type": "system_event",
+                "task_id": cron_task.task_id,
+                "errors": [str(exc)],
+                "cron_task_id": cron_task.task_id,
+                "cron_task_name": cron_task.name,
+            }
+
+        # 3. 补充 cron 上下文信息
+        if isinstance(result, dict):
+            result.setdefault("cron_task_id", cron_task.task_id)
+            result.setdefault("cron_task_name", cron_task.name)
+            result.setdefault("cron_expression", cron_task.cron_expression)
+            result.setdefault("trigger_count", cron_task.trigger_count)
+
+        return result
+
     async def _run_internal(
         self,
         *,
@@ -340,17 +402,20 @@ class ProactiveMultiAgentWorkflow:
                     "reason": f"resume_from_step:{resume_from_step_id or 'unknown'}",
                 }
             else:
+                plan_context = await self._build_orchestrator_context(
+                    phase="plan",
+                    task=task,
+                    intent=intent_result.output,
+                    memory_enabled=memory_enabled,
+                    planning_memory=planning_memory,
+                    run_id=run_id,
+                )
                 orchestrator_result = self._ensure_proactive_result(
                     await self._orchestrator_agent.orchestrate(
                         task=task,
                         context=self._extend_orchestrator_context(
                             task=task,
-                            base_context=self._build_orchestrator_context(
-                                phase="plan",
-                                intent=intent_result.output,
-                                memory_enabled=memory_enabled,
-                                planning_memory=planning_memory,
-                            ),
+                            base_context=plan_context,
                         ),
                     ),
                     agent_name="orchestrator",
@@ -373,6 +438,14 @@ class ProactiveMultiAgentWorkflow:
                 active_task_graph = orchestrator_result.output
                 if should_replan(critic_result.output):
                     logger.info("[ProactiveWorkflow] Critic rejected plan. Starting replan")
+                    replan_base = await self._build_orchestrator_context(
+                        phase="replan",
+                        task=task,
+                        intent=intent_result.output,
+                        memory_enabled=memory_enabled,
+                        planning_memory=planning_memory,
+                        run_id=run_id,
+                    )
                     replan_result = self._ensure_proactive_result(
                         await self._orchestrator_agent.orchestrate(
                             task=task,
@@ -380,12 +453,7 @@ class ProactiveMultiAgentWorkflow:
                                 task=task,
                                 base_context={
                                     "phase": "replan",
-                                    **self._build_orchestrator_context(
-                                        phase="replan",
-                                        intent=intent_result.output,
-                                        memory_enabled=memory_enabled,
-                                        planning_memory=planning_memory,
-                                    ),
+                                    **replan_base,
                                     "critic": critic_result.output,
                                     "prior_orchestrator_plan": orchestrator_result.output,
                                     "prior_task_graph": active_task_graph,
@@ -409,17 +477,55 @@ class ProactiveMultiAgentWorkflow:
                         len(active_task_graph.get("nodes", [])) if isinstance(active_task_graph, dict) else 0,
                     )
             
-            async def _record_node_memory(*, node, trace_entry, node_result) -> None:
-                if not memory_enabled:
-                    return
-                await memory_store.record_working_memory(
-                    run_id=run_id,
-                    task=task,
-                    trace_entry=trace_entry,
-                    node=node,
-                    node_result=node_result,
-                    private_memory_enabled=private_memory_enabled,
-                )
+            completed_step_records: list[dict[str, Any]] = []
+            current_segment_id: str | None = None
+
+            async def _on_node_completed(*, node, trace_entry, node_result) -> None:
+                nonlocal current_segment_id
+                # Memory recording
+                if memory_enabled:
+                    await memory_store.record_working_memory(
+                        run_id=run_id,
+                        task=task,
+                        trace_entry=trace_entry,
+                        node=node,
+                        node_result=node_result,
+                        private_memory_enabled=private_memory_enabled,
+                    )
+                # Session segmentation
+                try:
+                    completed_step_records.append({
+                        "step_id": str(node.get("step_id") or ""),
+                        "kind": node.get("kind"),
+                        "status": trace_entry.get("status"),
+                        "tool_name": trace_entry.get("tool_name"),
+                        "target_agent": trace_entry.get("target_agent"),
+                    })
+                    step_count = len(completed_step_records)
+                    if self._session_segmenter.should_segment(step_count):
+                        checkpoint = await self._session_segmenter.create_checkpoint(
+                            run_id=run_id,
+                            step_count=step_count,
+                            steps=list(completed_step_records),
+                            parent_segment_id=current_segment_id,
+                            context={
+                                "intent": intent_result.output,
+                                "task": {
+                                    k: v
+                                    for k, v in task.items()
+                                    if k in ("task_id", "content", "source")
+                                },
+                            },
+                        )
+                        current_segment_id = checkpoint.segment_id
+                        completed_step_records.clear()
+                        logger.info(
+                            "Session segmented at step %d: segment %d",
+                            step_count,
+                            checkpoint.segment_index,
+                        )
+                except Exception as seg_exc:
+                    logger.warning("Session segmentation failed, continuing: %s", seg_exc)
 
             executor = TaskGraphExecutor(
                 delegate_handlers={
@@ -428,7 +534,7 @@ class ProactiveMultiAgentWorkflow:
                     "risk_analyst": self._analyst_agent.analyze_task,
                     "analyst": self._analyst_agent.analyze_task,
                 },
-                on_node_completed=_record_node_memory if memory_enabled else None,
+                on_node_completed=_on_node_completed,
             )
             execution_result = await executor.execute(
                 task=task,
@@ -446,6 +552,7 @@ class ProactiveMultiAgentWorkflow:
                 execution_result=execution_result,
                 executor=executor,
                 is_resume=is_resume,
+                run_id=run_id,
             )
             if runtime_replan is not None:
                 active_task_graph = runtime_replan["task_graph"]
@@ -497,6 +604,45 @@ class ProactiveMultiAgentWorkflow:
                     critic_final=critic_final_result.output,
                 )
             
+            # Skill 置信度更新: 基于执行结果和 Critic 评审更新被注入 Skill 的置信度
+            tracked_skill_ids = self._skill_usage_tracker.get_tracked_skills(run_id)
+            try:
+                execution_had_failures = execution_result.get("status") != "completed"
+                skill_updates = await self._skill_usage_tracker.update_after_execution(
+                    run_id=run_id,
+                    execution_success=not execution_had_failures,
+                    critic_ok=critic_final_result.output.get("ok", False),
+                )
+                for update in skill_updates:
+                    logger.info(
+                        "Skill %s confidence updated: %.2f -> %.2f (status: %s -> %s)",
+                        update["skill_id"],
+                        update["old_confidence"],
+                        update["new_confidence"],
+                        update["old_status"],
+                        update["new_status"],
+                    )
+            except Exception as exc:
+                logger.warning("Skill confidence update failed: %s", exc)
+            finally:
+                self._skill_usage_tracker.clear_tracking(run_id)
+
+            # Skill 改进闭环: 当 Skill 被使用但产生次优结果时, 提议修订
+            try:
+                reviser = SkillReviser(self._skill_store)
+                for skill_id in tracked_skill_ids:
+                    proposal = await reviser.check_and_propose_revision(
+                        skill_id=skill_id,
+                        run_id=run_id,
+                        execution_result=execution_result.get("final_output", {}),
+                        critic_final=critic_final_result.output,
+                    )
+                    if proposal:
+                        result = await reviser.apply_revision(skill_id=skill_id, proposal=proposal)
+                        logger.info("Skill %s revised: %s", skill_id, proposal.reason)
+            except Exception as exc:
+                logger.warning("Skill revision failed: %s", exc)
+
             # SkillProposer: 从高质量完成的 run 中提取可复用模式
             try:
                 skill_proposer = SkillProposer(self._skill_store)
@@ -640,17 +786,47 @@ class ProactiveMultiAgentWorkflow:
                     agent_name="critic",
                 )
 
-    def _build_orchestrator_context(
+    async def _build_orchestrator_context(
         self,
         *,
         phase: str,
+        task: dict[str, Any],
         intent: dict[str, Any],
         memory_enabled: bool,
         planning_memory: dict[str, Any],
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         context = {"phase": phase, "intent": intent}
         if memory_enabled:
             context["memory"] = planning_memory.get("summary", {})
+        # Skill 注入: 以结构化 few-shot 形式增强规划能力
+        try:
+            skill_injector = SkillInjector(self._skill_store)
+            intent_str: str | None = None
+            if isinstance(intent, dict):
+                intent_str = intent.get("primary_intent_type") or intent.get("type")
+            skill_payload = await skill_injector.retrieve_applicable_skills(
+                task=task,
+                intent=intent_str if isinstance(intent_str, str) else None,
+                skill_enabled=memory_enabled,
+            )
+            context["skills"] = skill_payload
+            # Skill 使用跟踪: 记录被注入的 skill_id 用于后续置信度更新
+            if run_id is not None:
+                for skill in skill_payload.get("skills", []):
+                    skill_id = skill.get("skill_id")
+                    if skill_id:
+                        self._skill_usage_tracker.track_usage(
+                            skill_id, run_id=run_id, phase=phase
+                        )
+        except Exception as exc:
+            logger.warning("Skill injection failed: %s", exc)
+            context["skills"] = {
+                "skill_enabled": memory_enabled,
+                "skills": [],
+                "skill_count": 0,
+                "injection_summary": f"Skill injection error: {exc}",
+            }
         return context
 
     def _extend_orchestrator_context(
@@ -735,6 +911,7 @@ class ProactiveMultiAgentWorkflow:
         execution_result: dict[str, Any],
         executor: TaskGraphExecutor,
         is_resume: bool,
+        run_id: str | None = None,
     ) -> dict[str, Any] | None:
         if is_resume:
             return None
@@ -742,6 +919,14 @@ class ProactiveMultiAgentWorkflow:
             return None
 
         reason = build_runtime_replan_reason(execution_result)
+        runtime_replan_base = await self._build_orchestrator_context(
+            phase="runtime_replan",
+            task=task,
+            intent=intent_result.output,
+            memory_enabled=memory_enabled,
+            planning_memory=planning_memory,
+            run_id=run_id,
+        )
         replan_result = self._ensure_proactive_result(
             await self._orchestrator_agent.orchestrate(
                 task=task,
@@ -749,12 +934,7 @@ class ProactiveMultiAgentWorkflow:
                     task=task,
                     base_context={
                         "phase": "runtime_replan",
-                        **self._build_orchestrator_context(
-                            phase="runtime_replan",
-                            intent=intent_result.output,
-                            memory_enabled=memory_enabled,
-                            planning_memory=planning_memory,
-                        ),
+                        **runtime_replan_base,
                         "critic": critic_result.output,
                         "prior_task_graph": active_task_graph,
                         "execution_failure": extract_execution_failure(execution_result),

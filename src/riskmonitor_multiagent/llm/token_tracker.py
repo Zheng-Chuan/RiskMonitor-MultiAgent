@@ -75,6 +75,26 @@ class TokenUsageRecord:
     cached: bool = False
 
 
+@dataclass
+class TokenUsageMetrics:
+    """三层 prompt 分离 + token 优化的扩展指标.
+
+    在原有 TokenUsageRecord 基础上, 增加了:
+    - cache_hit_rate: 缓存命中率
+    - prefix_cache_savings: 前缀缓存节省的 token 数
+    - tier_breakdown: 各层级的 token 消耗明细
+    - cost_estimate: 估算成本
+    """
+
+    total_tokens: int
+    prompt_tokens: int
+    completion_tokens: int
+    cache_hit_rate: float
+    prefix_cache_savings: int
+    tier_breakdown: dict[str, int]  # {"stable": N, "context": N, "volatile": N}
+    cost_estimate: float
+
+
 class TokenTracker:
     """LLM Token 用量追踪器.
 
@@ -385,6 +405,7 @@ def record_token_usage(
 
 __all__ = [
     "TokenUsageRecord",
+    "TokenUsageMetrics",
     "TokenTracker",
     "get_token_tracker",
     "reset_token_tracker",

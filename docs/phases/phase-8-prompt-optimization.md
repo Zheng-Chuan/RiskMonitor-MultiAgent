@@ -2,7 +2,7 @@
 
 ## 状态
 
-待开始 ☐
+已完成 ✅
 
 ## 核心目标
 
@@ -35,19 +35,19 @@
 
 将 LLM 调用的 prompt 构建从每次全量重建升级为三层分离策略, 降低 token 成本并提高缓存命中率.
 
-- [ ] Checkpoint 14.7.1 三层 prompt 分离实现
+- [x] Checkpoint 14.7.1 三层 prompt 分离实现
   - 实现项: 将 prompt 构建分离为 `stable_tier` (Agent 角色定义, 工具索引, 行为规则), `context_tier` (当前 Skills, 项目规则, 日级刷新), `volatile_tier` (记忆快照, 当前事件, 每次刷新). stable_tier 尽量保持前缀稳定以命中提供商端缓存.
   - 验收方法: 运行 prompt 构建单测和 token 对比测试.
   - 验收证据: 三层分离后的 prompt 结构. token 用量对比 (分层前后). 缓存命中率统计.
   - 通过标准: stable_tier 在连续调用中保持完全一致. volatile_tier 变化不影响 stable_tier 缓存.
 
-- [ ] Checkpoint 14.7.2 prompt 版本管理与缓存失效控制
+- [x] Checkpoint 14.7.2 prompt 版本管理与缓存失效控制
   - 实现项: stable_tier 按版本号管理, 变更时统一失效. context_tier 按日期戳或配置哈希管理. volatile_tier 不参与缓存. 时间戳精度控制为日级 (非分钟级) 以减少缓存失效.
   - 验收方法: 运行 2 个缓存失效场景 case 和 1 个版本变更 case.
   - 验收证据: 版本变更触发的失效日志. 日级时间戳验证. 缓存命中率统计.
   - 通过标准: 版本变更时正确失效. 日内多次调用共享同一 context_tier 缓存. 预期 token 成本降低 20%+.
 
-- [ ] Checkpoint 14.7.3 token 成本追踪与优化报告
+- [x] Checkpoint 14.7.3 token 成本追踪与优化报告
   - 实现项: 扩展现有 TokenTracker, 增加 `cache_hit_rate` `prefix_cache_savings` `tier_breakdown` 指标. 定期生成成本优化报告.
   - 验收方法: 运行完整 benchmark 后检查成本报告.
   - 验收证据: 成本报告样例. 分层前后对比. cache_hit_rate 指标.
@@ -59,7 +59,7 @@
 
 验证 Phase 5-8 各能力形成的涌现属性: 系统越用越好.
 
-- [ ] Checkpoint: 自我改进闭环端到端验证
+- [x] Checkpoint: 自我改进闭环端到端验证
   - 实现项: 连续运行系统 7 天, 观察 Skill 库积累, 记忆质量提升, 规划效率变化, token 成本变化的趋势.
   - 验收方法: 7 天连续运行后生成趋势报告.
   - 验收证据: Skill 库增长曲线. 规划质量趋势. token 成本趋势. 任务完成率趋势.
@@ -85,10 +85,10 @@
 
 ## 交付物清单
 
-- [ ] 代码：三层 prompt 构建器, 版本管理器, 缓存失效控制, TokenTracker 扩展
-- [ ] 测试：prompt 构建单测, 缓存失效测试, token 对比测试
-- [ ] 文档：提示词分层策略说明, 成本优化报告模板
-- [ ] 评测：分层前后 token 成本对比, 7 天连续运行趋势报告
+- [x] 代码：三层 prompt 构建器, 版本管理器, 缓存失效控制, TokenTracker 扩展
+- [x] 测试：prompt 构建单测, 缓存失效测试, token 对比测试
+- [x] 文档：提示词分层策略说明, 成本优化报告模板
+- [x] 评测：分层前后 token 成本对比, 7 天连续运行趋势报告
 
 ## 相关文档
 

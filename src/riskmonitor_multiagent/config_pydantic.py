@@ -95,6 +95,12 @@ class Settings(BaseSettings):
     # ---- Knowledge 配置 ----
     knowledge_db_path: str = Field(default="", description="知识库 SQLite 路径(为空使用默认)")
 
+    # ---- Skill governance 配置 ----
+    skill_max_per_category: int = Field(default=10, description="每个分类最多 Skill 数")
+    skill_min_confidence_injection: float = Field(default=0.3, description="注入最低置信度")
+    skill_max_age_days: int = Field(default=90, description="Skill 最大年龄(天), 超期自动归档")
+    skill_max_injection_tokens: int = Field(default=2000, description="Skill 注入 token 预算")
+
     # ---- 派生属性 ----
     @property
     def mysql_dsn(self) -> str:

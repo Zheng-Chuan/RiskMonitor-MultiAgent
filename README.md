@@ -35,6 +35,22 @@
 - [docs/ARCHETECTURE.md](docs/ARCHETECTURE.md)
 - [docs/PRD.md](docs/PRD.md)
 
+## 开发环境
+
+本项目使用 conda 环境 MCP：
+
+```bash
+conda activate MCP
+# 或使用完整路径
+# /Users/zhengchuan/anaconda3/envs/MCP/bin/python
+
+# 运行测试
+PYTHONPATH=src python -m pytest tests/ -v
+
+# 启动服务
+make up
+```
+
 ## 测试入口
 
 - `tests/unit`: 纯逻辑和 contract 测试

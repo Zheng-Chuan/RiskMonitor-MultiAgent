@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from riskmonitor_multiagent.contracts.approval import build_approval_summary_text
@@ -188,6 +189,9 @@ class MemoryWriteOperationsMixin:
                 "tags": ["lesson", "procedure"],
             }
         )
+        # lesson 是关键数据, 立即同步落盘 (仅在 should_persist 时触发)
+        if self._ttl_engine.should_persist(lesson_entry):
+            asyncio.ensure_future(self.persistence.persist_memory_entry(lesson_entry))
         experience_entry = await self._persist_long_term_experience(
             run_id=run_id, task=task, final_output=final_output, critic_final=critic_final,
         )
@@ -299,4 +303,7 @@ class MemoryWriteOperationsMixin:
                 "tags": ["experience", "few_shot", "critic"],
             }
         )
+        # long_term_experience 是关键数据, 立即同步落盘 (仅在 should_persist 时触发)
+        if self._ttl_engine.should_persist(experience_entry):
+            asyncio.ensure_future(self.persistence.persist_memory_entry(experience_entry))
         return {"experience_entry": experience_entry, "rejected_entry": None, "policy": policy}

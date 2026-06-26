@@ -76,10 +76,10 @@
 | Phase 2 | 记忆闭环和恢复执行 | ✓ 完成 | [phase-2-memory-closure.md](./phases/phase-2-memory-closure.md) |
 | Phase 3 | 事件驱动和主动协作 | ✓ 完成 | [phase-3-event-driven.md](./phases/phase-3-event-driven.md) |
 | Phase 4 | 评测和门禁生产化 | ✓ 完成 | [phase-4-evaluation.md](./phases/phase-4-evaluation.md) |
-| Phase 5 | 技能自创闭环 | ☐ 待开始 | [phase-5-skill-creation.md](./phases/phase-5-skill-creation.md) |
-| Phase 6 | 记忆永久化与上下文压缩 | ☐ 待开始 | [phase-6-memory-persistence.md](./phases/phase-6-memory-persistence.md) |
-| Phase 7 | 调度与多平台 | ☐ 待开始 | [phase-7-scheduling-gateway.md](./phases/phase-7-scheduling-gateway.md) |
-| Phase 8 | 提示词优化与自我改进闭环 | ☐ 待开始 | [phase-8-prompt-optimization.md](./phases/phase-8-prompt-optimization.md) |
+| Phase 5 | 技能自创闭环 | ✓ 完成 | [phase-5-skill-creation.md](./phases/phase-5-skill-creation.md) |
+| Phase 6 | 记忆永久化与上下文压缩 | ✓ 完成 | [phase-6-memory-persistence.md](./phases/phase-6-memory-persistence.md) |
+| Phase 7 | 调度与多平台 | ✓ 完成 | [phase-7-scheduling-gateway.md](./phases/phase-7-scheduling-gateway.md) |
+| Phase 8 | 提示词优化与自我改进闭环 | ✓ 完成 | [phase-8-prompt-optimization.md](./phases/phase-8-prompt-optimization.md) |
 
 ---
 
@@ -92,7 +92,7 @@
 | 统一记忆架构 | Implemented | [ADR-003](./decisions/ADR-003-unified-memory-design.md) |
 | 零信任工具治理 | Implemented | [ADR-004](./decisions/ADR-004-tool-governance.md) |
 | run_trace.v2 全链路追踪 | Implemented | [ADR-005](./decisions/ADR-005-run-trace-v2.md) |
-| Hermes 五柱升级提案 | Draft | [RFC-001](./decisions/RFC-001-hermes-upgrade.md) |
+| Hermes 五柱升级提案 | Implemented | [RFC-001](./decisions/RFC-001-hermes-upgrade.md) |
 
 ---
 

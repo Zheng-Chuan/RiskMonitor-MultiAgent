@@ -28,6 +28,7 @@ class EventType(Enum):
     MODERATOR_DECISION = "moderator_decision"
     CONFLICT_DETECTED = "conflict_detected"
     ARBITRATION_RESOLVED = "arbitration_resolved"
+    CRON_TRIGGERED = "cron_triggered"
 
 
 def normalize_event(event: dict[str, Any]) -> dict[str, Any]:

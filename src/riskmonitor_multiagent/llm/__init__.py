@@ -5,6 +5,7 @@ from __future__ import annotations
 from riskmonitor_multiagent.llm.cache import LLMCache, get_llm_cache, reset_llm_cache
 from riskmonitor_multiagent.llm.llm_client import LLMError
 from riskmonitor_multiagent.llm.llm_client import LlmClient
+from riskmonitor_multiagent.llm.token_tracker import TokenUsageMetrics
 from riskmonitor_multiagent.llm.output_repair import (
     OutputRepairError,
     build_repair_prompt,
@@ -29,5 +30,6 @@ __all__ = [
     "build_repair_prompt",
     "PromptLoader",
     "get_prompt_loader",
+    "TokenUsageMetrics",
 ]
 
