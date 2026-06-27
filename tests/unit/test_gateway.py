@@ -109,9 +109,13 @@ class _FakeAdapter(GatewayAdapter):
         return self._platform
 
     async def receive_message(self, raw_input: dict) -> GatewayMessage:
+        msg_type = str(raw_input.get("message_type", "user_task"))
         return GatewayMessage(
             platform=self.platform_name,
+            message_type=msg_type,
             content=str(raw_input.get("content", "")),
+            user_id=str(raw_input.get("from_user")) if raw_input.get("from_user") else None,
+            channel_id=str(raw_input.get("chat_id")) if raw_input.get("chat_id") else None,
         )
 
     async def send_response(self, message: GatewayMessage, response: dict) -> bool:

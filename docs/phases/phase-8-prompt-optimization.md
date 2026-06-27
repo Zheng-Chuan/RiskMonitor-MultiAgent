@@ -48,10 +48,10 @@
   - 通过标准: 版本变更时正确失效. 日内多次调用共享同一 context_tier 缓存. 预期 token 成本降低 20%+.
 
 - [x] Checkpoint 14.7.3 token 成本追踪与优化报告
-  - 实现项: 扩展现有 TokenTracker, 增加 `cache_hit_rate` `prefix_cache_savings` `tier_breakdown` 指标. 定期生成成本优化报告.
+  - 实现项: 扩展现有 TokenTracker, 增加 `cache_hit_rate` `prefix_cache_savings` `tier_breakdown` 指标. 实现 `CostReportGenerator` (位于 `src/riskmonitor_multiagent/prompts/cost_report.py`), 支持生成分层前后 token 成本对比报告, 包含各 Agent 各层 token 用量明细和缓存节省统计. 支持 tiktoken 精确计算 (可选依赖, 不可用时回退到启发式估算).
   - 验收方法: 运行完整 benchmark 后检查成本报告.
   - 验收证据: 成本报告样例. 分层前后对比. cache_hit_rate 指标.
-  - 通过标准: 成本报告可生成. 分层优化后 token 总消耗下降可量化.
+  - 通过标准: 成本报告可生成. 分层优化后 token 总消耗下降可量化. token 成本下降 20%+ 可通过报告验证.
 
 ### 自我改进闭环验证
 
@@ -60,10 +60,10 @@
 验证 Phase 5-8 各能力形成的涌现属性: 系统越用越好.
 
 - [x] Checkpoint: 自我改进闭环端到端验证
-  - 实现项: 连续运行系统 7 天, 观察 Skill 库积累, 记忆质量提升, 规划效率变化, token 成本变化的趋势.
+  - 实现项: 连续运行系统 7 天, 观察 Skill 库积累, 记忆质量提升, 规划效率变化, token 成本变化的趋势. 实现 `TrendTracker` (位于 `src/riskmonitor_multiagent/prompts/trend_tracker.py`), 支持自动追踪多次运行的关键指标趋势 (Skill 库增长、规划质量、token 成本、任务完成率), 生成 7 天自我改进趋势报告.
   - 验收方法: 7 天连续运行后生成趋势报告.
-  - 验收证据: Skill 库增长曲线. 规划质量趋势. token 成本趋势. 任务完成率趋势.
-  - 通过标准: Skill 库有有效积累. 系统整体表现随使用时间呈上升趋势.
+  - 验收证据: Skill 库增长曲线. 规划质量趋势. token 成本趋势. 任务完成率趋势. TrendTracker 生成的趋势报告.
+  - 通过标准: Skill 库有有效积累. 系统整体表现随使用时间呈上升趋势. 7 天自我改进趋势可通过 TrendTracker 验证.
 
 ## 风险与缓解
 
@@ -85,10 +85,10 @@
 
 ## 交付物清单
 
-- [x] 代码：三层 prompt 构建器, 版本管理器, 缓存失效控制, TokenTracker 扩展
+- [x] 代码：三层 prompt 构建器 (含 tiktoken 可选精确计算), 版本管理器, 缓存失效控制, TokenTracker 扩展, CostReportGenerator, TrendTracker
 - [x] 测试：prompt 构建单测, 缓存失效测试, token 对比测试
 - [x] 文档：提示词分层策略说明, 成本优化报告模板
-- [x] 评测：分层前后 token 成本对比, 7 天连续运行趋势报告
+- [x] 评测：分层前后 token 成本对比 (CostReportGenerator 验证), 7 天连续运行趋势报告 (TrendTracker 验证)
 
 ## 相关文档
 
