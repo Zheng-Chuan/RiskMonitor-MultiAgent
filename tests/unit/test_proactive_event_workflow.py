@@ -3,6 +3,10 @@ from __future__ import annotations
 import pytest
 
 from riskmonitor_multiagent.contracts.event import EventType, new_event
+from riskmonitor_multiagent.orchestration.multiagent_workflow import (
+    run_user_task,
+    start_from_event,
+)
 from riskmonitor_multiagent.orchestration.proactive_workflow import (
     ProactiveMultiAgentWorkflow,
     reset_proactive_workflow,
@@ -81,3 +85,48 @@ async def test_start_from_event_rejects_invalid_event() -> None:
     assert result.get("status") == "failed"
     assert result.get("entry_type") == "system_event"
     assert "invalid_event:" in (result.get("errors") or [""])[0]
+
+
+@pytest.mark.asyncio
+async def test_multiagent_workflow_facade_routes_user_task(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_run(*, task: dict) -> dict:
+        captured["task"] = task
+        return {"status": "completed", "task_id": task.get("task_id")}
+
+    monkeypatch.setattr(
+        "riskmonitor_multiagent.orchestration.proactive_workflow.run_proactive_workflow",
+        fake_run,
+    )
+    result = await run_user_task(task={"task_id": "facade-user-1", "payload": {"content": "分析任务"}})
+
+    assert result.get("status") == "completed"
+    assert (captured.get("task") or {}).get("task_id") == "facade-user-1"
+
+
+@pytest.mark.asyncio
+async def test_multiagent_workflow_facade_routes_system_event(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeWorkflow:
+        async def start_from_event(self, *, event: dict, candidate_agents=None) -> dict:
+            return {
+                "status": "completed",
+                "event_id": event.get("event_id"),
+                "candidate_agents": list(candidate_agents or []),
+            }
+
+    monkeypatch.setattr(
+        "riskmonitor_multiagent.orchestration.proactive_workflow.get_proactive_workflow",
+        lambda: _FakeWorkflow(),
+    )
+    event = new_event(
+        event_type=EventType.TASK_CREATED,
+        source_agent="monitor",
+        payload={"content": "facade event"},
+    )
+
+    result = await start_from_event(event=event, candidate_agents=["orchestrator"])
+
+    assert result.get("status") == "completed"
+    assert result.get("event_id") == event.get("event_id")
+    assert result.get("candidate_agents") == ["orchestrator"]

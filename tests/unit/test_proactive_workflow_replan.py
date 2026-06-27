@@ -548,6 +548,10 @@ def test_proactive_workflow_persists_memory_and_supports_resume_from_run_id():
             return {
                 "hits": [{"entry_id": "mem-1", "kind": "lesson", "memory_type": "procedural", "content": {"text": "先查持仓"}}],
                 "summary": {"hit_count": 1, "texts": ["[procedural/lesson] 先查持仓"]},
+                "shared_board": [{"entry_id": "board-1", "agent_role": "orchestrator", "content": {"text": "关注持仓波动"}}],
+                "private_memory_state": {
+                    "risk_analyst": [{"entry_id": "pm-1", "content": {"text": "分析师历史备注"}}],
+                },
             }
 
         async def record_working_memory(self, *, run_id, task, trace_entry, node=None, node_result=None, private_memory_enabled=True):
@@ -713,6 +717,10 @@ def test_proactive_workflow_persists_memory_and_supports_resume_from_run_id():
     assert (second.get("run_summary") or {}).get("text") == "完成总结"
     assert isinstance(seen_resume_context.get("resume_context"), dict)
     assert len((seen_resume_context.get("resume_context") or {}).get("memory_state") or []) == 1
+    assert len((seen_resume_context.get("resume_context") or {}).get("shared_memory_board") or []) == 1
+    assert "risk_analyst" in ((seen_resume_context.get("resume_context") or {}).get("private_memory_state") or {})
+    assert isinstance((seen_resume_context.get("resume_context") or {}).get("execution_state"), dict)
+    assert isinstance((seen_resume_context.get("resume_context") or {}).get("task_graph"), dict)
 
 
 def test_proactive_workflow_omits_memory_fields_when_memory_disabled():

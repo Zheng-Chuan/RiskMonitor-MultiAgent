@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from ast import literal_eval
 from collections.abc import Mapping
 from typing import Any, Awaitable, Callable
 
@@ -78,6 +79,7 @@ class TaskGraphExecutor:
         edges = [dict(edge) for edge in graph.get("edges", []) if isinstance(edge, dict)]
         prior_state = dict(execution_state) if isinstance(execution_state, dict) else {}
         completed = self._extract_completed_steps(prior_state)
+        skipped = self._extract_skipped_steps(prior_state)
         node_outputs = self._extract_node_outputs(prior_state)
         delegate_results = self._restore_delegate_results(prior_state)
         receipts = self._extract_receipts(prior_state)
@@ -97,6 +99,7 @@ class TaskGraphExecutor:
             )
 
         dependency_map: dict[str, set[str]] = {str(node["step_id"]): set() for node in nodes}
+        incoming_edges_map: dict[str, list[dict[str, Any]]] = {str(node["step_id"]): [] for node in nodes}
         for node in nodes:
             step_id = str(node["step_id"])
             parent_id = node.get("parent_id")
@@ -108,8 +111,10 @@ class TaskGraphExecutor:
             to_step_id = edge.get("to_step_id")
             if isinstance(from_step_id, str) and from_step_id.strip() and isinstance(to_step_id, str) and to_step_id.strip():
                 dependency_map.setdefault(to_step_id.strip(), set()).add(from_step_id.strip())
+                incoming_edges_map.setdefault(to_step_id.strip(), []).append(dict(edge))
 
         remaining = {str(node["step_id"]): node for node in nodes}
+        node_statuses = self._build_node_statuses(nodes=nodes, completed=completed, skipped=skipped)
         final_output: dict[str, Any] = {}
         status = "completed"
         failed_step_id: str | None = None
@@ -119,11 +124,18 @@ class TaskGraphExecutor:
             step_id = str(node["step_id"])
             if step_id in completed and not self._should_resume_node(step_id=step_id, resume_from_step_id=resume_from_step_id, dependency_map=dependency_map):
                 node["status"] = "completed"
+                node_statuses[step_id] = "completed"
+                remaining.pop(step_id, None)
+            elif step_id in skipped and not self._should_resume_node(step_id=step_id, resume_from_step_id=resume_from_step_id, dependency_map=dependency_map):
+                node["status"] = "skipped"
+                node_statuses[step_id] = "skipped"
                 remaining.pop(step_id, None)
             elif self._should_resume_node(step_id=step_id, resume_from_step_id=resume_from_step_id, dependency_map=dependency_map):
                 node["status"] = "pending"
                 completed.discard(step_id)
+                skipped.discard(step_id)
                 node_outputs.pop(step_id, None)
+                node_statuses[step_id] = "pending"
 
         # 清理需要从失败点之后重新执行的派生节点状态
         if resume_from_step_id:
@@ -131,14 +143,31 @@ class TaskGraphExecutor:
                 if self._should_resume_node(step_id=step_id, resume_from_step_id=resume_from_step_id, dependency_map=dependency_map):
                     node_outputs.pop(step_id, None)
                     completed.discard(step_id)
+                    skipped.discard(step_id)
+                    node_statuses[step_id] = "pending"
 
         while remaining:
+            terminal_steps = completed | skipped
             ready_nodes = [
                 node
                 for step_id, node in remaining.items()
-                if dependency_map.get(step_id, set()).issubset(completed)
+                if dependency_map.get(step_id, set()).issubset(terminal_steps)
             ]
-            if not ready_nodes:
+            executable_nodes: list[dict[str, Any]] = []
+            skipped_nodes: list[tuple[dict[str, Any], dict[str, Any]]] = []
+            for node in ready_nodes:
+                readiness = self._evaluate_node_readiness(
+                    task=task,
+                    node=node,
+                    incoming_edges=incoming_edges_map.get(str(node.get("step_id") or ""), []),
+                    node_outputs=node_outputs,
+                    node_statuses=node_statuses,
+                )
+                if readiness.get("status") == "skipped":
+                    skipped_nodes.append((node, readiness))
+                else:
+                    executable_nodes.append(node)
+            if not executable_nodes and not skipped_nodes:
                 status = "failed"
                 for node in remaining.values():
                     node["status"] = "blocked"
@@ -152,14 +181,20 @@ class TaskGraphExecutor:
                         node=node,
                         node_outputs=node_outputs,
                     )
-                    for node in ready_nodes
+                    for node in executable_nodes
                 )
             )
+            processed_nodes: list[dict[str, Any]] = list(executable_nodes)
+            processed_results: list[dict[str, Any]] = list(results)
+            for node, readiness in skipped_nodes:
+                processed_nodes.append(node)
+                processed_results.append(self._build_skipped_result(node=node, readiness=readiness))
 
             should_stop = False
-            for node, node_result in zip(ready_nodes, results):
+            for node, node_result in zip(processed_nodes, processed_results):
                 step_id = str(node["step_id"])
                 node["status"] = node_result["status"]
+                node_statuses[step_id] = node_result["status"]
                 node["attempt_count"] = node_result.get("attempt_count", 1)
                 if isinstance(node_result.get("evidence"), dict):
                     node["evidence"] = node_result["evidence"]
@@ -239,6 +274,8 @@ class TaskGraphExecutor:
                         delegate_results[node_result["delegate_result"].meta["agent_name"]] = node_result["delegate_result"]
                     if isinstance(node_result.get("final_output"), dict):
                         final_output = node_result["final_output"]
+                elif node_result["status"] == "skipped":
+                    skipped.add(step_id)
                 elif node_result["status"] == "stopped":
                     completed.add(step_id)
                     should_stop = True
@@ -278,6 +315,7 @@ class TaskGraphExecutor:
             "task_graph_execution": {
                 "status": status,
                 "completed_steps": sorted(completed),
+                "skipped_steps": sorted(skipped),
                 "failed_step_id": failed_step_id,
                 "blocked_step_id": blocked_step_id,
                 "errors": errors,
@@ -399,39 +437,12 @@ class TaskGraphExecutor:
             return step_approval_result
 
         if kind == "delegate":
-            raw_target_agent = str(node.get("target_agent") or "").strip()
-            target_agent = self._resolve_delegate_target(raw_target_agent)
-            handler = self._delegate_handlers.get(target_agent)
-            if handler is None:
-                return {"status": "failed", "error": f"unsupported_delegate_target:{raw_target_agent or target_agent or 'unknown'}"}
-
-            result = await handler(
+            return await self._execute_delegate_like_node(
                 task=task,
-                context={
-                    "task_graph_node": node,
-                    "step_id": step_id,
-                    "upstream_outputs": dict(node_outputs),
-                    "resume_context": (
-                        dict(task.get("resume_context", {}))
-                        if isinstance(task.get("resume_context"), dict)
-                        else {}
-                    ),
-                },
+                node=node,
+                node_outputs=node_outputs,
+                mode="delegate",
             )
-            result.meta = dict(result.meta or {})
-            result.meta["agent_name"] = target_agent
-            return {
-                "status": "completed" if result.ok else "failed",
-                "output": result.output if isinstance(result.output, dict) else {},
-                "delegate_result": result,
-                "output_ref": target_agent,
-                "evidence": {
-                    "task_graph_step_id": step_id,
-                    "delegate_agent": target_agent,
-                    "requested_delegate_agent": raw_target_agent,
-                },
-                "error": None if result.ok else f"delegate_failed:{target_agent}",
-            }
 
         if kind == "tool_call":
             tool_name = str(node.get("tool_name") or "").strip()
@@ -565,6 +576,19 @@ class TaskGraphExecutor:
                 "input_sources": list(final_output.get("sources") or []),
             }
 
+        if kind == "analyze":
+            return await self._execute_analyze_node(
+                task=task,
+                node=node,
+                node_outputs=node_outputs,
+            )
+
+        if kind == "ask_human":
+            return self._execute_ask_human_node(
+                node=node,
+                node_outputs=node_outputs,
+            )
+
         if kind == "replan":
             return {
                 "status": "completed",
@@ -632,6 +656,12 @@ class TaskGraphExecutor:
             return set()
         return {str(step_id) for step_id in raw if isinstance(step_id, str) and step_id.strip()}
 
+    def _extract_skipped_steps(self, state: dict[str, Any]) -> set[str]:
+        raw = state.get("skipped_steps")
+        if not isinstance(raw, list):
+            return set()
+        return {str(step_id) for step_id in raw if isinstance(step_id, str) and step_id.strip()}
+
     def _extract_node_outputs(self, state: dict[str, Any]) -> dict[str, dict[str, Any]]:
         raw = state.get("node_outputs")
         if not isinstance(raw, Mapping):
@@ -668,6 +698,28 @@ class TaskGraphExecutor:
                 )
         return restored
 
+    def _build_node_statuses(
+        self,
+        *,
+        nodes: list[dict[str, Any]],
+        completed: set[str],
+        skipped: set[str],
+    ) -> dict[str, str]:
+        statuses: dict[str, str] = {}
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            step_id = str(node.get("step_id") or "")
+            if not step_id:
+                continue
+            if step_id in completed:
+                statuses[step_id] = "completed"
+            elif step_id in skipped:
+                statuses[step_id] = "skipped"
+            else:
+                statuses[step_id] = str(node.get("status") or "pending")
+        return statuses
+
     def _should_resume_node(
         self,
         *,
@@ -700,6 +752,338 @@ class TaskGraphExecutor:
                 return True
             stack.extend(dependency_map.get(current, set()))
         return False
+
+    def _evaluate_node_readiness(
+        self,
+        *,
+        task: dict[str, Any],
+        node: dict[str, Any],
+        incoming_edges: list[dict[str, Any]],
+        node_outputs: dict[str, dict[str, Any]],
+        node_statuses: dict[str, str],
+    ) -> dict[str, Any]:
+        node_condition = node.get("condition")
+        if node_condition is not None:
+            passed = self._evaluate_condition(
+                condition=node_condition,
+                context={
+                    "task": task,
+                    "upstream_outputs": node_outputs,
+                    "upstream_statuses": node_statuses,
+                },
+                parent_step_id=None,
+                node_statuses=node_statuses,
+            )
+            if not passed:
+                return {
+                    "status": "skipped",
+                    "reason": f"node_condition_false:{str(node.get('step_id') or '')}",
+                }
+
+        for edge in incoming_edges:
+            parent_step_id = str(edge.get("from_step_id") or "").strip()
+            if not parent_step_id:
+                continue
+            passed = self._evaluate_condition(
+                condition=edge.get("condition"),
+                context=self._build_condition_context(
+                    parent_step_id=parent_step_id,
+                    node_outputs=node_outputs,
+                    node_statuses=node_statuses,
+                ),
+                parent_step_id=parent_step_id,
+                node_statuses=node_statuses,
+            )
+            if not passed:
+                return {
+                    "status": "skipped",
+                    "reason": f"edge_condition_false:{parent_step_id}->{str(node.get('step_id') or '')}",
+                }
+        return {"status": "ready"}
+
+    def _evaluate_condition(
+        self,
+        *,
+        condition: Any,
+        context: dict[str, Any],
+        parent_step_id: str | None,
+        node_statuses: dict[str, str],
+    ) -> bool:
+        if condition in (None, "", True):
+            return True
+        if condition is False:
+            return False
+        if isinstance(condition, dict):
+            op = str(condition.get("op") or "always").strip().lower()
+            if op == "always":
+                return True
+            if op == "status_in":
+                values = condition.get("value") or condition.get("values") or []
+                allowed = {str(item).strip().lower() for item in values if isinstance(item, str)}
+                current = str(context.get("status") or "").strip().lower()
+                return current in allowed
+            path = str(condition.get("path") or "").strip()
+            actual = self._resolve_condition_value(context=context, path=path)
+            if op == "truthy":
+                return bool(actual)
+            if op == "falsy":
+                return not bool(actual)
+            expected = condition.get("value")
+            if op == "equals":
+                return actual == expected
+            if op == "not_equals":
+                return actual != expected
+            return bool(actual)
+
+        raw = str(condition).strip()
+        if not raw:
+            return True
+        lowered = raw.lower()
+        if lowered == "always":
+            return True
+        if lowered in {"critic_rejected", "manual_resume", "new_evidence"}:
+            return True
+        if lowered in {"on_success", "success", "completed"}:
+            if parent_step_id is None:
+                return True
+            return str(node_statuses.get(parent_step_id) or "").lower() == "completed"
+        if lowered in {"on_skipped", "skipped"}:
+            if parent_step_id is None:
+                return False
+            return str(node_statuses.get(parent_step_id) or "").lower() == "skipped"
+        if lowered in {"on_failure", "failure", "failed"}:
+            if parent_step_id is None:
+                return False
+            return str(node_statuses.get(parent_step_id) or "").lower() == "failed"
+        if lowered.startswith("truthy:"):
+            return bool(self._resolve_condition_value(context=context, path=raw.split(":", 1)[1]))
+        if lowered.startswith("falsy:"):
+            return not bool(self._resolve_condition_value(context=context, path=raw.split(":", 1)[1]))
+        if lowered.startswith("equals:"):
+            path, expected = self._split_condition_path_and_value(raw[len("equals:") :])
+            return self._resolve_condition_value(context=context, path=path) == self._parse_condition_value(expected)
+        if lowered.startswith("not_equals:"):
+            path, expected = self._split_condition_path_and_value(raw[len("not_equals:") :])
+            return self._resolve_condition_value(context=context, path=path) != self._parse_condition_value(expected)
+        return bool(self._resolve_condition_value(context=context, path=raw))
+
+    def _build_condition_context(
+        self,
+        *,
+        parent_step_id: str,
+        node_outputs: dict[str, dict[str, Any]],
+        node_statuses: dict[str, str],
+    ) -> dict[str, Any]:
+        payload = dict(node_outputs.get(parent_step_id) or {})
+        return {
+            "status": node_statuses.get(parent_step_id),
+            "step_id": parent_step_id,
+            "output": payload,
+            **payload,
+        }
+
+    @staticmethod
+    def _split_condition_path_and_value(raw: str) -> tuple[str, str]:
+        path, _, expected = raw.partition(":")
+        return path.strip(), expected.strip()
+
+    @staticmethod
+    def _parse_condition_value(raw: str) -> Any:
+        lowered = raw.lower()
+        if lowered in {"true", "false", "none", "null"}:
+            return {"true": True, "false": False, "none": None, "null": None}[lowered]
+        try:
+            return literal_eval(raw)
+        except (ValueError, SyntaxError):
+            return raw
+
+    @staticmethod
+    def _resolve_condition_value(*, context: dict[str, Any], path: str) -> Any:
+        if not path:
+            return context
+        current: Any = context
+        for part in path.split("."):
+            key = part.strip()
+            if not key:
+                continue
+            if isinstance(current, Mapping) and key in current:
+                current = current[key]
+                continue
+            return None
+        return current
+
+    def _build_skipped_result(
+        self,
+        *,
+        node: dict[str, Any],
+        readiness: dict[str, Any],
+    ) -> dict[str, Any]:
+        now_ms = time.time() * 1000
+        reason = str(readiness.get("reason") or "condition_false")
+        summary = str(node.get("reason") or node.get("instruction") or "条件不满足 已跳过")
+        return {
+            "status": "skipped",
+            "output": {
+                "summary": f"{summary} | skipped:{reason}",
+            },
+            "error": None,
+            "failure_classification": None,
+            "started_at_ms": now_ms,
+            "finished_at_ms": now_ms,
+            "latency_ms": 0.0,
+            "input_sources": [str(edge.get("from_step_id") or "") for edge in readiness.get("incoming_edges", []) if isinstance(edge, dict)],
+            "evidence": {
+                "task_graph_step_id": str(node.get("step_id") or ""),
+                "skip_reason": reason,
+            },
+        }
+
+    async def _execute_delegate_like_node(
+        self,
+        *,
+        task: dict[str, Any],
+        node: dict[str, Any],
+        node_outputs: dict[str, dict[str, Any]],
+        mode: str,
+    ) -> dict[str, Any]:
+        step_id = str(node.get("step_id") or "")
+        raw_target_agent = str(node.get("target_agent") or "").strip()
+        target_agent = self._resolve_delegate_target(raw_target_agent)
+        handler = self._delegate_handlers.get(target_agent)
+        if handler is None:
+            return {"status": "failed", "error": f"unsupported_delegate_target:{raw_target_agent or target_agent or 'unknown'}"}
+
+        result = await handler(
+            task=task,
+            context={
+                "task_graph_node": node,
+                "step_id": step_id,
+                "upstream_outputs": dict(node_outputs),
+                "resume_context": (
+                    dict(task.get("resume_context", {}))
+                    if isinstance(task.get("resume_context"), dict)
+                    else {}
+                ),
+            },
+        )
+        result.meta = dict(result.meta or {})
+        result.meta["agent_name"] = target_agent
+        return {
+            "status": "completed" if result.ok else "failed",
+            "output": result.output if isinstance(result.output, dict) else {},
+            "delegate_result": result,
+            "output_ref": target_agent,
+            "evidence": {
+                "task_graph_step_id": step_id,
+                f"{mode}_agent": target_agent,
+                "requested_delegate_agent": raw_target_agent,
+            },
+            "error": None if result.ok else f"{mode}_failed:{target_agent}",
+        }
+
+    async def _execute_analyze_node(
+        self,
+        *,
+        task: dict[str, Any],
+        node: dict[str, Any],
+        node_outputs: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        target_agent = str(node.get("target_agent") or "").strip()
+        if target_agent:
+            handler = self._delegate_handlers.get(self._resolve_delegate_target(target_agent))
+            if handler is not None:
+                return await self._execute_delegate_like_node(
+                    task=task,
+                    node=node,
+                    node_outputs=node_outputs,
+                    mode="analyze",
+                )
+
+        instruction = str(node.get("instruction") or node.get("reason") or "执行分析").strip()
+        upstream_summaries: list[str] = []
+        for step_id, payload in node_outputs.items():
+            if not isinstance(payload, dict):
+                continue
+            summary = payload.get("summary") or payload.get("report")
+            if isinstance(summary, str) and summary.strip():
+                upstream_summaries.append(f"{step_id}:{summary.strip()}")
+        report_lines = [instruction]
+        if upstream_summaries:
+            report_lines.append("参考上游输出: " + " ; ".join(upstream_summaries))
+        return {
+            "status": "completed",
+            "output": {
+                "summary": instruction,
+                "report": "\n".join(report_lines),
+                "input_sources": sorted(node_outputs.keys()),
+            },
+            "output_ref": "analysis_output",
+            "evidence": {
+                "task_graph_step_id": str(node.get("step_id") or ""),
+                "analysis_mode": "internal",
+            },
+            "input_sources": sorted(node_outputs.keys()),
+        }
+
+    def _execute_ask_human_node(
+        self,
+        *,
+        node: dict[str, Any],
+        node_outputs: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        params = dict(node.get("params")) if isinstance(node.get("params"), dict) else {}
+        approval = dict(node.get("approval")) if isinstance(node.get("approval"), dict) else {}
+        response = params.get("human_response")
+        if not isinstance(response, str) or not response.strip():
+            response = approval.get("response")
+        if isinstance(response, str) and response.strip():
+            clean_response = response.strip()
+            return {
+                "status": "completed",
+                "output": {
+                    "summary": f"人工输入已确认: {clean_response}",
+                    "human_response": clean_response,
+                    "input_sources": sorted(node_outputs.keys()),
+                },
+                "output_ref": "human_response",
+                "evidence": {
+                    "task_graph_step_id": str(node.get("step_id") or ""),
+                    "question": node.get("instruction") or node.get("reason"),
+                },
+                "input_sources": sorted(node_outputs.keys()),
+            }
+
+        request = normalize_approval_request(
+            {
+                "level": "step",
+                "approval_id": approval.get("approval_id") or f"human:{node.get('step_id')}",
+                "step_id": node.get("step_id"),
+                "reason": node.get("instruction") or node.get("reason") or "需要人工输入",
+                "risk_level": approval.get("risk_level") or "MEDIUM",
+                "impact_scope": approval.get("impact_scope") or ["human_input"],
+                "recommended_action": approval.get("recommended_action") or "collect_human_input_and_resume",
+            }
+        )
+        record = normalize_approval_record(
+            {
+                "request": request,
+                "state": "pending",
+                "actor": approval.get("actor"),
+                "note": approval.get("note"),
+                "error": "human_input_required",
+            }
+        )
+        return {
+            "status": "blocked",
+            "output": {
+                "summary": build_approval_summary_text(record),
+                "approval_request": request,
+                "question": node.get("instruction") or node.get("reason"),
+            },
+            "approval_record": record,
+            "error": "human_input_required",
+            "failure_classification": "permission",
+        }
 
     def _build_finalize_output(
         self,

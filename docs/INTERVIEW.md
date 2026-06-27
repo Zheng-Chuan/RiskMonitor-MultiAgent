@@ -2,7 +2,7 @@
 
 本文件整理了针对 RiskMonitor-MultiAgent 项目的高压面试问题与参考答案.
 
-关联架构文档: [ARCHETECTURE.md](file:///Users/zhengchuan/Documents/TECH/Repo/RiskMonitor-MultiAgent/docs/ARCHETECTURE.md)
+关联架构文档: [ARCHITECTURE.md](file:///Users/zhengchuan/Documents/TECH/Repo/RiskMonitor-MultiAgent/docs/ARCHITECTURE.md)
 
 这不是八股文.
 这是从资深面试官视角出发, 专门拷打你是否真的做过这个项目, 是否真的理解 `TaskGraph` `ToolExecutor` `Memory` `Approval` `Trace` `Benchmark` 的一份问答手册.

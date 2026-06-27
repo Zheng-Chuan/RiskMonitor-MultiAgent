@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from riskmonitor_multiagent.cli.replay import main as replay_main
 from riskmonitor_multiagent.cli.replay import replay_run
 from riskmonitor_multiagent.observability.run_trace import (
     RunTraceSnapshot,
@@ -191,3 +192,27 @@ def test_replay_run_can_reload_snapshot_from_disk(tmp_path, monkeypatch) -> None
 
     assert payload["run_id"] == "run_disk_001"
     assert payload["entries"][0]["trace_type"] == "run_finished"
+
+
+def test_replay_cli_main_prints_output(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("RUN_TRACE_DIR", str(tmp_path / "run_traces"))
+    reset_run_trace_store()
+    store = get_run_trace_store()
+    store.save_snapshot(
+        RunTraceSnapshot(
+            run_id="run_cli_001",
+            entry_type="user_task",
+            status="completed",
+            task_id="task_cli_001",
+            entries=[
+                {"category": "final", "trace_type": "run_finished", "timestamp_ms": 2, "status": "completed", "summary": {"status": "completed"}, "payload": {}},
+            ],
+        )
+    )
+
+    exit_code = replay_main(["run_cli_001", "--format", "json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["run_id"] == "run_cli_001"

@@ -32,8 +32,9 @@
 
 ## 文档
 
-- [docs/ARCHETECTURE.md](docs/ARCHETECTURE.md)
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/PRD.md](docs/PRD.md)
+- [docs/RESUME.md](docs/RESUME.md)
 
 ## 开发环境
 

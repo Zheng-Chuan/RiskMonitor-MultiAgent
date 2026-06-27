@@ -1,6 +1,13 @@
-"""多平台网关单元测试."""
+"""多平台网关单元测试.
+
+注意: Slack 和企业微信适配器已于 2026-06-27 移除.
+      以下仅保留 GatewayAdapter / GatewayMessage / GatewayRouter 核心契约测试.
+      适配器相关测试已注释移除, 后续新平台适配器需配套新增测试.
+"""
 
 from __future__ import annotations
+
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -8,9 +15,11 @@ from riskmonitor_multiagent.gateway import (
     GatewayAdapter,
     GatewayMessage,
     GatewayRouter,
-    SlackAdapter,
-    WeChatWorkAdapter,
 )
+
+# [REMOVED - 2026-06-27] Slack 和企业微信适配器已删除
+# from riskmonitor_multiagent.gateway.slack_adapter import SlackAdapter
+# from riskmonitor_multiagent.gateway.wechat_work_adapter import WeChatWorkAdapter
 
 
 # ---------------------------------------------------------------------------
@@ -23,7 +32,7 @@ class TestGatewayMessage:
 
     def test_default_fields_auto_generated(self) -> None:
         """不传参时 message_id 和 timestamp 自动生成."""
-        msg = GatewayMessage(platform="slack")
+        msg = GatewayMessage(platform="test_platform")
         assert msg.message_id.startswith("gw_")
         assert len(msg.message_id) > 3
         assert msg.timestamp > 0
@@ -38,7 +47,7 @@ class TestGatewayMessage:
         """显式传参时字段值被保留."""
         msg = GatewayMessage(
             message_id="gw_custom_001",
-            platform="wechat_work",
+            platform="test_platform",
             message_type="alert",
             content="系统异常",
             user_id="user_001",
@@ -48,7 +57,7 @@ class TestGatewayMessage:
             reply_to="gw_orig_001",
         )
         assert msg.message_id == "gw_custom_001"
-        assert msg.platform == "wechat_work"
+        assert msg.platform == "test_platform"
         assert msg.message_type == "alert"
         assert msg.content == "系统异常"
         assert msg.user_id == "user_001"
@@ -59,211 +68,60 @@ class TestGatewayMessage:
 
     def test_message_id_uniqueness(self) -> None:
         """连续构造的两个消息 ID 不同."""
-        msg1 = GatewayMessage(platform="slack")
-        msg2 = GatewayMessage(platform="slack")
+        msg1 = GatewayMessage(platform="test_platform")
+        msg2 = GatewayMessage(platform="test_platform")
         assert msg1.message_id != msg2.message_id
 
 
 # ---------------------------------------------------------------------------
-# 2 & 3. 适配器 receive_message → GatewayMessage 正确转换
+# [REMOVED - 2026-06-27] 适配器 receive_message 测试
+# 以下测试类依赖已删除的 SlackAdapter / WeChatWorkAdapter, 已移除:
+#   - TestWeChatWorkAdapterReceive
+#   - TestSlackAdapterReceive
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# [REMOVED - 2026-06-27] send_response / send_alert 测试
+# 以下测试类依赖已删除的 SlackAdapter / WeChatWorkAdapter, 已移除:
+#   - TestSendResponseAndAlert
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# [REMOVED - 2026-06-27] platform_hints 测试
+# 以下测试类依赖已删除的 SlackAdapter / WeChatWorkAdapter, 已移除:
+#   - TestPlatformHints
 # ---------------------------------------------------------------------------
 
 
-class TestWeChatWorkAdapterReceive:
-    """企业微信适配器 receive_message 测试."""
-
-    @pytest.mark.asyncio
-    async def test_receive_text_message(self) -> None:
-        """文本消息正确转换为 GatewayMessage."""
-        adapter = WeChatWorkAdapter()
-        raw = {
-            "msg_type": "text",
-            "content": "请检查系统状态",
-            "from_user": "zhangsan",
-            "chat_id": "group_001",
-            "agent_id": "1000002",
-            "msg_id": "msg_abc123",
-        }
-        msg = await adapter.receive_message(raw)
-        assert msg.platform == "wechat_work"
-        assert msg.message_type == "user_task"
-        assert msg.content == "请检查系统状态"
-        assert msg.user_id == "zhangsan"
-        assert msg.channel_id == "group_001"
-        assert msg.metadata.get("agent_id") == "1000002"
-        assert msg.metadata.get("wechat_msg_type") == "text"
-        assert msg.reply_to == "msg_abc123"
-        assert msg.timestamp > 0
-
-    @pytest.mark.asyncio
-    async def test_receive_explicit_message_type(self) -> None:
-        """显式 message_type 优先于 msg_type 映射."""
-        adapter = WeChatWorkAdapter()
-        raw = {
-            "msg_type": "text",
-            "content": "告警确认",
-            "from_user": "lisi",
-            "message_type": "approval",
-        }
-        msg = await adapter.receive_message(raw)
-        assert msg.message_type == "approval"
-
-    @pytest.mark.asyncio
-    async def test_receive_minimal_input(self) -> None:
-        """最小输入也能正常转换."""
-        adapter = WeChatWorkAdapter()
-        raw = {"content": "hello"}
-        msg = await adapter.receive_message(raw)
-        assert msg.platform == "wechat_work"
-        assert msg.content == "hello"
-        assert msg.message_type == "user_task"
-        assert msg.user_id is None
-
-
-class TestSlackAdapterReceive:
-    """Slack 适配器 receive_message 测试."""
-
-    @pytest.mark.asyncio
-    async def test_receive_message_event(self) -> None:
-        """Slack message 事件正确转换为 GatewayMessage."""
-        adapter = SlackAdapter()
-        raw = {
-            "type": "message",
-            "event": {
-                "text": "check system health",
-                "user": "U12345",
-                "channel": "C67890",
-                "ts": "1700000000.123456",
-            },
-            "team_id": "T00001",
-            "api_app_id": "A00001",
-        }
-        msg = await adapter.receive_message(raw)
-        assert msg.platform == "slack"
-        assert msg.message_type == "user_task"
-        assert msg.content == "check system health"
-        assert msg.user_id == "U12345"
-        assert msg.channel_id == "C67890"
-        assert msg.timestamp == 1700000000123
-        assert msg.metadata.get("team_id") == "T00001"
-        assert msg.metadata.get("api_app_id") == "A00001"
-        assert msg.metadata.get("slack_event_type") == "message"
-
-    @pytest.mark.asyncio
-    async def test_receive_app_mention_with_thread(self) -> None:
-        """app_mention 事件含 thread_ts 时正确设置 reply_to."""
-        adapter = SlackAdapter()
-        raw = {
-            "type": "app_mention",
-            "event": {
-                "text": "<@U BOT> analyze risk",
-                "user": "U99999",
-                "channel": "C11111",
-                "ts": "1700000001.000000",
-                "thread_ts": "1699999999.000000",
-            },
-        }
-        msg = await adapter.receive_message(raw)
-        assert msg.message_type == "user_task"
-        assert msg.reply_to == "1699999999.000000"
-
-    @pytest.mark.asyncio
-    async def test_receive_explicit_message_type(self) -> None:
-        """显式 message_type 优先."""
-        adapter = SlackAdapter()
-        raw = {
-            "type": "message",
-            "event": {"text": "status query", "user": "U1", "channel": "C1"},
-            "message_type": "status",
-        }
-        msg = await adapter.receive_message(raw)
-        assert msg.message_type == "status"
-
-    @pytest.mark.asyncio
-    async def test_receive_invalid_ts_defaults_to_zero(self) -> None:
-        """无效时间戳时 timestamp 保持为 0, 由 dataclass 补默认值."""
-        adapter = SlackAdapter()
-        raw = {
-            "type": "message",
-            "event": {
-                "text": "test",
-                "user": "U1",
-                "channel": "C1",
-                "ts": "not_a_number",
-            },
-        }
-        msg = await adapter.receive_message(raw)
-        # 无效 ts 解析为 0, __post_init__ 会补当前时间戳
-        assert msg.timestamp > 0
-
-
 # ---------------------------------------------------------------------------
-# 4 & 5. send_response 和 send_alert 返回 True
+# 7. GatewayRouter 注册和获取适配器 (核心契约测试, 使用 mock 适配器)
 # ---------------------------------------------------------------------------
 
 
-class TestSendResponseAndAlert:
-    """send_response 和 send_alert 测试."""
+class _FakeAdapter(GatewayAdapter):
+    """用于测试的 fake 适配器."""
 
-    @pytest.mark.asyncio
-    async def test_wechat_work_send_response_returns_true(self) -> None:
-        adapter = WeChatWorkAdapter()
-        msg = GatewayMessage(platform="wechat_work", user_id="u1", channel_id="c1")
-        result = await adapter.send_response(msg, {"text": "处理完成"})
-        assert result is True
+    def __init__(self, platform: str = "fake") -> None:
+        self._platform = platform
 
-    @pytest.mark.asyncio
-    async def test_wechat_work_send_alert_returns_true(self) -> None:
-        adapter = WeChatWorkAdapter()
-        result = await adapter.send_alert(
-            {"title": "CPU 告警", "description": "CPU 超过 90%", "level": "high"},
-            channel_id="ch_alert",
+    @property
+    def platform_name(self) -> str:
+        return self._platform
+
+    async def receive_message(self, raw_input: dict) -> GatewayMessage:
+        return GatewayMessage(
+            platform=self.platform_name,
+            content=str(raw_input.get("content", "")),
         )
-        assert result is True
 
-    @pytest.mark.asyncio
-    async def test_slack_send_response_returns_true(self) -> None:
-        adapter = SlackAdapter()
-        msg = GatewayMessage(platform="slack", user_id="U1", channel_id="C1")
-        result = await adapter.send_response(msg, {"text": "analysis done"})
-        assert result is True
+    async def send_response(self, message: GatewayMessage, response: dict) -> bool:
+        return True
 
-    @pytest.mark.asyncio
-    async def test_slack_send_alert_returns_true(self) -> None:
-        adapter = SlackAdapter()
-        result = await adapter.send_alert(
-            {"title": "Memory Alert", "description": "Memory > 95%", "level": "critical"},
-            channel_id="C_alerts",
-        )
-        assert result is True
+    async def send_alert(self, alert: dict, channel_id: str | None = None) -> bool:
+        return True
 
-
-# ---------------------------------------------------------------------------
-# 6. platform_hints 返回正确特性
-# ---------------------------------------------------------------------------
-
-
-class TestPlatformHints:
-    """platform_hints 测试."""
-
-    def test_wechat_work_hints(self) -> None:
-        hints = WeChatWorkAdapter().platform_hints()
-        assert hints["max_text_length"] == 2048
-        assert hints["supports_markdown"] is True
-        assert hints["supports_card"] is True
-        assert hints["supports_buttons"] is False
-
-    def test_slack_hints(self) -> None:
-        hints = SlackAdapter().platform_hints()
-        assert hints["max_text_length"] == 40000
-        assert hints["supports_markdown"] is True
-        assert hints["supports_card"] is True
-        assert hints["supports_buttons"] is True
-
-
-# ---------------------------------------------------------------------------
-# 7. GatewayRouter 注册和获取适配器
-# ---------------------------------------------------------------------------
+    def platform_hints(self) -> dict:
+        return {"max_text_length": 1024}
 
 
 class TestGatewayRouterRegister:
@@ -271,13 +129,9 @@ class TestGatewayRouterRegister:
 
     def test_register_and_get_adapter(self) -> None:
         router = GatewayRouter()
-        wechat = WeChatWorkAdapter()
-        slack = SlackAdapter()
-        router.register_adapter(wechat)
-        router.register_adapter(slack)
-
-        assert router.get_adapter("wechat_work") is wechat
-        assert router.get_adapter("slack") is slack
+        fake = _FakeAdapter("fake")
+        router.register_adapter(fake)
+        assert router.get_adapter("fake") is fake
 
     def test_get_unregistered_platform_returns_none(self) -> None:
         router = GatewayRouter()
@@ -285,15 +139,15 @@ class TestGatewayRouterRegister:
 
     def test_register_overwrites_same_platform(self) -> None:
         router = GatewayRouter()
-        adapter1 = WeChatWorkAdapter()
-        adapter2 = WeChatWorkAdapter()
+        adapter1 = _FakeAdapter("fake")
+        adapter2 = _FakeAdapter("fake")
         router.register_adapter(adapter1)
         router.register_adapter(adapter2)
-        assert router.get_adapter("wechat_work") is adapter2
+        assert router.get_adapter("fake") is adapter2
 
 
 # ---------------------------------------------------------------------------
-# 8 & 9. route_message 路由决策
+# 8 & 9. route_message 路由决策 (核心契约测试)
 # ---------------------------------------------------------------------------
 
 
@@ -304,11 +158,11 @@ class TestGatewayRouterRoute:
     async def test_route_user_task(self) -> None:
         """user_task 消息类型路由到 user_task 入口."""
         router = GatewayRouter()
-        router.register_adapter(WeChatWorkAdapter())
-        raw = {"msg_type": "text", "content": "分析风险", "from_user": "u1"}
-        result = await router.route_message(raw, platform="wechat_work")
+        router.register_adapter(_FakeAdapter("test"))
+        raw = {"content": "分析风险"}
+        result = await router.route_message(raw, platform="test")
         assert result["entry_type"] == "user_task"
-        assert result["platform"] == "wechat_work"
+        assert result["platform"] == "test"
         assert isinstance(result["message"], GatewayMessage)
         assert result["adapter"] is not None
 
@@ -316,14 +170,9 @@ class TestGatewayRouterRoute:
     async def test_route_alert_to_system_event(self) -> None:
         """alert 消息类型路由到 system_event 入口."""
         router = GatewayRouter()
-        router.register_adapter(WeChatWorkAdapter())
-        raw = {
-            "msg_type": "text",
-            "content": "告警: CPU > 90%",
-            "from_user": "monitor",
-            "message_type": "alert",
-        }
-        result = await router.route_message(raw, platform="wechat_work")
+        router.register_adapter(_FakeAdapter("test"))
+        raw = {"content": "告警: CPU > 90%", "message_type": "alert"}
+        result = await router.route_message(raw, platform="test")
         assert result["entry_type"] == "system_event"
         assert result["message"].message_type == "alert"
 
@@ -331,27 +180,29 @@ class TestGatewayRouterRoute:
     async def test_route_approval_to_system_event(self) -> None:
         """approval 消息类型路由到 system_event 入口."""
         router = GatewayRouter()
-        router.register_adapter(SlackAdapter())
-        raw = {
-            "type": "message",
-            "event": {"text": "approve", "user": "U1", "channel": "C1"},
-            "message_type": "approval",
-        }
-        result = await router.route_message(raw, platform="slack")
+        router.register_adapter(_FakeAdapter("test"))
+        raw = {"content": "approve", "message_type": "approval"}
+        result = await router.route_message(raw, platform="test")
         assert result["entry_type"] == "system_event"
 
     @pytest.mark.asyncio
     async def test_route_status_to_system_event(self) -> None:
         """status 消息类型路由到 system_event 入口."""
         router = GatewayRouter()
-        router.register_adapter(SlackAdapter())
-        raw = {
-            "type": "message",
-            "event": {"text": "status?", "user": "U1", "channel": "C1"},
-            "message_type": "status",
-        }
-        result = await router.route_message(raw, platform="slack")
+        router.register_adapter(_FakeAdapter("test"))
+        raw = {"content": "status?", "message_type": "status"}
+        result = await router.route_message(raw, platform="test")
         assert result["entry_type"] == "system_event"
+
+    @pytest.mark.asyncio
+    async def test_route_explicit_system_event_to_system_event(self) -> None:
+        """显式 system_event 类型也路由到 system_event 入口."""
+        router = GatewayRouter()
+        router.register_adapter(_FakeAdapter("test"))
+        raw = {"content": "收到平台回调事件", "message_type": "system_event"}
+        result = await router.route_message(raw, platform="test")
+        assert result["entry_type"] == "system_event"
+        assert result["message"].message_type == "system_event"
 
     @pytest.mark.asyncio
     async def test_route_unregistered_platform(self) -> None:
@@ -363,27 +214,42 @@ class TestGatewayRouterRoute:
         assert "platform_not_registered" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_route_same_content_different_platforms_same_entry(self) -> None:
-        """不同平台相同请求产生相同路由决策."""
+    async def test_route_and_execute_user_task_uses_executor(self) -> None:
+        """route_and_execute 会把 user_task 交给统一执行器."""
         router = GatewayRouter()
-        router.register_adapter(WeChatWorkAdapter())
-        router.register_adapter(SlackAdapter())
+        router.register_adapter(_FakeAdapter("test"))
+        mock_executor = AsyncMock(return_value={"status": "completed", "kind": "task"})
 
-        wechat_raw = {"msg_type": "text", "content": "分析风险", "from_user": "u1"}
-        slack_raw = {
-            "type": "message",
-            "event": {"text": "分析风险", "user": "U1", "channel": "C1"},
-        }
+        result = await router.route_and_execute(
+            {"content": "分析风险"},
+            platform="test",
+            user_task_executor=mock_executor,
+        )
 
-        wechat_result = await router.route_message(wechat_raw, platform="wechat_work")
-        slack_result = await router.route_message(slack_raw, platform="slack")
+        assert result["entry_type"] == "user_task"
+        assert result["execution_result"]["kind"] == "task"
+        mock_executor.assert_awaited_once()
 
-        assert wechat_result["entry_type"] == slack_result["entry_type"]
-        assert wechat_result["message"].content == slack_result["message"].content
+    @pytest.mark.asyncio
+    async def test_route_and_execute_system_event_uses_executor(self) -> None:
+        """route_and_execute 会把 system_event 交给事件执行器."""
+        router = GatewayRouter()
+        router.register_adapter(_FakeAdapter("test"))
+        mock_executor = AsyncMock(return_value={"status": "completed", "kind": "event"})
+
+        result = await router.route_and_execute(
+            {"content": "CPU 告警", "message_type": "alert"},
+            platform="test",
+            system_event_executor=mock_executor,
+        )
+
+        assert result["entry_type"] == "system_event"
+        assert result["execution_result"]["kind"] == "event"
+        mock_executor.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
-# 10. format_response 根据 platform_hints 截断
+# 10. format_response 根据 platform_hints 截断 (核心契约测试)
 # ---------------------------------------------------------------------------
 
 
@@ -391,46 +257,35 @@ class TestGatewayRouterFormatResponse:
     """GatewayRouter format_response 测试."""
 
     @pytest.mark.asyncio
-    async def test_format_response_wechat_truncation(self) -> None:
-        """企业微信平台响应超长时被截断."""
+    async def test_format_response_truncation(self) -> None:
+        """响应超长时被截断."""
         router = GatewayRouter()
-        router.register_adapter(WeChatWorkAdapter())
-        long_text = "A" * 3000
-        result = await router.format_response("wechat_work", {"text": long_text})
+        router.register_adapter(_FakeAdapter("test"))
+        long_text = "A" * 2000
+        result = await router.format_response("test", {"text": long_text})
         assert result["truncated"] is True
-        assert result["original_length"] == 3000
-        assert len(result["text"]) == 2048
+        assert result["original_length"] == 2000
+        assert len(result["text"]) == 1024
 
     @pytest.mark.asyncio
-    async def test_format_response_slack_no_truncation(self) -> None:
-        """Slack 平台 3000 字符不触发截断."""
+    async def test_format_response_no_truncation(self) -> None:
+        """短文本不触发截断."""
         router = GatewayRouter()
-        router.register_adapter(SlackAdapter())
-        text = "B" * 3000
-        result = await router.format_response("slack", {"text": text})
+        router.register_adapter(_FakeAdapter("test"))
+        text = "B" * 500
+        result = await router.format_response("test", {"text": text})
         assert result.get("truncated") is not True
         assert result["text"] == text
-
-    @pytest.mark.asyncio
-    async def test_format_response_slack_truncation_at_limit(self) -> None:
-        """Slack 平台超 40000 字符时截断."""
-        router = GatewayRouter()
-        router.register_adapter(SlackAdapter())
-        long_text = "C" * 40001
-        result = await router.format_response("slack", {"text": long_text})
-        assert result["truncated"] is True
-        assert result["original_length"] == 40001
-        assert len(result["text"]) == 40000
 
     @pytest.mark.asyncio
     async def test_format_response_adds_platform_hints(self) -> None:
         """格式化后的响应包含平台特性提示."""
         router = GatewayRouter()
-        router.register_adapter(WeChatWorkAdapter())
-        result = await router.format_response("wechat_work", {"text": "ok"})
-        assert result["platform"] == "wechat_work"
+        router.register_adapter(_FakeAdapter("test"))
+        result = await router.format_response("test", {"text": "ok"})
+        assert result["platform"] == "test"
         assert "platform_hints" in result
-        assert result["platform_hints"]["max_text_length"] == 2048
+        assert result["platform_hints"]["max_text_length"] == 1024
 
     @pytest.mark.asyncio
     async def test_format_response_unregistered_platform(self) -> None:
@@ -443,11 +298,11 @@ class TestGatewayRouterFormatResponse:
     async def test_format_response_content_key_truncation(self) -> None:
         """使用 content 键的响应也被正确截断."""
         router = GatewayRouter()
-        router.register_adapter(WeChatWorkAdapter())
-        long_text = "D" * 3000
-        result = await router.format_response("wechat_work", {"content": long_text})
+        router.register_adapter(_FakeAdapter("test"))
+        long_text = "D" * 2000
+        result = await router.format_response("test", {"content": long_text})
         assert result["truncated"] is True
-        assert len(result["content"]) == 2048
+        assert len(result["content"]) == 1024
 
 
 # ---------------------------------------------------------------------------

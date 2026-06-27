@@ -674,3 +674,93 @@ def test_task_graph_executor_resumes_after_validation_fix_without_rerunning_upst
     assert calls["engineer"] == 1
     assert calls["analyst"] == 2
     assert "参数修复后业务分析完成" in (second.get("final_output") or {}).get("summary", "")
+
+
+def test_task_graph_executor_supports_conditional_edges_and_skips_inactive_branch():
+    async def _fake_engineer(*, task, context=None):
+        del task, context
+        return ProactiveAgentResult(
+            ok=True,
+            output={"summary": "路由完成", "route": "tool"},
+        )
+
+    executor = TaskGraphExecutor(
+        delegate_handlers={
+            "system_engineer": _fake_engineer,
+        }
+    )
+    graph = {
+        "schema_version": "task_graph.v1",
+        "nodes": [
+            {"step_id": "s1", "kind": "delegate", "reason": "先判断走哪条分支", "status": "pending", "target_agent": "system_engineer"},
+            {"step_id": "s2", "parent_id": "s1", "kind": "analyze", "reason": "工具分支分析", "status": "pending", "instruction": "执行工具分支"},
+            {"step_id": "s3", "parent_id": "s1", "kind": "analyze", "reason": "人工分支分析", "status": "pending", "instruction": "执行人工分支"},
+            {"step_id": "s4", "kind": "finalize", "reason": "汇总已激活分支", "status": "pending"},
+        ],
+        "edges": [
+            {"from_step_id": "s1", "to_step_id": "s2", "condition": "equals:route:tool"},
+            {"from_step_id": "s1", "to_step_id": "s3", "condition": "equals:route:manual"},
+            {"from_step_id": "s2", "to_step_id": "s4", "condition": "always"},
+            {"from_step_id": "s3", "to_step_id": "s4", "condition": "always"},
+        ],
+    }
+
+    result = asyncio.run(
+        executor.execute(
+            task={"task_id": "tg-condition-1", "payload": {"content": "验证条件分支"}},
+            task_graph=graph,
+        )
+    )
+
+    execution = result.get("task_graph_execution") or {}
+    assert result.get("status") == "completed"
+    assert execution.get("completed_steps") == ["s1", "s2", "s4"]
+    assert execution.get("skipped_steps") == ["s3"]
+    trace = execution.get("trace") or []
+    skipped = next(item for item in trace if item.get("step_id") == "s3")
+    assert skipped.get("status") == "skipped"
+    summary = (result.get("final_output") or {}).get("summary", "")
+    assert "执行工具分支" in summary
+    assert "执行人工分支" not in summary
+
+
+def test_task_graph_executor_supports_ask_human_resume_flow():
+    graph = {
+        "schema_version": "task_graph.v1",
+        "nodes": [
+            {"step_id": "s1", "kind": "ask_human", "reason": "需要人工确认阈值", "status": "pending", "instruction": "请确认是否提高阈值"},
+            {"step_id": "s2", "parent_id": "s1", "kind": "finalize", "reason": "汇总人工输入", "status": "pending"},
+        ],
+        "edges": [
+            {"from_step_id": "s1", "to_step_id": "s2", "condition": "always"},
+        ],
+    }
+
+    first = asyncio.run(
+        TaskGraphExecutor(delegate_handlers={}).execute(
+            task={"task_id": "tg-human-1", "payload": {"content": "等待人工确认"}},
+            task_graph=graph,
+        )
+    )
+    first_exec = first.get("task_graph_execution") or {}
+    assert first.get("status") == "blocked"
+    assert first_exec.get("blocked_step_id") == "s1"
+    assert (first.get("approval_records") or [])[0].get("error") == "human_input_required"
+
+    resumed_graph = first.get("task_graph") or {}
+    for node in resumed_graph.get("nodes", []):
+        if node.get("step_id") == "s1":
+            node["params"] = {"human_response": "确认提高阈值到 95"}
+
+    second = asyncio.run(
+        TaskGraphExecutor(delegate_handlers={}).execute(
+            task={"task_id": "tg-human-1", "payload": {"content": "等待人工确认"}},
+            task_graph=resumed_graph,
+            execution_state=first_exec,
+            resume_from_step_id="s1",
+        )
+    )
+    second_exec = second.get("task_graph_execution") or {}
+    assert second.get("status") == "completed"
+    assert second_exec.get("resume_history")[0].get("resume_from_step_id") == "s1"
+    assert "确认提高阈值到 95" in (second.get("final_output") or {}).get("summary", "")

@@ -29,6 +29,14 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+# tiktoken 可选导入: 用于精确 token 计算
+try:
+    import tiktoken as _tiktoken
+    _TIKTOKEN_AVAILABLE = True
+except ImportError:
+    _tiktoken = None  # type: ignore[assignment]
+    _TIKTOKEN_AVAILABLE = False
+
 # 中文字符的 Unicode 范围正则 (与 context_compressor 保持一致)
 _CJK_PATTERN = re.compile(
     r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff"
@@ -328,6 +336,43 @@ class TieredPromptBuilder:
         cjk_tokens = cjk_chars / 1.5
         en_tokens = non_cjk_chars / 4.0
         return int(cjk_tokens + en_tokens) + _PER_MESSAGE_OVERHEAD
+
+    @staticmethod
+    def count_tokens_precise(text: str, *, model: str = "gpt-4") -> int:
+        """精确计算文本的 token 数 (使用 tiktoken).
+
+        当 tiktoken 可用时, 使用 cl100k_base 编码精确计算.
+        当 tiktoken 不可用时, 回退到启发式估算.
+
+        Args:
+            text: 文本内容
+            model: 模型名称 (目前统一使用 cl100k_base)
+
+        Returns:
+            精确的 token 数
+        """
+        if not text:
+            return 0
+        if _TIKTOKEN_AVAILABLE:
+            try:
+                enc = _tiktoken.get_encoding("cl100k_base")
+                return len(enc.encode(text))
+            except Exception:
+                # tiktoken 编码失败时回退到启发式
+                pass
+        return TieredPromptBuilder.estimate_tier_tokens_text(text)
+
+    def count_tier_tokens_precise(self, tier: PromptTier, *, model: str = "gpt-4") -> int:
+        """精确计算层级的 token 数.
+
+        Args:
+            tier: prompt 层级
+            model: 模型名称
+
+        Returns:
+            精确的 token 数
+        """
+        return self.count_tokens_precise(tier.content, model=model)
 
 
 __all__ = [

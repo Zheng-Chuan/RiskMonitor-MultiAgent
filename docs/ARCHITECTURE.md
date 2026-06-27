@@ -123,6 +123,6 @@
 # 文档保留范围
 ```text
 README.md
-docs/ARCHETECTURE.md
+docs/ARCHITECTURE.md
 docs/PRD.md
 ```

@@ -65,7 +65,13 @@ from riskmonitor_multiagent.orchestration.workflow_events import (
     requires_manual_approval,
 )
 from riskmonitor_multiagent.scheduling.cron_manager import CronTask
-from riskmonitor_multiagent.skills import SkillProposer, SkillStore, SkillInjector, SkillUsageTracker
+from riskmonitor_multiagent.skills import (
+    SkillInjector,
+    SkillProposer,
+    SkillReviser,
+    SkillStore,
+    SkillUsageTracker,
+)
 
 logger = logging.getLogger(__name__)
 

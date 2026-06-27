@@ -62,6 +62,16 @@ def _safe_env_int(name: str, default: int) -> int:
             return default
 
 
+def _safe_env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
 @dataclass
 class TokenUsageRecord:
     """单次 LLM 调用的 token 用量记录."""
@@ -73,6 +83,8 @@ class TokenUsageRecord:
     total_tokens: int
     latency_ms: float = 0.0
     cached: bool = False
+    prefix_cache_savings: int = 0
+    tier_breakdown: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -130,6 +142,8 @@ class TokenTracker:
         total_tokens: int,
         latency_ms: float = 0.0,
         cached: bool = False,
+        prefix_cache_savings: int = 0,
+        tier_breakdown: dict[str, int] | None = None,
     ) -> None:
         """记录一次 LLM 调用的 token 用量."""
         try:
@@ -141,6 +155,8 @@ class TokenTracker:
                 t_tokens = p_tokens + c_tokens
             latency = _safe_float(latency_ms)
             cached_bool = bool(cached)
+            cache_savings = _safe_int(prefix_cache_savings, default=p_tokens if cached_bool else 0)
+            normalized_tiers = self._normalize_tier_breakdown(tier_breakdown)
 
             # 1) Prometheus counters
             label_model = {"model": model_str}
@@ -196,6 +212,8 @@ class TokenTracker:
                 total_tokens=t_tokens,
                 latency_ms=latency,
                 cached=cached_bool,
+                prefix_cache_savings=cache_savings,
+                tier_breakdown=normalized_tiers,
             )
 
             with self._lock:
@@ -240,6 +258,14 @@ class TokenTracker:
         prompt_tokens = sum(r.prompt_tokens for r in records)
         completion_tokens = sum(r.completion_tokens for r in records)
         calls = len(records)
+        cached_calls = sum(1 for r in records if r.cached)
+        cache_hit_rate = (cached_calls / calls) if calls else 0.0
+        prefix_cache_savings = sum(r.prefix_cache_savings for r in records)
+        tier_breakdown = self._aggregate_tier_breakdown(records)
+        cost_estimate = self._estimate_cost(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
 
         by_model: dict[str, dict[str, int]] = {}
         for r in records:
@@ -250,14 +276,30 @@ class TokenTracker:
                     "calls": 0,
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
+                    "cached_calls": 0,
+                    "prefix_cache_savings": 0,
                 },
             )
             entry["total_tokens"] += r.total_tokens
             entry["calls"] += 1
             entry["prompt_tokens"] += r.prompt_tokens
             entry["completion_tokens"] += r.completion_tokens
+            entry["cached_calls"] += 1 if r.cached else 0
+            entry["prefix_cache_savings"] += r.prefix_cache_savings
 
         daily_total = sum(r.total_tokens for r in daily_records)
+        for model, entry in by_model.items():
+            model_calls = int(entry["calls"])
+            model_prompt = int(entry["prompt_tokens"])
+            model_completion = int(entry["completion_tokens"])
+            entry["cache_hit_rate"] = (
+                float(entry["cached_calls"]) / model_calls if model_calls else 0.0
+            )
+            entry["cost_estimate"] = self._estimate_cost(
+                prompt_tokens=model_prompt,
+                completion_tokens=model_completion,
+            )
+            by_model[model] = entry
 
         return {
             "window_hours": max(1, self._window_s // 3600),
@@ -265,6 +307,11 @@ class TokenTracker:
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "calls": calls,
+            "cached_calls": cached_calls,
+            "cache_hit_rate": cache_hit_rate,
+            "prefix_cache_savings": prefix_cache_savings,
+            "tier_breakdown": tier_breakdown,
+            "cost_estimate": cost_estimate,
             "by_model": by_model,
             "alert_threshold_hourly": self._hourly_threshold,
             "alert_threshold_daily": self._daily_threshold,
@@ -358,6 +405,45 @@ class TokenTracker:
         except Exception:  # pragma: no cover
             logger.debug("set_gauge alert failed", exc_info=True)
 
+    @staticmethod
+    def _normalize_tier_breakdown(tier_breakdown: dict[str, int] | None) -> dict[str, int]:
+        """统一 tier 字段, 未提供时保留为空字典."""
+        if not isinstance(tier_breakdown, dict):
+            return {}
+        normalized: dict[str, int] = {}
+        for tier_name, value in tier_breakdown.items():
+            normalized[str(tier_name)] = _safe_int(value)
+        return normalized
+
+    @staticmethod
+    def _aggregate_tier_breakdown(records: list[TokenUsageRecord]) -> dict[str, int]:
+        """聚合 tier token 明细, 未标注部分单独归类."""
+        breakdown = {
+            "stable": 0,
+            "context": 0,
+            "volatile": 0,
+            "unattributed_prompt_tokens": 0,
+        }
+        for record in records:
+            if record.tier_breakdown:
+                for tier_name, value in record.tier_breakdown.items():
+                    breakdown[tier_name] = breakdown.get(tier_name, 0) + _safe_int(value)
+                continue
+            breakdown["unattributed_prompt_tokens"] += max(record.prompt_tokens, 0)
+        return breakdown
+
+    @staticmethod
+    def _estimate_cost(*, prompt_tokens: int, completion_tokens: int) -> float:
+        """根据环境变量估算成本.
+
+        环境变量单位统一为每 1K token 的价格, 默认 0 表示未配置.
+        """
+        prompt_price_per_1k = _safe_env_float("LLM_COST_PROMPT_PER_1K", 0.0)
+        completion_price_per_1k = _safe_env_float("LLM_COST_COMPLETION_PER_1K", 0.0)
+        prompt_cost = (_safe_int(prompt_tokens) / 1000.0) * prompt_price_per_1k
+        completion_cost = (_safe_int(completion_tokens) / 1000.0) * completion_price_per_1k
+        return round(prompt_cost + completion_cost, 6)
+
 
 # ---------------------------------------------------------------------- #
 # 全局单例 + 便捷函数
@@ -391,6 +477,8 @@ def record_token_usage(
     total_tokens: int,
     latency_ms: float = 0.0,
     cached: bool = False,
+    prefix_cache_savings: int = 0,
+    tier_breakdown: dict[str, int] | None = None,
 ) -> None:
     """便捷函数 - 记录一次 LLM token 用量."""
     get_token_tracker().record(
@@ -400,6 +488,8 @@ def record_token_usage(
         total_tokens=total_tokens,
         latency_ms=latency_ms,
         cached=cached,
+        prefix_cache_savings=prefix_cache_savings,
+        tier_breakdown=tier_breakdown,
     )
 
 

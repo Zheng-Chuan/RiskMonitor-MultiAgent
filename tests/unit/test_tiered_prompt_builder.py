@@ -577,3 +577,55 @@ class TestTokenEstimation:
             behavior_rules=["Rule A"],
         )
         assert tier.token_estimate == builder.estimate_tier_tokens(tier)
+
+
+# ---------------------------------------------------------------------------
+# tiktoken 精确 token 计算
+# ---------------------------------------------------------------------------
+
+
+class TestPreciseTokenCount:
+    """测试 tiktoken 精确 token 计算."""
+
+    def test_count_tokens_precise_returns_positive(self):
+        """精确计算返回正整数."""
+        tokens = TieredPromptBuilder.count_tokens_precise("Hello world, this is a test.")
+        assert tokens > 0
+
+    def test_count_tokens_precise_empty_string(self):
+        """空字符串返回 0."""
+        tokens = TieredPromptBuilder.count_tokens_precise("")
+        assert tokens == 0
+
+    def test_count_tokens_precise_chinese(self):
+        """中文字符也能精确计算."""
+        tokens = TieredPromptBuilder.count_tokens_precise("你好世界，这是风控测试。")
+        assert tokens > 0
+
+    def test_count_tier_tokens_precise(self):
+        """count_tier_tokens_precise 对 PromptTier 对象精确计算."""
+        builder = TieredPromptBuilder()
+        tier = PromptTier(
+            tier_name="test",
+            content="This is a test prompt with some content for token counting.",
+            version="v1",
+            token_estimate=0,
+            cacheable=True,
+        )
+        precise = builder.count_tier_tokens_precise(tier)
+        heuristic = builder.estimate_tier_tokens(tier)
+        # 精确值与启发式值应该在同一数量级
+        assert precise > 0
+        assert heuristic > 0
+        # 偏差不应超过 10 倍
+        assert precise < heuristic * 10
+        assert heuristic < precise * 10
+
+    def test_precise_vs_heuristic_order_of_magnitude(self):
+        """精确计算与启发式在同一数量级."""
+        text = "You are a risk analyst. Analyze the following breach and provide recommendations."
+        precise = TieredPromptBuilder.count_tokens_precise(text)
+        heuristic = TieredPromptBuilder.estimate_tier_tokens_text(text)
+        # 两者应在同一数量级 (启发式可能偏差不大)
+        ratio = max(precise, heuristic) / max(min(precise, heuristic), 1)
+        assert ratio < 5, f"precise={precise}, heuristic={heuristic}, ratio={ratio}"

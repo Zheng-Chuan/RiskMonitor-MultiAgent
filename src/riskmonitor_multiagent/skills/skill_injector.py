@@ -13,12 +13,14 @@ Skill 注入器.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from riskmonitor_multiagent.skills.skill_governor import SkillGovernor
 from riskmonitor_multiagent.skills.skill_store import SkillStore
 
 logger = logging.getLogger(__name__)
+_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]+")
 
 
 class SkillInjector:
@@ -97,6 +99,12 @@ class SkillInjector:
                 "injection_summary": f"Skill search error: {exc}",
             }
 
+        if len(hits) < self._max_skills:
+            hits = await self._supplement_with_keyword_fallback(
+                query=query,
+                hits=hits,
+            )
+
         skills = [self._build_injection_item(hit) for hit in hits]
 
         # 治理过滤: 置信度/状态/数量/token 预算控制
@@ -117,6 +125,111 @@ class SkillInjector:
                 f"for this task"
             ),
         }
+
+    async def _supplement_with_keyword_fallback(
+        self,
+        *,
+        query: str,
+        hits: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """在语义检索不稳定时, 用关键词重叠做兜底补全."""
+        query_terms = self._extract_query_terms(query)
+        if not query_terms:
+            return hits
+
+        existing_ids = {
+            str(item.get("skill_id") or "")
+            for item in hits
+            if item.get("skill_id")
+        }
+        candidates = await self._store.list_all(status="active")
+        ranked: list[tuple[float, dict[str, Any]]] = []
+        for candidate in candidates:
+            skill_id = str(candidate.get("skill_id") or "")
+            if not skill_id or skill_id in existing_ids:
+                continue
+            if float(candidate.get("confidence", 0.0)) < self._min_confidence:
+                continue
+            score = self._keyword_overlap_score(query_terms=query_terms, skill=candidate)
+            if score <= 0:
+                continue
+            ranked.append((score, candidate))
+
+        if not ranked:
+            return hits
+
+        ranked.sort(
+            key=lambda item: (
+                item[0],
+                float(item[1].get("confidence", 0.0)),
+                int(item[1].get("updated_at", 0)),
+            ),
+            reverse=True,
+        )
+        supplemented = list(hits)
+        for _, candidate in ranked:
+            supplemented.append(candidate)
+            if len(supplemented) >= self._max_skills:
+                break
+        return supplemented
+
+    @classmethod
+    def _extract_query_terms(cls, text: str) -> set[str]:
+        """抽取中英文查询词, 兼容中文短语和英文 token."""
+        terms: set[str] = set()
+        for raw_token in _TOKEN_PATTERN.findall(text.lower()):
+            token = raw_token.strip()
+            if not token:
+                continue
+            terms.add(token)
+            if token.isascii():
+                continue
+            for size in (2, 3):
+                if len(token) < size:
+                    continue
+                for idx in range(len(token) - size + 1):
+                    terms.add(token[idx : idx + size])
+        return terms
+
+    @classmethod
+    def _keyword_overlap_score(
+        cls,
+        *,
+        query_terms: set[str],
+        skill: dict[str, Any],
+    ) -> float:
+        """按关键词命中长度计算简易相关性得分."""
+        haystack = cls._build_skill_text(skill)
+        if not haystack:
+            return 0.0
+        score = 0.0
+        for term in query_terms:
+            if term and term in haystack:
+                score += max(len(term), 1)
+        return score
+
+    @staticmethod
+    def _build_skill_text(skill: dict[str, Any]) -> str:
+        """构建 Skill 文本快照, 供兜底检索使用."""
+        parts: list[str] = []
+        for field in ("name", "failure_boundary"):
+            value = skill.get(field)
+            if isinstance(value, str) and value.strip():
+                parts.append(value.strip())
+        for tag in skill.get("tags") or []:
+            if isinstance(tag, str) and tag.strip():
+                parts.append(tag.strip())
+        for cond in skill.get("applicable_conditions") or []:
+            if isinstance(cond, str) and cond.strip():
+                parts.append(cond.strip())
+        for step in skill.get("steps") or []:
+            if not isinstance(step, dict):
+                continue
+            for field in ("description", "expected_outcome"):
+                value = step.get(field)
+                if isinstance(value, str) and value.strip():
+                    parts.append(value.strip())
+        return " ".join(parts).lower()
 
     # ==================== 内部工具 ====================
 

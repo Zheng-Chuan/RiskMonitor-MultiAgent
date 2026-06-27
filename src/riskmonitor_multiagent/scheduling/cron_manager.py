@@ -11,12 +11,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Awaitable, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +29,66 @@ _CRON_SEGMENT_COUNT = 5  # minute hour day month weekday
 
 # 自然语言 → cron 表达式映射 (顺序很重要: 先匹配更具体的关键词)
 _NATURAL_LANGUAGE_MAP: list[tuple[str, str]] = [
+    # 金融场景
     ("每个工作日收盘后", "0 18 * * 1-5"),
     ("每天收盘后", "0 18 * * 1-5"),
+    ("收盘后", "0 18 * * 1-5"),
+    ("每个工作日开盘前", "30 9 * * 1-5"),
+    ("每天开盘前", "30 9 * * 1-5"),
+    ("开盘前", "30 9 * * 1-5"),
+    # 工作日
     ("工作日", "0 0 * * 1-5"),
     ("每个工作日", "0 0 * * 1-5"),
+    # 时间段
+    ("每天午夜", "0 0 * * *"),
+    ("午夜", "0 0 * * *"),
+    ("每天中午", "0 12 * * *"),
+    ("中午", "0 12 * * *"),
+    # 基本周期
     ("每天", "0 0 * * *"),
+    ("每日", "0 0 * * *"),
+    # 具体星期 (必须在 "每周" 之前, 否则 "每周一" 会先匹配 "每周")
+    ("每周一", "0 0 * * 1"),
+    ("每周二", "0 0 * * 2"),
+    ("每周三", "0 0 * * 3"),
+    ("每周四", "0 0 * * 4"),
+    ("每周五", "0 0 * * 5"),
+    ("每周六", "0 0 * * 6"),
+    ("每周日", "0 0 * * 0"),
+    ("每周天", "0 0 * * 0"),
     ("每周", "0 0 * * 0"),
+    ("每半小时", "*/30 * * * *"),
+    ("半小时", "*/30 * * * *"),
     ("每小时", "0 * * * *"),
 ]
+
+# 正则模式列表 (用于动态解析, 按优先级排列)
+_NL_REGEX_PATTERNS: list[tuple[str, str]] = [
+    # "每隔N分钟" / "每N分钟" → "*/N * * * *"
+    (r"每(?:隔)?\s*(\d+)\s*分钟", "*/{0} * * * *"),
+    # "每隔N小时" / "每N小时" → "0 */N * * *"
+    (r"每(?:隔)?\s*(\d+)\s*小时", "0 */{0} * * *"),
+    # "每天X点Y分" → "M X * * *"
+    (r"每?天\s*(?:上午|下午)?(\d{1,2})\s*[点时:]\s*(\d{1,2})\s*分?", "{1} {0} * * *"),
+    # "每天X点" → "0 X * * *"
+    (r"每?天\s*(?:上午|下午)?(\d{1,2})\s*[点时:]", "0 {0} * * *"),
+    # "下午X点" → "0 X+12 * * *" (下午自动 +12)
+    (r"下午\s*(\d{1,2})\s*[点时:]", "0 {_pm_hour} * * *"),
+    # "上午X点" → "0 X * * *"
+    (r"上午\s*(\d{1,2})\s*[点时:]", "0 {0} * * *"),
+    # "每个工作日X点" → "0 X * * 1-5"
+    (r"每?个?工作日\s*(?:上午|下午)?(\d{1,2})\s*[点时:]", "0 {0} * * 1-5"),
+    # "每N天" → "0 0 */N * *"
+    (r"每(?:隔)?\s*(\d+)\s*天", "0 0 */{0} * *"),
+    # "周X" → "0 0 * * N" (周几)
+    (r"周([一二三四五六日天])", "0 0 * * {_weekday}"),
+]
+
+# 中文星期映射
+_WEEKDAY_MAP: dict[str, str] = {
+    "一": "1", "二": "2", "三": "3", "四": "4",
+    "五": "5", "六": "6", "日": "0", "天": "0",
+}
 
 _DEFAULT_CRON = "0 0 * * *"
 
@@ -79,12 +132,24 @@ class CronManager:
 
     使用内存存储管理 CronTask 生命周期,
     支持自然语言解析和递归深度防护.
+    可选启用 asyncio 后台调度循环, 自动触发到期任务.
     """
 
-    def __init__(self, *, max_concurrent_crons: int = 5) -> None:
+    def __init__(
+        self,
+        *,
+        max_concurrent_crons: int = 5,
+        schedule_interval_seconds: float = 30.0,
+    ) -> None:
         self._tasks: dict[str, CronTask] = {}
         self._recursion_depths: dict[str, int] = {}
         self._max_concurrent_crons = max_concurrent_crons
+        self._schedule_interval = schedule_interval_seconds
+        self._background_task: Optional[asyncio.Task[None]] = None
+        self._running = False
+        self._trigger_callback: Optional[
+            Callable[[CronTask], Awaitable[None]]
+        ] = None
 
     # ------------------------------------------------------------------
     # 任务 CRUD
@@ -260,22 +325,94 @@ class CronManager:
     def parse_natural_language(self, description: str) -> str:
         """将自然语言描述转为 cron 表达式.
 
+        解析策略 (按优先级):
+        1. 关键词精确匹配 (_NATURAL_LANGUAGE_MAP)
+        2. 正则模式动态解析 (_NL_REGEX_PATTERNS)
+        3. 兜底返回 "0 0 * * *" (每天)
+
         支持的关键词:
-        - "每天" → "0 0 * * *"
+        - "每天" / "每日" → "0 0 * * *"
         - "每个工作日" / "工作日" → "0 0 * * 1-5"
         - "每周" → "0 0 * * 0"
+        - "每周一" ~ "每周日" → 对应星期几
         - "每小时" → "0 * * * *"
-        - "每天收盘后" / "每个工作日收盘后" → "0 18 * * 1-5"
+        - "每半小时" → "*/30 * * * *"
+        - "收盘后" / "每天收盘后" → "0 18 * * 1-5"
+        - "开盘前" / "每天开盘前" → "30 9 * * 1-5"
+        - "中午" → "0 12 * * *"
+        - "午夜" → "0 0 * * *"
+
+        支持的正则模式:
+        - "每隔N分钟" → "*/N * * * *"
+        - "每隔N小时" → "0 */N * * *"
+        - "每天X点" → "0 X * * *"
+        - "每天X点Y分" → "M X * * *"
+        - "下午X点" → "0 X+12 * * *"
+        - "每个工作日X点" → "0 X * * 1-5"
+        - "每N天" → "0 0 */N * *"
+        - "周X" → "0 0 * * N"
 
         兜底: 返回 "0 0 * * *" (每天)
         """
         if not description:
             return _DEFAULT_CRON
         desc = description.strip()
+
+        # 1. 如果包含数字 (具体时间), 优先尝试正则模式
+        if re.search(r"\d", desc):
+            result = self._parse_with_regex(desc)
+            if result is not None:
+                return result
+
+        # 2. 关键词匹配
         for keyword, cron_expr in _NATURAL_LANGUAGE_MAP:
             if keyword in desc:
                 return cron_expr
+
+        # 3. 正则模式匹配 (非数字场景, 如 "周X")
+        result = self._parse_with_regex(desc)
+        if result is not None:
+            return result
+
+        # 4. 兜底
         return _DEFAULT_CRON
+
+    def _parse_with_regex(self, desc: str) -> str | None:
+        """使用正则模式动态解析自然语言.
+
+        Args:
+            desc: 自然语言描述文本.
+
+        Returns:
+            解析成功的 cron 表达式, 失败返回 None.
+        """
+        for pattern, template in _NL_REGEX_PATTERNS:
+            match = re.search(pattern, desc)
+            if not match:
+                continue
+
+            groups = match.groups()
+
+            # 特殊处理: 下午时间 (+12)
+            if "{_pm_hour}" in template:
+                hour = int(groups[0])
+                if hour < 12:
+                    hour += 12
+                return template.replace("{_pm_hour}", str(hour))
+
+            # 特殊处理: 中文星期
+            if "{_weekday}" in template:
+                weekday_char = groups[0]
+                weekday_num = _WEEKDAY_MAP.get(weekday_char, "0")
+                return template.replace("{_weekday}", weekday_num)
+
+            # 通用格式化
+            try:
+                return template.format(*groups)
+            except (IndexError, KeyError):
+                continue
+
+        return None
 
     # ------------------------------------------------------------------
     # Cron 表达式验证
@@ -378,6 +515,107 @@ class CronManager:
 
         # 默认每天
         return 86400 * 1000
+
+    # ------------------------------------------------------------------
+    # 后台调度循环
+    # ------------------------------------------------------------------
+
+    def set_trigger_callback(
+        self,
+        callback: Callable[[CronTask], Awaitable[None]] | None,
+    ) -> None:
+        """设置任务触发时的回调函数.
+
+        回调在每个调度周期内对到期任务逐一调用.
+        若未设置回调, 到期任务仅更新 last_triggered / trigger_count.
+
+        Args:
+            callback: 异步回调函数, 接收 CronTask 参数.
+        """
+        self._trigger_callback = callback
+
+    async def start(self) -> None:
+        """启动后台调度循环.
+
+        创建 asyncio 后台任务, 每隔 schedule_interval_seconds
+        检查到期任务并触发. 重复调用幂等.
+        """
+        if self._running:
+            logger.debug("CronManager scheduler already running")
+            return
+        self._running = True
+        self._background_task = asyncio.create_task(
+            self._schedule_loop(),
+            name="cron_manager_schedule_loop",
+        )
+        logger.info(
+            "CronManager scheduler started (interval=%.1fs)",
+            self._schedule_interval,
+        )
+
+    async def stop(self) -> None:
+        """停止后台调度循环.
+
+        取消后台任务并等待其退出. 幂等调用.
+        """
+        if not self._running:
+            return
+        self._running = False
+        if self._background_task is not None:
+            self._background_task.cancel()
+            try:
+                await self._background_task
+            except asyncio.CancelledError:
+                pass
+            self._background_task = None
+        logger.info("CronManager scheduler stopped")
+
+    @property
+    def is_running(self) -> bool:
+        """后台调度循环是否正在运行."""
+        return self._running
+
+    async def _schedule_loop(self) -> None:
+        """后台调度循环主逻辑.
+
+        每隔 schedule_interval_seconds 检测到期任务,
+        调用 mark_triggered 并执行回调.
+        """
+        logger.info("Schedule loop entered")
+        while self._running:
+            try:
+                await self._tick()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Error in cron schedule tick")
+            try:
+                await asyncio.sleep(self._schedule_interval)
+            except asyncio.CancelledError:
+                raise
+
+    async def _tick(self) -> None:
+        """单次调度周期: 检测到期任务并触发."""
+        due_tasks = await self.get_due_tasks()
+        if not due_tasks:
+            return
+
+        sem = asyncio.Semaphore(self._max_concurrent_crons)
+
+        async def _process(task: CronTask) -> None:
+            async with sem:
+                await self.mark_triggered(task.task_id)
+                if self._trigger_callback is not None:
+                    try:
+                        await self._trigger_callback(task)
+                    except Exception:
+                        logger.exception(
+                            "Cron trigger callback failed for task %s",
+                            task.task_id,
+                        )
+
+        await asyncio.gather(*[_process(t) for t in due_tasks])
+        logger.debug("Schedule tick: processed %d due tasks", len(due_tasks))
 
 
 __all__ = [

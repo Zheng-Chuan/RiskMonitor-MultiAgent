@@ -184,6 +184,14 @@ class SkillStore:
             result = dict(skill)
             result["semantic_score"] = float(hit.get("semantic_score", 0.0))
             results.append(result)
+        if len(results) < limit:
+            for fallback in self._keyword_fallback_search(
+                query=query,
+                limit=limit,
+                min_confidence=min_confidence,
+                existing_skill_ids={str(item.get("skill_id") or "") for item in results},
+            ):
+                results.append(fallback)
         return results
 
     async def find_similar(
@@ -298,6 +306,44 @@ class SkillStore:
                 self._store[skill_id] = skill
                 await self._index_skill(skill)
         return len(skills)
+
+    def _keyword_fallback_search(
+        self,
+        *,
+        query: str,
+        limit: int,
+        min_confidence: float,
+        existing_skill_ids: set[str],
+    ) -> list[dict[str, Any]]:
+        """当语义检索排序不稳定时, 用关键词匹配兜底."""
+        query_text = str(query or "").strip().lower()
+        if not query_text:
+            return []
+        candidates: list[tuple[float, dict[str, Any]]] = []
+        query_tokens = [token for token in query_text.split() if token]
+        for skill_id, skill in self._store.items():
+            if skill_id in existing_skill_ids:
+                continue
+            if skill.get("status") != "active":
+                continue
+            if float(skill.get("confidence", 0.0)) < min_confidence:
+                continue
+            haystack = self._build_skill_text(skill).lower()
+            if not haystack:
+                continue
+            score = 0.0
+            if query_text in haystack:
+                score += len(query_text) * 2
+            for token in query_tokens:
+                if token in haystack:
+                    score += len(token)
+            if score <= 0:
+                continue
+            result = dict(skill)
+            result["semantic_score"] = max(float(result.get("semantic_score", 0.0)), score)
+            candidates.append((score, result))
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        return [item[1] for item in candidates[: max(0, limit)]]
 
     # ==================== 健康检查 ====================
 

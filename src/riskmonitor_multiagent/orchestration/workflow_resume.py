@@ -22,8 +22,24 @@ def apply_resume_context(
         "run_id": resume_request.get("run_id"),
         "resume_from_step_id": resume_request.get("resume_from_step_id"),
         "memory_state": list(resume_request.get("memory_state") or []),
+        "shared_memory_board": list(resume_request.get("shared_memory_board") or []),
+        "private_memory_state": (
+            {
+                str(agent_id): [item for item in entries if isinstance(item, dict)]
+                for agent_id, entries in (resume_request.get("private_memory_state") or {}).items()
+                if isinstance(entries, list)
+            }
+            if isinstance(resume_request.get("private_memory_state"), dict)
+            else {}
+        ),
         "run_summary": dict(resume_request.get("run_summary") or {}) if isinstance(resume_request.get("run_summary"), dict) else {},
         "approval_decision": dict(resume_request.get("approval_decision") or {}) if isinstance(resume_request.get("approval_decision"), dict) else {},
+        "task_graph": dict(resume_request.get("task_graph") or {}) if isinstance(resume_request.get("task_graph"), dict) else {},
+        "execution_state": (
+            dict(resume_request.get("execution_state") or {})
+            if isinstance(resume_request.get("execution_state"), dict)
+            else {}
+        ),
     }
     return enriched
 

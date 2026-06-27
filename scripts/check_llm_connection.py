@@ -6,7 +6,7 @@
 
 要求:
   - 项目根目录 .env 中设置 LLM_API_KEY=你的密钥
-  - 本项目默认使用火山引擎 Coding API
+  - 本项目默认使用兼容 OpenAI Chat Completions 的 LLM 提供方
   - 切勿将 API Key 提交到 git 或粘贴到聊天
 """
 
@@ -66,7 +66,7 @@ async def main() -> int:
     print("响应内容:", text[:200] + ("..." if len(text) > 200 else ""))
     if isinstance(usage, dict):
         print("Token 使用:", json.dumps(usage, ensure_ascii=False))
-    print("OK: 火山引擎 LLM 连接正常,可以运行 make eval-run 等进行带真实调用的评测.")
+    print("OK: 当前 LLM 提供方连接正常, 可以运行 make eval-run 等进行带真实调用的评测.")
     return 0
 
 

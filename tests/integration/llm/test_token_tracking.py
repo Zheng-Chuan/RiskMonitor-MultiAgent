@@ -109,6 +109,41 @@ class TestTokenTrackingUnit:
         # 验证 cached 标签存在 (lowercase true/false in prometheus labels)
         assert 'cached="true"' in metrics_text or 'cached="false"' in metrics_text
 
+    def test_extended_metrics_are_reported(self, monkeypatch):
+        """扩展指标包含 cache_hit_rate prefix_cache_savings tier_breakdown cost_estimate."""
+        monkeypatch.setenv("LLM_COST_PROMPT_PER_1K", "0.01")
+        monkeypatch.setenv("LLM_COST_COMPLETION_PER_1K", "0.02")
+        reset_token_tracker()
+
+        record_token_usage(
+            model="m1",
+            prompt_tokens=100,
+            completion_tokens=50,
+            total_tokens=150,
+            cached=False,
+            tier_breakdown={"stable": 30, "context": 20, "volatile": 50},
+        )
+        record_token_usage(
+            model="m1",
+            prompt_tokens=80,
+            completion_tokens=0,
+            total_tokens=80,
+            cached=True,
+            prefix_cache_savings=80,
+        )
+
+        summary = get_token_tracker().summary()
+        assert summary["calls"] == 2
+        assert summary["cached_calls"] == 1
+        assert summary["cache_hit_rate"] == 0.5
+        assert summary["prefix_cache_savings"] == 80
+        assert summary["tier_breakdown"]["stable"] == 30
+        assert summary["tier_breakdown"]["context"] == 20
+        assert summary["tier_breakdown"]["volatile"] == 50
+        assert summary["tier_breakdown"]["unattributed_prompt_tokens"] == 80
+        assert summary["cost_estimate"] == pytest.approx(0.0028, rel=1e-6)
+        assert summary["by_model"]["m1"]["cache_hit_rate"] == 0.5
+
 
 class TestRealLLMTokenTracking:
     """真实火山引擎 LLM 调用的 token 追踪验证"""
@@ -213,6 +248,10 @@ class TestUsageAPIEndpoint:
         assert "completion_tokens" in data
         assert "calls" in data
         assert "by_model" in data
+        assert "cache_hit_rate" in data
+        assert "prefix_cache_savings" in data
+        assert "tier_breakdown" in data
+        assert "cost_estimate" in data
         assert "alert_threshold_hourly" in data
         assert "hourly_alert_triggered" in data
 
@@ -233,3 +272,5 @@ class TestUsageAPIEndpoint:
 
         assert data["calls"] >= 1
         assert data["total_tokens"] >= 300
+        assert "cache_hit_rate" in data
+        assert "tier_breakdown" in data
