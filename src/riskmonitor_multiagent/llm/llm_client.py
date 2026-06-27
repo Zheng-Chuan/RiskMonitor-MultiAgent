@@ -54,6 +54,55 @@ def _build_headers(host_header: Optional[str] = None) -> dict[str, str]:
     return headers
 
 
+def _normalize_message_text_fields(message: dict[str, Any]) -> dict[str, Any]:
+    """兼容不同供应商的文本字段, 统一补全 reasoning_content."""
+    normalized = dict(message) if isinstance(message, dict) else {}
+    if not isinstance(normalized.get("content"), str):
+        normalized["content"] = normalized.get("content")
+
+    reasoning = normalized.get("reasoning")
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        reasoning = None
+
+    if reasoning is None:
+        reasoning_details = normalized.get("reasoning_details")
+        if isinstance(reasoning_details, list):
+            texts: list[str] = []
+            for item in reasoning_details:
+                if not isinstance(item, dict):
+                    continue
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    texts.append(text.strip())
+            if texts:
+                reasoning = "\n".join(texts)
+
+    if reasoning:
+        normalized.setdefault("reasoning_content", reasoning)
+    return normalized
+
+
+def _normalize_response_payload(data: dict[str, Any]) -> dict[str, Any]:
+    """统一补齐响应字段, 降低上游差异对调用方的影响."""
+    normalized = dict(data)
+    choices = normalized.get("choices")
+    if not isinstance(choices, list):
+        return normalized
+
+    normalized_choices: list[dict[str, Any] | Any] = []
+    for choice in choices:
+        if not isinstance(choice, dict):
+            normalized_choices.append(choice)
+            continue
+        normalized_choice = dict(choice)
+        message = normalized_choice.get("message")
+        if isinstance(message, dict):
+            normalized_choice["message"] = _normalize_message_text_fields(message)
+        normalized_choices.append(normalized_choice)
+    normalized["choices"] = normalized_choices
+    return normalized
+
+
 class LlmClient:
     """LLM 异步客户端."""
 
@@ -209,6 +258,7 @@ class LlmClient:
                                 message="响应 JSON 不是对象",
                                 status_code=int(resp.status),
                             )
+                        data = _normalize_response_payload(data)
                         
                         # 写入缓存(只缓存 temperature=0 的确定性请求)
                         if use_cache and temperature == 0.0:

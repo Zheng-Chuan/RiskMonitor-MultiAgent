@@ -13,13 +13,13 @@ from __future__ import annotations
 
 from riskmonitor_multiagent.gateway.adapter import GatewayAdapter, GatewayMessage
 from riskmonitor_multiagent.gateway.router import GatewayRouter
-
-# [DEPRECATED - 2026-06-27] Slack 和企业微信适配器已移除
-# from riskmonitor_multiagent.gateway.slack_adapter import SlackAdapter
-# from riskmonitor_multiagent.gateway.wechat_work_adapter import WeChatWorkAdapter
+from riskmonitor_multiagent.gateway.slack_adapter import SlackAdapter
+from riskmonitor_multiagent.gateway.wechat_work_adapter import WeChatWorkAdapter
 
 __all__ = [
     "GatewayAdapter",
     "GatewayMessage",
     "GatewayRouter",
+    "SlackAdapter",
+    "WeChatWorkAdapter",
 ]

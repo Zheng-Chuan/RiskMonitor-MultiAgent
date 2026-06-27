@@ -172,7 +172,7 @@ class SkillStore:
         过滤 status != "active" 的结果.
         """
         hits = await self._indexer.search(query, limit=limit)
-        results: list[dict[str, Any]] = []
+        merged_results: dict[str, dict[str, Any]] = {}
         for hit in hits:
             skill = hit.get("skill")
             if not isinstance(skill, dict):
@@ -183,16 +183,35 @@ class SkillStore:
                 continue
             result = dict(skill)
             result["semantic_score"] = float(hit.get("semantic_score", 0.0))
-            results.append(result)
-        if len(results) < limit:
-            for fallback in self._keyword_fallback_search(
-                query=query,
-                limit=limit,
-                min_confidence=min_confidence,
-                existing_skill_ids={str(item.get("skill_id") or "") for item in results},
-            ):
-                results.append(fallback)
-        return results
+            skill_id = str(result.get("skill_id") or "")
+            if not skill_id:
+                continue
+            merged_results[skill_id] = result
+
+        for fallback in self._keyword_fallback_search(
+            query=query,
+            limit=max(limit * 2, limit),
+            min_confidence=min_confidence,
+            existing_skill_ids=set(merged_results),
+        ):
+            skill_id = str(fallback.get("skill_id") or "")
+            if not skill_id:
+                continue
+            existing = merged_results.get(skill_id)
+            if existing is None:
+                merged_results[skill_id] = fallback
+                continue
+            existing_score = float(existing.get("semantic_score", 0.0))
+            fallback_score = float(fallback.get("semantic_score", 0.0))
+            if fallback_score > existing_score:
+                merged_results[skill_id] = fallback
+
+        ranked_results = sorted(
+            merged_results.values(),
+            key=lambda item: float(item.get("semantic_score", 0.0)),
+            reverse=True,
+        )
+        return ranked_results[: max(0, limit)]
 
     async def find_similar(
         self, skill: dict[str, Any], threshold: float = 0.85

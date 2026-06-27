@@ -139,7 +139,14 @@ def _query_positions_by_desk(params: dict[str, Any]) -> dict[str, Any]:
         limit=int(limit),
         offset=int(offset),
     )
-    return {"desk": desk, "position_count": len(positions), "positions": positions}
+    normalized_positions = normalize_positions(positions)
+    total_delta = sum(float(pos.get("delta") or 0.0) for pos in normalized_positions)
+    return {
+        "desk": desk,
+        "position_count": len(normalized_positions),
+        "total_delta": float(total_delta),
+        "positions": normalized_positions,
+    }
 
 
 def _query_all_positions(_: dict[str, Any]) -> dict[str, Any]:

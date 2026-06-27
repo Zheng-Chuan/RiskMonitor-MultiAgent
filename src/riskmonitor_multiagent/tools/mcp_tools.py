@@ -85,6 +85,7 @@ def _execute_mcp_tool(
         if isinstance(result, dict):
             public_result = dict(result)
             public_result.setdefault("request_id", request_id)
+            public_result.setdefault("latency_ms", float(receipt.get("latency_ms") or 0.0))
             return public_result
     return {"request_id": request_id}
 

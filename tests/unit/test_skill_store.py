@@ -273,6 +273,43 @@ async def test_search_empty_query_returns_empty():
     assert hits == []
 
 
+@pytest.mark.asyncio
+async def test_search_keyword_fallback_still_merges_when_semantic_hits_are_full():
+    """测试 search 在语义结果已满时仍会合并关键词兜底命中."""
+    from riskmonitor_multiagent.skills import SkillStore
+
+    store = SkillStore()
+    target = await store.create(
+        _make_skill(
+            skill_id="skill_target",
+            name="集成测试 Skill",
+            tags=["risk", "integration"],
+            applicable_conditions=["集成测试"],
+        )
+    )
+    for index in range(5):
+        await store.create(
+            _make_skill(
+                skill_id=f"skill_noise_{index}",
+                name=f"噪声技能{index}",
+                tags=["noise"],
+            )
+        )
+
+    async def fake_semantic_search(_query: str, limit: int = 5):
+        hits = []
+        for index in range(limit):
+            noise = await store.get(f"skill_noise_{index}")
+            assert noise is not None
+            hits.append({"skill": noise, "semantic_score": 0.9 - (index * 0.01)})
+        return hits
+
+    store._indexer.search = fake_semantic_search  # type: ignore[method-assign]
+    hits = await store.search("集成测试", limit=5)
+
+    assert any(hit["skill_id"] == target["skill_id"] for hit in hits)
+
+
 # ==================== find_similar ====================
 
 

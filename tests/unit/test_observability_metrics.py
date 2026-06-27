@@ -13,6 +13,10 @@ from riskmonitor_multiagent.observability.metrics import (
     reset_observability_metrics,
     set_gauge,
 )
+from riskmonitor_multiagent.services.prometheus_metrics_service import (
+    generate_prometheus_metrics,
+    reset_metrics,
+)
 
 
 def test_observability_metrics_render_contains_counters_gauges_and_p95():
@@ -28,3 +32,12 @@ def test_observability_metrics_render_contains_counters_gauges_and_p95():
     assert "rm_test_latency_ms_p95" in out
     assert 'node="n1"' in out
 
+
+def test_generate_prometheus_metrics_includes_observability_block() -> None:
+    reset_metrics()
+    reset_observability_metrics()
+    inc_counter("rm_test_counter_total")
+
+    out = generate_prometheus_metrics()
+
+    assert "rm_test_counter_total" in out
